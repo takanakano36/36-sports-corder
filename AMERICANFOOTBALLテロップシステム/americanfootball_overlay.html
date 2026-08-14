@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>アメフト中継用スポーツコーダー - オーバーレイ画面</title>
+    <link rel="stylesheet" href="css/americanfootball_overlay.css?v=11">
+</head>
+<body>
+    <!-- クロマキー背景色 (デフォルト: グリーンバック) -->
+    <div id="chromakey-bg" class="chromakey-bg green"></div>
+
+    <!-- ==========================================================================
+       1. 小得点板 (画面左上配置)
+       ========================================================================== -->
+    <div id="overlay-small-scoreboard" class="overlay-element hidden">
+        <!-- HOME -->
+        <div class="sb-small-team">
+            <div id="sb-small-color-home" class="sb-small-team-color" style="background-color: #991b1b;"></div>
+            <div class="flex-col">
+                <span id="sb-small-name-home" class="sb-small-name">名古屋産業</span>
+                <div class="sb-small-to-dots" id="to-dots-small-home">
+                    <!-- JSでドット(active)を動的生成 -->
+                </div>
+            </div>
+        </div>
+        
+        <div id="sb-small-score-home" class="sb-small-score">0</div>
+        
+        <!-- 中央 (Q ＆ クロック映像: ゲーム/プレイ両方表示) -->
+        <div class="sb-small-vs-center">
+            <span id="sb-small-period" class="sb-small-period">1Q</span>
+            <div class="sb-small-clocks-row">
+                <div id="sb-small-gameclock-stream" class="clock-stream-box gameclock">
+                    <img id="img-small-gameclock-stream" class="clock-stream-img" src="" alt="">
+                </div>
+                <div id="sb-small-playclock-stream" class="clock-stream-box playclock">
+                    <img id="img-small-playclock-stream" class="clock-stream-img" src="" alt="">
+                </div>
+            </div>
+        </div>
+        
+        <div id="sb-small-score-away" class="sb-small-score">0</div>
+
+        <!-- AWAY -->
+        <div class="sb-small-team">
+            <div class="flex-col" style="text-align: right; align-items: flex-end;">
+                <span id="sb-small-name-away" class="sb-small-name">中京大学</span>
+                <div class="sb-small-to-dots" id="to-dots-small-away">
+                    <!-- JSでドット(active)を動的生成 -->
+                </div>
+            </div>
+            <div id="sb-small-color-away" class="sb-small-team-color" style="background-color: #1d4ed8; margin-right: 0; margin-left: 10px;"></div>
+        </div>
+
+        <!-- ダウン＆ディスタンス ＆ FLAGカバー (1段並び) -->
+        <div id="sb-small-down-dist-container" class="sb-small-dd-container">
+            <span id="sb-small-down-dist-text">1st & 10</span>
+            <div id="sb-small-flag-cover" class="sb-small-flag-cover">
+                <span>FLAG</span>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==========================================================================
+       2. 大得点板 (画面下部中央配置 / ダウン＆ディスタンスとプレイクロックは除外)
+       ========================================================================== -->
+    <div id="overlay-large-scoreboard" class="overlay-element hidden">
+        <!-- HOMEチーム (背景黒、ロゴカードのみチームカラー) -->
+        <div class="sb-large-team home" style="background-color: #030712;">
+            <!-- ロゴ専用カラーブロック -->
+            <div id="sb-large-logo-bg-home" class="sb-large-logo-bg-block" style="background-color: #991b1b;">
+                <img id="sb-large-logo-home" class="sb-large-team-logo" src="" alt="">
+            </div>
+            <!-- チーム名・TOブロック (ロゴから十分離れたマージン) -->
+            <div class="sb-large-team-info-box" style="padding-left: 24px; display: flex; align-items: center; height: 100%; overflow: hidden;">
+                <div id="pos-indicator-home" class="possession-indicator"></div>
+                <div class="sb-large-team-name-box">
+                    <span id="sb-large-name-home" class="sb-large-team-name">名古屋産業大</span>
+                    <span id="sb-large-sub-home" class="sb-large-team-sub">NAGOYASANGYO</span>
+                    <div class="sb-large-to-container" id="to-dots-large-home">
+                        <!-- JSでドットを動的生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- HOMEスコア -->
+        <div id="sb-large-score-home" class="sb-large-score" style="background-color: #030712;">0</div>
+        
+        <!-- 中央ピリオド・クロック映像 -->
+        <div class="sb-large-center-match">
+            <span id="sb-large-period" class="sb-large-period">1Q</span>
+            <div class="sb-large-time">
+                <div id="sb-large-clock-stream" class="clock-stream-box">
+                    <!-- キャプチャされた時計映像 -->
+                    <img id="img-large-clock-stream" class="clock-stream-img" src="" alt="">
+                </div>
+            </div>
+        </div>
+        
+        <!-- AWAYスコア -->
+        <div id="sb-large-score-away" class="sb-large-score" style="background-color: #030712;">0</div>
+        
+        <!-- AWAYチーム (背景黒、ロゴカードのみチームカラー) -->
+        <div class="sb-large-team away" style="background-color: #030712;">
+            <!-- チーム名・TOブロック (ロゴから十分離れたマージン) -->
+            <div class="sb-large-team-info-box" style="padding-right: 24px; display: flex; align-items: center; justify-content: flex-end; height: 100%; flex: 1; overflow: hidden;">
+                <div class="sb-large-team-name-box" style="align-items: flex-end;">
+                    <span id="sb-large-name-away" class="sb-large-team-name">中京大学</span>
+                    <span id="sb-large-sub-away" class="sb-large-team-sub">CHUKYO</span>
+                    <div class="sb-large-to-container" id="to-dots-large-away">
+                        <!-- JSでドットを動的生成 -->
+                    </div>
+                </div>
+                <div id="pos-indicator-away" class="possession-indicator"></div>
+            </div>
+            <!-- ロゴ専用カラーブロック -->
+            <div id="sb-large-logo-bg-away" class="sb-large-logo-bg-block" style="background-color: #1d4ed8;">
+                <img id="sb-large-logo-away" class="sb-large-team-logo" src="" alt="">
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==========================================================================
+       3. ランニングスコア (画面下部中央・野球 of ランスコ風スタイル)
+       ========================================================================== -->
+    <div id="overlay-runningscore" class="overlay-element hidden" style="flex-direction: column; align-items: center;">
+        <div id="ransko-tournament-name" class="vs-tournament tournament-display-text" style="min-width: 960px !important; border-bottom: none !important;">大会名</div>
+        <table class="ransko-table">
+            <thead>
+                <tr>
+                    <th class="ransko-team-logo-cell" id="ransko-logo-cell-home-header"></th>
+                    <th class="ransko-team-name-cell">TEAM</th>
+                    <th>1Q</th>
+                    <th>2Q</th>
+                    <th>3Q</th>
+                    <th>4Q</th>
+                    <th id="ransko-ot-header-overlay" style="display: none;">OT</th>
+                    <th style="color: var(--yellow-flag);">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <!-- HOME -->
+                    <td class="ransko-team-logo-cell" id="ransko-logo-cell-home">
+                        <div class="ransko-logo-circle" id="ransko-logo-circle-home">
+                            <img id="ransko-overlay-logo-home" src="" alt="">
+                        </div>
+                    </td>
+                    <td id="ransko-overlay-name-home" class="ransko-team-name-cell">HOME</td>
+                    <td id="ransko-overlay-h-1">-</td>
+                    <td id="ransko-overlay-h-2">-</td>
+                    <td id="ransko-overlay-h-3">-</td>
+                    <td id="ransko-overlay-h-4">-</td>
+                    <td id="ransko-overlay-h-ot" style="display: none;">-</td>
+                    <td id="ransko-overlay-h-total" class="ransko-total-cell">0</td>
+                </tr>
+                <tr>
+                    <!-- AWAY -->
+                    <td class="ransko-team-logo-cell" id="ransko-logo-cell-away">
+                        <div class="ransko-logo-circle" id="ransko-logo-circle-away">
+                            <img id="ransko-overlay-logo-away" src="" alt="">
+                        </div>
+                    </td>
+                    <td id="ransko-overlay-name-away" class="ransko-team-name-cell">AWAY</td>
+                    <td id="ransko-overlay-a-1">-</td>
+                    <td id="ransko-overlay-a-2">-</td>
+                    <td id="ransko-overlay-a-3">-</td>
+                    <td id="ransko-overlay-a-4">-</td>
+                    <td id="ransko-overlay-a-ot" style="display: none;">-</td>
+                    <td id="ransko-overlay-a-total" class="ransko-total-cell">0</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+
+    <!-- ==========================================================================
+       4. 対戦VS画面テロップ
+       ========================================================================== -->
+    <div id="overlay-vs" class="overlay-element hidden">
+        <div class="vs-tournament">
+            <span id="vs-tournament-name" class="tournament-display-text">大会名・リーグ名</span>
+        </div>
+        <div class="vs-plate">
+            <!-- 左側：HOME -->
+            <div class="vs-team vs-left" id="vs-team-left">
+                <div class="logo-box" id="vs-logo-box-left">
+                    <img id="vs-logo-left" class="team-left-logo-display" src="" alt="">
+                </div>
+                <span id="vs-name-left" class="vs-team-name team-left-name-display">左チーム名</span>
+            </div>
+            
+            <!-- 中央VS台形 -->
+            <div class="vs-center-box">
+                <div class="vs-label">VS</div>
+            </div>
+            
+            <!-- 右側：AWAY -->
+            <div class="vs-team vs-right" id="vs-team-right">
+                <span id="vs-name-right" class="vs-team-name team-right-name-display">右チーム名</span>
+                <div class="logo-box" id="vs-logo-box-right">
+                    <img id="vs-logo-right" class="team-right-logo-display" src="" alt="">
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==========================================================================
+       5. スタメン一覧 (Lineup) テロップ (提供画像デザイン準拠)
+       ========================================================================== -->
+    <div id="overlay-lineup" class="overlay-element hidden">
+        <!-- ヘッダー -->
+        <div class="lineup-header" id="lineup-team-header">
+            <div class="lineup-header-left">
+                <div class="lineup-logo-box" id="lineup-team-logo-box">
+                    <img id="lineup-team-logo" src="" alt="">
+                </div>
+                <span id="lineup-team-name" class="lineup-team-name">名城大学</span>
+            </div>
+            <!-- 斜めイエローバッジ (OFFENSE/DEFENSE) -->
+            <div class="lineup-side-badge" id="lineup-team-side">OFFENSE</div>
+        </div>
+        <!-- 選手行リスト -->
+        <div class="lineup-players-list" id="lineup-players-list">
+            <!-- JSで選手行を動的生成 -->
+        </div>
+    </div>
+
+
+    <!-- ==========================================================================
+       6. ワンショットテロップ (選手カード - 野球/サッカー共通標準デザイン準拠)
+       ========================================================================== -->
+    <div id="telop-wrapper" class="overlay-element hidden">
+        <div id="player-card" class="telop-content">
+            <!-- 左端：チームカラー背景とロゴ -->
+            <div class="player-team-color-box" id="player-team-color-box">
+                <div class="logo-box-wrapper">
+                    <img id="player-team-logo" src="" alt="">
+                </div>
+            </div>
+            
+            <!-- 右側メインエリア -->
+            <div class="player-main-area">
+                <!-- 上部チーム名黒帯 -->
+                <div class="player-team-name-strip">
+                    <span id="player-team" class="player-team-name">チーム名</span>
+                </div>
+                
+                <!-- 下部選手情報 -->
+                <div class="player-details-row">
+                    <div class="player-pos-num">
+                        <span id="player-position" class="player-pos">QB</span>
+                        <span id="player-number" class="player-num">18</span>
+                    </div>
+                    <div class="player-name-box">
+                        <span id="player-name-ja" class="player-name-ja">山田 太郎</span>
+                        <span id="player-comment" class="player-comment">紹介コメント</span>
+                    </div>
+                    <div class="player-memo-box">
+                        <span id="player-memo" class="player-memo">4年</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. 全画面スライド (静止画) テロップ -->
+    <div id="overlay-image-telop" class="image-telop-container hidden">
+        <img id="img-image-telop" class="image-telop-img" src="" alt="">
+    </div>
+
+    <!-- 外付けUSBカメラ クロップテロップ表示枠 (プレイクロック/タイマー) -->
+    <div id="camera-crop-overlay-wrapper" class="hidden">
+        <img id="camera-crop-img" src="" alt="Camera Crop">
+    </div>
+
+    <!-- 画面右下にホバー時のみ表示される全画面ボタン（スイッチャー出力用） -->
+    <button id="btn-fullscreen-toggle" class="fullscreen-btn">全画面表示 (スイッチャー出力)</button>
+
+    <!-- javascript -->
+    <script src="js/americanfootball_overlay.js?v=11"></script>
+    <script>
+        (function() {
+            const fullscreenBtn = document.getElementById('btn-fullscreen-toggle');
+            let mouseIdleTimer = null;
+
+            const isIframe = (window.self !== window.top);
+            if (isIframe && fullscreenBtn) {
+                fullscreenBtn.style.display = 'none';
+                fullscreenBtn.remove();
+            } else if (fullscreenBtn) {
+                fullscreenBtn.style.display = 'block';
+            }
+
+            function resetMouseIdleTimer() {
+                document.body.classList.remove('mouse-idle');
+                clearTimeout(mouseIdleTimer);
+                mouseIdleTimer = setTimeout(() => {
+                    document.body.classList.add('mouse-idle');
+                }, 3000);
+            }
+
+            if (!isIframe) {
+                window.addEventListener('mousemove', resetMouseIdleTimer);
+                window.addEventListener('click', resetMouseIdleTimer);
+                resetMouseIdleTimer();
+            }
+
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen();
+                }
+            }
+
+            if (fullscreenBtn && !isIframe) {
+                fullscreenBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                });
+            }
+
+            document.addEventListener('dblclick', () => {
+                toggleFullscreen();
+            });
+
+            // 1920x1080 16:9 完全自動フィット制御 (トリミング・見切れ防止)
+            function fitWindow() {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                const scale = Math.min(w / 1920, h / 1080);
+                if (scale < 0.999 || scale > 1.001) {
+                    document.body.style.transform = `scale(${scale})`;
+                    document.body.style.transformOrigin = 'center center';
+                    document.body.style.position = 'absolute';
+                    document.body.style.left = `${(w - 1920 * scale) / 2}px`;
+                    document.body.style.top = `${(h - 1080 * scale) / 2}px`;
+                } else {
+                    document.body.style.transform = 'none';
+                    document.body.style.position = 'relative';
+                    document.body.style.left = '0';
+                    document.body.style.top = '0';
+                }
+            }
+
+            window.addEventListener('resize', fitWindow);
+            window.addEventListener('load', fitWindow);
+            fitWindow();
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1273 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Outfit:wght@400;700;900&family=Noto+Sans+JP:wght@500;700;900&display=swap');
+
+/* ==========================================================================
+   共通設定 ＆ リセット (イタリック完全排除)
+   ========================================================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: transparent;
+    font-family: 'Outfit', 'Noto Sans JP', sans-serif;
+    color: #ffffff;
+    user-select: none;
+    position: relative;
+}
+
+body.chromakey-green { background-color: #00ff00 !important; }
+body.chromakey-blue { background-color: #0000ff !important; }
+body.chromakey-magenta { background-color: #ff00ff !important; }
+
+.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 40px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.card-fade-in-up {
+    animation: cardFrameFadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cardFrameFadeInUp {
+    from {
+        opacity: 0;
+        transform: translate3d(-50%, 40px, 0) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(-50%, 0, 0) scale(1);
+    }
+}
+
+/* 非表示クラス */
+.hidden {
+    display: none !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   得点経過タイムライン (左端縦2列配置、左マージン95%特例 = 48px, 位置下 = 280px)
+   ========================================================================== */
+#overlay-score-timeline {
+    position: absolute;
+    top: 280px;
+    left: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 15px 12px;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    z-index: 75;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 105px;
+}
+
+#overlay-score-timeline.hidden {
+    opacity: 0;
+    transform: translateX(-30px);
+}
+
+.timeline-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border-bottom: 1.5px solid #334155;
+    padding-bottom: 4px;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.timeline-grid-header {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.timeline-grid-team-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 10px;
+    font-weight: 900;
+    width: 36px;
+    text-align: center;
+}
+.timeline-grid-team-title.home { color: #38bdf8; }
+.timeline-grid-team-title.away { color: #f97316; }
+
+.timeline-rows-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+}
+
+.timeline-row {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    align-items: center;
+    height: 24px;
+}
+
+.timeline-cell {
+    width: 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.history-circle {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    font-weight: 900;
+    color: #ffffff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    box-sizing: border-box;
+    font-style: normal;
+}
+
+.history-circle.home {
+    background: radial-gradient(circle, #0ea5e9 0%, #0284c7 100%);
+    border: 1.5px solid #38bdf8;
+    box-shadow: 0 0 6px rgba(14, 165, 233, 0.6);
+}
+
+.history-circle.away {
+    background: radial-gradient(circle, #f97316 0%, #ea580c 100%);
+    border: 1.5px solid #fdba74;
+    box-shadow: 0 0 6px rgba(249, 115, 22, 0.6);
+}
+
+/* ==========================================================================
+   大得点板 (Scoreboard Large - 最新バスケ1280pxサイズ ＆ 縦並び配置移植)
+   ========================================================================== */
+#overlay-large-board {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1280px; /* バスケ最新サイズ 1280px */
+    height: 100px;
+    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    z-index: 10;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-large-board.hidden {
+    opacity: 0;
+    transform: translate(-50%, 30px);
+}
+
+.large-team {
+    width: 470px; /* バスケ最新サイズ 470px */
+    flex: 0 0 470px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.large-team.home {
+    justify-content: flex-start;
+}
+
+.large-team.away {
+    justify-content: flex-start;
+    flex-direction: row-reverse;
+}
+
+.team-color-bar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 15px;
+    z-index: 15 !important;
+}
+.large-team.home .team-color-bar {
+    left: 0;
+    border-radius: 10px 0 0 10px;
+}
+.large-team.away .team-color-bar {
+    right: 0;
+    border-radius: 0 10px 10px 0;
+}
+
+/* チーム名 ＆ タイムアウト/チャレンジ縦並びブロック (バスケ最新) */
+.large-name-to-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    margin: 0 16px;
+    flex: 1;
+    min-width: 0;
+}
+.large-team.away .large-name-to-block {
+    align-items: flex-end; /* AWAY側は右寄せ */
+}
+
+.large-name-container {
+    max-width: 240px; /* 最新バッファサイズ */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    margin: 0;
+    z-index: 2;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.timeout-dots {
+    display: flex;
+    gap: 6px;
+    z-index: 2;
+}
+
+.timeout-dots-row {
+    display: flex;
+    gap: 4px;
+}
+
+.timeout-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #475569;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+.timeout-dot.active {
+    background: #eab308;
+    box-shadow: 0 0 8px #eab308;
+}
+
+/* スコア */
+.large-score {
+    width: 110px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 56px;
+    font-weight: 900;
+    font-style: normal;
+    text-shadow: 0 0 10px rgba(255,255,255,0.2);
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.2);
+}
+.large-team.home .large-score {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.large-team.away .large-score {
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 中央情報ブロック (バレーボール用に再設計) */
+.large-center {
+    width: 340px;
+    height: 100%;
+    background: linear-gradient(180deg, #020617 0%, #0b1329 100%);
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+    border-right: 2px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    z-index: 3;
+}
+
+.serve-indicator {
+    font-family: 'Oswald', sans-serif;
+    font-size: 24px;
+    font-weight: 900;
+    color: transparent;
+    transition: all 0.3s ease;
+    user-select: none;
+    line-height: 1;
+    font-style: normal;
+}
+.serve-indicator.active.home {
+    color: #38bdf8;
+    text-shadow: 0 0 10px #38bdf8, 0 0 20px #38bdf8;
+}
+.serve-indicator.active.away {
+    color: #f97316;
+    text-shadow: 0 0 10px #f97316, 0 0 20px #f97316;
+}
+
+.large-mid-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.set-label {
+    font-size: 14px;
+    font-weight: 900;
+    color: #38bdf8;
+    text-shadow: 0 0 6px rgba(56,189,248,0.5);
+    margin-bottom: 2px;
+    letter-spacing: 1.5px;
+}
+
+.set-count-container {
+    display: flex;
+    gap: 5px;
+}
+
+.set-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #1e293b;
+    border: 1px solid #475569;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    transition: all 0.3s ease;
+}
+.set-dot.active.home {
+    background-color: #38bdf8;
+    box-shadow: 0 0 8px #38bdf8;
+    border-color: #38bdf8;
+}
+.set-dot.active.away {
+    background-color: #f97316;
+    box-shadow: 0 0 8px #f97316;
+    border-color: #f97316;
+}
+
+/* ==========================================================================
+   小得点板 (Scoreboard Small - 横長 660px ＆ 縦並び配置移植)
+   ========================================================================== */
+#overlay-small-board {
+    position: absolute;
+    top: 54px;
+    left: 96px;
+    width: 660px; /* 横長660px */
+    height: 56px;
+    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    overflow: hidden;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-small-board.hidden {
+    opacity: 0;
+    transform: translate(-30px, 0);
+}
+
+.small-team {
+    flex: 3;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    position: relative;
+}
+
+.small-team.home {
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+.small-team.away {
+    border-left: 1px solid rgba(255,255,255,0.1);
+    flex-direction: row-reverse;
+}
+
+.small-team-indicator {
+    width: 6px;
+    height: 70%;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+/* 小得点 チーム名 ＆ ドット縦並びブロック (バスケ最新) */
+.small-name-to-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    margin: 0 8px;
+    flex: 1;
+    min-width: 0;
+}
+.small-team.away .small-name-to-block {
+    align-items: flex-end; /* AWAY側は右寄せ */
+}
+
+.small-name {
+    font-size: 16px;
+    font-weight: 900;
+    max-width: 180px; /* バレー用に180px確保 */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.small-timeout-dots {
+    display: flex;
+    gap: 4px;
+}
+.small-timeout-dots .timeout-dot {
+    width: 7px;
+    height: 7px;
+}
+
+.small-serve-indicator {
+    font-family: 'Oswald', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: transparent;
+    transition: all 0.3s ease;
+    user-select: none;
+    margin: 0 6px;
+    flex-shrink: 0;
+    font-style: normal;
+}
+.small-serve-indicator.active.home {
+    color: #38bdf8;
+    text-shadow: 0 0 6px #38bdf8;
+}
+.small-serve-indicator.active.away {
+    color: #f97316;
+    text-shadow: 0 0 6px #f97316;
+}
+
+.small-score {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    font-style: normal;
+    flex-shrink: 0;
+}
+
+.small-center {
+    flex: 2;
+    height: 100%;
+    background: rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+}
+
+.small-period-display {
+    font-size: 11px;
+    font-weight: 700;
+    color: #38bdf8;
+    letter-spacing: 0.5px;
+}
+
+.small-sets-display {
+    font-family: 'Oswald', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    font-style: normal;
+}
+
+/* ==========================================================================
+   ランニングスコア (Ransko - バスケ最新デザイン完全移植)
+   ========================================================================== */
+#overlay-ransko {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1200px; /* バスケ最新 1200px */
+    z-index: 65;
+    transition: opacity 0.5s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-ransko.hidden {
+    opacity: 0;
+    transform: translate(-50%, 40px);
+}
+
+.ransko-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 3px solid #334155;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    overflow: hidden;
+    color: #fff;
+}
+
+.ransko-table thead tr:first-child th:first-child { border-top-left-radius: 8px; }
+.ransko-table thead tr:first-child th:last-child { border-top-right-radius: 8px; }
+.ransko-table tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
+.ransko-table tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+
+.ransko-table th, .ransko-table td {
+    padding: 12px 18px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ransko-table th {
+    background-color: rgba(15, 23, 42, 0.9);
+    font-size: 18px;
+    font-weight: 900;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+}
+
+.ransko-table td {
+    font-family: 'Oswald', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffff;
+    font-style: normal;
+}
+
+.ransko-team-logo-cell {
+    width: 84px;
+    padding: 0 !important;
+    text-align: center;
+    vertical-align: middle;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.ransko-logo-circle {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background-color: rgba(255,255,255,0.1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.ransko-logo-circle img {
+    width: 95%;
+    height: 95%;
+    object-fit: contain;
+}
+
+.ransko-color-bar-indicator {
+    width: 10px;
+    height: 42px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.ransko-team-name-cell {
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 20px !important;
+    font-weight: 900 !important;
+    text-align: left !important;
+    min-width: 200px;
+    border-right: 2px solid #334155 !important;
+    color: #ffffff !important;
+    padding-left: 24px !important;
+}
+
+.ransko-total-cell {
+    color: #eab308 !important;
+    font-size: 32px !important;
+    border-left: 2px solid #334155 !important;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================================================
+   対戦カード (DISPLAY_MODE: vs - 全国共通デザイン標準)
+   ========================================================================== */
+#overlay-vs {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 95;
+    transition: opacity 0.5s, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-vs.hidden {
+    opacity: 0;
+    transform: translate(-50%, -40%);
+}
+
+.vs-tournament {
+    background: linear-gradient(180deg, #0f1c30 0%, #030810 100%) !important;
+    border: 1.5px solid #1e293b !important;
+    border-bottom: none !important;
+    border-radius: 9px 9px 0 0 !important;
+    padding: 9px 36px !important;
+    min-width: 720px !important;
+    text-align: center !important;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3) !important;
+    z-index: 1;
+}
+
+.tournament-display-text {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #f1f5f9 !important;
+    letter-spacing: 1.5px !important;
+}
+
+.vs-plate {
+    display: flex;
+    width: 1560px !important;
+    height: 126px !important;
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 5%, #e2e8f0 15%, #cbd5e1 30%, #94a3b8 55%, #cbd5e1 85%, #475569 100%) !important;
+    border: 3px solid #334155 !important;
+    border-radius: 0 0 30px 30px !important;
+    box-shadow: inset 0 3px 3px #ffffff, inset 0 -3px 4.5px rgba(0, 0, 0, 0.3), 0 22.5px 45px rgba(0, 0, 0, 0.5) !important;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+    padding: 0 !important;
+}
+
+.vs-plate::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1.2px, transparent 1.2px) !important;
+    background-size: 6px 6px !important;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.vs-team {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 48px !important;
+    z-index: 1;
+}
+
+.vs-team.vs-left {
+    justify-content: flex-start !important;
+    padding-left: 48px !important;
+}
+.vs-team.vs-left .vs-team-name {
+    text-align: left !important;
+    margin-left: 30px !important;
+    margin-right: 0 !important;
+}
+.vs-team.no-logo {
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+.vs-team.no-logo .vs-team-name {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    text-align: center !important;
+}
+
+.vs-team.vs-right {
+    justify-content: flex-end !important;
+    padding-right: 48px !important;
+}
+.vs-team.vs-right .vs-team-name {
+    text-align: right !important;
+    margin-right: 30px !important;
+    margin-left: 0 !important;
+}
+
+.vs-team-name {
+    font-size: 42px !important;
+    font-weight: 900 !important;
+    color: #1e293b !important;
+    text-shadow: 0 1.5px 3px rgba(255,255,255,0.8) !important;
+    letter-spacing: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vs-plate .logo-box {
+    width: 90px !important;
+    height: 90px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.vs-plate .logo-box img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    opacity: 1;
+}
+
+.vs-center-box {
+    width: 210px !important;
+    height: 100% !important;
+    background: linear-gradient(180deg, #0b1f3c 0%, #030a14 100%) !important;
+    clip-path: polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%) !important;
+    border-left: 3px solid #0ea5e9 !important;
+    border-right: 3px solid #0ea5e9 !important;
+    box-shadow: 0 0 22.5px rgba(14, 165, 233, 0.8), inset 0 0 15px rgba(14, 165, 233, 0.4) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 2 !important;
+    position: relative !important;
+    border-bottom: 4.5px solid #38bdf8 !important;
+}
+
+.vs-label {
+    font-family: 'Oswald', sans-serif !important;
+    font-size: 60px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    font-style: normal !important;
+    letter-spacing: 1.5px !important;
+    text-shadow: 0 0 15px #0ea5e9, 0 0 30px #0ea5e9 !important;
+    transform: translateY(-3px) !important;
+}
+
+/* ==========================================================================
+   スタメン一覧 (Lineup - イタリックなし、バスケ完全同期)
+   ========================================================================== */
+#overlay-lineup {
+    position: absolute;
+    bottom: 96px;
+    right: 96px;
+    width: 400px;
+    z-index: 80;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-lineup.hidden {
+    transform: translateY(40px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.lineup-header {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    overflow: hidden;
+    padding: 0 16px;
+    z-index: 2;
+    position: relative;
+}
+
+.lineup-header-team-name {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    flex: 1;
+}
+
+.lineup-logo-box {
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.lineup-logo-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.lineup-title-badge {
+    background: rgba(255,255,255,0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.lineup-rows {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    padding: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lineup-row {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.lineup-left-block {
+    width: 110px;
+    height: 100%;
+    background: #0f172a;
+    clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    z-index: 2;
+}
+
+.lineup-pos-tag {
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+    width: 32px;
+}
+
+.lineup-number-tag {
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #eab308;
+    margin-left: 4px;
+    font-style: normal;
+}
+
+.lineup-right-block {
+    flex: 1;
+    height: 100%;
+    background: linear-gradient(90deg, #f8fafc 0%, #cbd5e1 100%);
+    margin-left: -20px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 80px 0 24px;
+}
+
+.lineup-name-label {
+    max-width: 180px;
+    font-size: 24px;
+    font-weight: 900;
+    color: #0f172a;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lineup-grade-tag {
+    position: absolute;
+    right: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 2px 6px;
+    line-height: 1;
+}
+
+/* ==========================================================================
+   個別選手紹介テロップ (showPlayer - 最新バスケ960pxスリットデザイン完全移植)
+   ========================================================================== */
+#overlay-player-card {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    width: 960px; /* 最新 960px */
+    height: 120px; /* 最新 120px */
+    z-index: 90;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+#overlay-player-card.hidden {
+    opacity: 0 !important;
+    transform: translateX(-50%) translateY(80px) scale(0.97) !important;
+    pointer-events: none !important;
+}
+
+#player-card {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #f1f5f9 0%, #ffffff 50%, #e2e8f0 100%);
+    border: 3px solid rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 0, 0, 0.1), inset 0 1.5px 2px #ffffff;
+    overflow: hidden;
+    position: relative;
+}
+
+#player-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(180deg, #1e293b 0%, #020617 100%);
+    z-index: 10;
+}
+
+.player-team-color-box {
+    width: 140px;
+    height: 100%;
+    background-color: var(--player-team-color, #0f2746);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+    border-right: 2px solid rgba(0, 0, 0, 0.25);
+    box-shadow: inset -5px 0 10px rgba(0, 0, 0, 0.15);
+}
+
+.logo-box-wrapper {
+    width: 104px;
+    height: 104px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden;
+}
+
+#player-team-logo {
+    max-width: 95%;
+    max-height: 95%;
+    object-fit: contain;
+}
+
+.player-main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    height: 100%;
+    padding-bottom: 8px;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 30%, #ffffff 70%, #cbd5e1 100%);
+}
+
+.player-main-area::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.5) 75%, transparent 75%, transparent);
+    background-size: 30px 30px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.player-team-name-strip {
+    background: linear-gradient(180deg, #27272a 0%, #09090b 100%);
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    width: fit-content;
+    min-width: 280px;
+    border-radius: 0 0 10px 0;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+    z-index: 5;
+    position: relative;
+}
+
+.player-team-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f4f4f5;
+    letter-spacing: 1px;
+}
+
+.player-details-row {
+    display: flex;
+    align-items: center;
+    height: 82px;
+    padding: 0 32px;
+    z-index: 5;
+    position: relative;
+}
+
+.player-details-row::after {
+    content: '>>>';
+    font-family: 'Oswald', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: #94a3b8;
+    letter-spacing: -2px;
+    opacity: 0.25;
+    position: absolute;
+    right: 24px;
+    bottom: 8px;
+    z-index: 1;
+}
+
+.player-pos-num {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 130px;
+    flex-shrink: 0;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    color: #0f172a;
+    padding-top: 6px;
+    font-style: normal;
+}
+
+.player-pos {
+    font-size: 28px;
+    letter-spacing: 0.5px;
+}
+
+.player-num {
+    font-size: 44px;
+    line-height: 1;
+    color: #0f172a;
+}
+
+.player-name-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 6px;
+    padding-top: 6px;
+}
+
+.player-name-ja {
+    font-family: 'Outfit', sans-serif, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+    font-weight: 900;
+    font-size: 42px;
+    color: #0f172a;
+    letter-spacing: 4px;
+    text-shadow: 0.5px 0.5px 0px rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    line-height: 1.0;
+}
+
+.player-comment {
+    font-family: 'Outfit', sans-serif, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: #475569;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    text-align: center;
+    max-width: 480px;
+    width: 480px;
+    white-space: nowrap;
+    overflow: hidden;
+    display: block;
+}
+
+.player-memo-box {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    align-self: flex-start;
+    align-items: baseline;
+    justify-content: center;
+    padding-top: 4px;
+}
+
+.player-memo {
+    font-family: 'Outfit', sans-serif, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+    font-weight: 800;
+    font-size: 26px;
+    color: #1e293b;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   全画面表示ボタン (通常時は常に表示、全画面時のみ非表示)
+   ========================================================================== */
+.fullscreen-btn {
+    display: block !important;
+    position: fixed !important;
+    bottom: 24px !important;
+    right: 24px !important;
+    z-index: 2147483647 !important;
+    background: rgba(15, 23, 42, 0.85);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.3s ease, background 0.2s, transform 0.2s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+.fullscreen-btn:hover {
+    background: #0f172a;
+    border-color: #0095ff;
+    transform: scale(1.05);
+    opacity: 1 !important;
+}
+
+.mouse-idle {
+    cursor: none !important;
+}
+
+/* ==========================================================================
+   カスタム画像テロップ (Googleスライド画像等用)
+   ========================================================================== */
+#image-telop-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.6s ease-in-out;
+    z-index: 80;
+}
+
+#image-telop-wrapper.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: none;
+}
+
+#image-telop-src {
+    width: 1920px;
+    height: 1080px;
+    object-fit: contain;
+}
+
+/* クロマキー用背景 */
+.chromakey-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    z-index: -10;
+    pointer-events: none;
+    transition: background-color 0.2s;
+}
+.chromakey-bg.green { background-color: #00ff00; }
+.chromakey-bg.blue { background-color: #0000ff; }
+.chromakey-bg.magenta { background-color: #ff00ff; }
+.chromakey-bg.transparent { background-color: transparent; }
+
+/* ==========================================================================
+   フィル＆キー方式 (Fill / Key 放送規格出力)
+   ========================================================================== */
+
+/* Fillモード: 通常描画、背景は黒（スイッチャーFill入力用） */
+body.fill-mode {
+    background-color: #000000 !important;
+}
+body.fill-mode .chromakey-bg {
+    background-color: #000000 !important;
+}
+
+/* Key (Mask) モード: 放送用アルファキー（白=不透明、黒=透明、スイッチャーKey入力用） */
+body.key-mode {
+    background-color: #000000 !important;
+}
+body.key-mode .chromakey-bg {
+    background-color: #000000 !important;
+}
+body.key-mode #scoreboard-large,
+body.key-mode #scoreboard-small,
+body.key-mode #scoreboard-ransko,
+body.key-mode #overlay-vs,
+body.key-mode #telop-wrapper,
+body.key-mode #overlay-lineup,
+body.key-mode #image-telop-wrapper {
+    filter: brightness(0) invert(1) contrast(100);
+}
+body.key-mode .fullscreen-btn {
+    display: none !important;
+}

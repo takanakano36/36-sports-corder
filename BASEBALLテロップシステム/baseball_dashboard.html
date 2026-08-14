@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>野球・ソフトボール中継用スポーツコーダー - コントロールパネル</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;700;900&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/baseball_dashboard.css?v=2">
+    <!-- Excelファイル読込用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <header class="app-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; flex-wrap: wrap; gap: 10px;">
+        <div class="logo">⚾ Baseball Broadcast Coder <span class="badge">Operator</span></div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button id="btn-open-fill" class="btn-success" style="padding: 7px 14px; font-size: 13px; font-weight: 800; border-radius: 4px; cursor: pointer; background: #16a34a; border: 1px solid #22c55e; color: #ffffff;" title="スイッチャーFill入力用の通常カラー映像ウィンドウ(1920x1080)を開きます">🎬 Fill画面を開く (映像)</button>
+            <button id="btn-open-key" class="btn-warning" style="padding: 7px 14px; font-size: 13px; font-weight: 800; border-radius: 4px; cursor: pointer; background: #475569; border: 1px solid #94a3b8; color: #ffffff;" title="スイッチャーKey入力用の白黒アルファマスクウィンドウ(1920x1080)を開きます">🔲 Key画面を開く (マスク)</button>
+            <button id="btn-open-dual" class="btn-primary" style="padding: 7px 12px; font-size: 12px; font-weight: 700; border-radius: 4px; cursor: pointer; background: #0284c7; border: 1px solid #38bdf8; color: #ffffff;" title="FillとKeyの2枚のウィンドウを一度に開きます">🎬🔲 2画面一括起動</button>
+            <button id="btn-open-overlay" class="btn-primary" style="padding: 7px 10px; font-size: 12px; font-weight: 700; border-radius: 4px; cursor: pointer; background: #334155; border: 1px solid #475569; color: #ffffff;" title="OBS取込等のクロマキー単一画面を開きます">📺 クロマキー画面</button>
+            <div class="connection-status" id="connection-status">
+                <span class="status-indicator online"></span> 接続中 (オーバーレイ同期)
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        <!-- ==================== 左側：スコア＆イニングコントロール ==================== -->
+        <section class="panel-section section-match">
+            <h2 class="panel-title">試合コントロール</h2>
+            
+            <!-- チーム設定 -->
+            <div class="control-group">
+                <label class="group-label">チーム情報設定</label>
+                <div class="team-settings-container">
+                    <div class="team-setting-block home">
+                        <span class="sub-label" style="color: #38bdf8; font-weight: bold;">HOMEチーム (後攻)</span>
+                        <input type="text" id="input-home-name" class="form-input" value="後攻 TEAM" placeholder="日本語チーム名(短縮)">
+                        <input type="text" id="input-home-sub" class="form-input" value="HOME" placeholder="英語表記(大得点用)">
+                        <div class="color-picker-row margin-top-xs">
+                            <span class="sub-label">カラー:</span>
+                            <input type="color" id="input-home-color" class="color-picker" value="#059669">
+                        </div>
+                        <div class="logo-selector margin-top-xs" id="home-logo-drop-zone" style="border: 1px dashed transparent; border-radius: 4px; padding: 2px; transition: border-color 0.2s;" title="画像ファイルをここにドラッグ＆ドロップして登録できます">
+                            <span class="sub-label">ロゴ画像:</span>
+                            <input type="file" id="input-home-logo-file" accept="image/*" class="file-input margin-top-xs">
+                            <input type="text" id="input-home-logo-url" class="form-input margin-top-xs" placeholder="またはファイルをここにドロップ">
+                        </div>
+                    </div>
+                    
+                    <div class="team-setting-divider">VS</div>
+                    
+                    <div class="team-setting-block away">
+                        <span class="sub-label" style="color: #f43f5e; font-weight: bold;">AWAYチーム (先攻)</span>
+                        <input type="text" id="input-away-name" class="form-input" value="先攻 TEAM" placeholder="日本語チーム名(短縮)">
+                        <input type="text" id="input-away-sub" class="form-input" value="VISITOR" placeholder="英語表記(大得点用)">
+                        <div class="color-picker-row margin-top-xs">
+                            <span class="sub-label">カラー:</span>
+                            <input type="color" id="input-away-color" class="color-picker" value="#1d4ed8">
+                        </div>
+                        <div class="logo-selector margin-top-xs" id="away-logo-drop-zone" style="border: 1px dashed transparent; border-radius: 4px; padding: 2px; transition: border-color 0.2s;" title="画像ファイルをここにドラッグ＆ドロップして登録できます">
+                            <span class="sub-label">ロゴ画像:</span>
+                            <input type="file" id="input-away-logo-file" accept="image/*" class="file-input margin-top-xs">
+                            <input type="text" id="input-away-logo-url" class="form-input margin-top-xs" placeholder="またはファイルをここにドロップ">
+                        </div>
+                    </div>
+                </div>
+                <div class="margin-top-sm">
+                    <label class="sub-label" style="font-weight: bold;">大会名 (対戦モード用):</label>
+                    <input type="text" id="input-tournament" class="form-input" value="">
+                </div>
+            </div>
+
+            <!-- イニング・得点管理 -->
+            <div class="control-group">
+                <label class="group-label">イニング＆得点</label>
+                <div class="timer-display-box">
+                    <span id="label-inning" class="timer-digits">1表</span>
+                    <span id="label-scores" class="period-badge">H 0 - 0 A</span>
+                </div>
+                
+                <div class="btn-grid-4">
+                    <button id="btn-prev-inning" class="btn btn-secondary">前へ</button>
+                    <button id="btn-next-inning" class="btn btn-primary">次へ</button>
+                    <button id="btn-change-half" class="btn btn-accent">表/裏切替</button>
+                    <div class="select-wrapper">
+                        <select id="select-inning-half" class="form-input select-input">
+                            <option value="1-top">1回表</option>
+                            <option value="1-bot">1回裏</option>
+                            <option value="2-top">2回表</option>
+                            <option value="2-bot">2回裏</option>
+                            <option value="3-top">3回表</option>
+                            <option value="3-bot">3回裏</option>
+                            <option value="4-top">4回表</option>
+                            <option value="4-bot">4回裏</option>
+                            <option value="5-top">5回表</option>
+                            <option value="5-bot">5回裏</option>
+                            <option value="6-top">6回表</option>
+                            <option value="6-bot">6回裏</option>
+                            <option value="7-top">7回表</option>
+                            <option value="7-bot">7回裏</option>
+                            <option value="8-top">8回表</option>
+                            <option value="8-bot">8回裏</option>
+                            <option value="9-top">9回表</option>
+                            <option value="9-bot">9回裏</option>
+                            <option value="10-top">10回表</option>
+                            <option value="10-bot">10回裏</option>
+                            <option value="11-top">11回表</option>
+                            <option value="11-bot">11回裏</option>
+                            <option value="12-top">12回表</option>
+                            <option value="12-bot">12回裏</option>
+                            <option value="end">試合終了</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- ランニングスコアテーブル (操作用) -->
+                <div class="running-score-table-wrapper margin-top-sm">
+                    <table class="running-score-input-table">
+                        <thead>
+                            <tr>
+                                <th>チーム</th>
+                                <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>延</th>
+                                <th>R</th><th>H</th><th>E</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="row-input-away">
+                                <td class="team-header away">先攻 (表)</td>
+                                <td><input type="text" class="score-cell-input" data-inning="1" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="2" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="3" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="4" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="5" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="6" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="7" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="8" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="9" data-team="away" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="10" data-team="away" value=""></td>
+                                <td class="total-cell" id="input-away-r">0</td>
+                                <td>
+                                    <select class="stats-cell-input stats-select-box" id="input-away-h"></select>
+                                </td>
+                                <td>
+                                    <select class="stats-cell-input stats-select-box" id="input-away-e"></select>
+                                </td>
+                            </tr>
+                            <tr id="row-input-home">
+                                <td class="team-header home">後攻 (裏)</td>
+                                <td><input type="text" class="score-cell-input" data-inning="1" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="2" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="3" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="4" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="5" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="6" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="7" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="8" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="9" data-team="home" value=""></td>
+                                <td><input type="text" class="score-cell-input" data-inning="10" data-team="home" value=""></td>
+                                <td class="total-cell" id="input-home-r">0</td>
+                                <td>
+                                    <select class="stats-cell-input stats-select-box" id="input-home-h"></select>
+                                </td>
+                                <td>
+                                    <select class="stats-cell-input stats-select-box" id="input-home-e"></select>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex-row items-center justify-between margin-top-sm">
+                    <div class="display-toggle flex-column" style="width: 100%; margin-bottom: 8px;">
+                        <span class="sub-label" style="font-weight: bold; margin-bottom: 6px;">表示モード (テロップ送出):</span>
+                        <div class="display-mode-buttons" id="display-mode-container" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            <button class="display-mode-btn btn btn-sm btn-secondary active" data-mode="small">小得点</button>
+                            <button class="display-mode-btn btn btn-sm btn-secondary" data-mode="large">ランスコ</button>
+                            <button class="display-mode-btn btn btn-sm btn-secondary" data-mode="large-soccer">大得点</button>
+                            <button class="display-mode-btn btn btn-sm btn-secondary" data-mode="vs">対戦(VS)</button>
+                            <button class="display-mode-btn btn btn-sm btn-secondary" data-mode="lineup-home">スタメン(後攻)</button>
+                            <button class="display-mode-btn btn btn-sm btn-secondary" data-mode="lineup-away">スタメン(先攻)</button>
+                            <button class="display-mode-btn btn btn-sm btn-danger-outline" data-mode="none" style="margin-left: auto;">非表示 (OFF)</button>
+                        </div>
+                    </div>
+                    <div class="display-toggle flex-row items-center gap-xs">
+                        <input type="checkbox" id="check-show-he" checked style="width: 20px; height: 20px; cursor: pointer; margin-right: 4px;">
+                        <label for="check-show-he" class="sub-label" style="font-weight: bold; cursor: pointer; font-size: 13px; color: #ffffff;">ランスコにH・Eを表示</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 出力背景色設定 -->
+            <div class="control-group">
+                <label class="group-label">クロマキー背景色 (OBS取込用)</label>
+                <div class="chromakey-selector">
+                    <button class="btn btn-chroma chroma-green active" data-color="green">グリーン</button>
+                    <button class="btn btn-chroma chroma-blue" data-color="blue">ブルー</button>
+                    <button class="btn btn-chroma chroma-magenta" data-color="magenta">マゼンタ</button>
+                    <button class="btn btn-chroma chroma-transparent" data-color="transparent">透過 (本番用)</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 中央：BSO・ランナー＆カメラキャプチャコントロール ==================== -->
+        <section class="panel-section section-bso-camera">
+            <h2 class="panel-title">BSO / ランナー / カメラキャプチャ</h2>
+
+            <!-- BSO・ランナーコントロール -->
+            <div class="control-group">
+                <label class="group-label">BSO & ランナー</label>
+                <div class="bso-runner-container">
+                    <!-- BSO操作 -->
+                    <div class="bso-controls-block">
+                        <div class="bso-row-input">
+                            <span class="bso-lbl text-ball">B</span>
+                            <div class="bso-dots-input" id="bso-balls-input">
+                                <span class="bso-dot-btn" data-index="1"></span>
+                                <span class="bso-dot-btn" data-index="2"></span>
+                                <span class="bso-dot-btn" data-index="3"></span>
+                            </div>
+                            <button class="btn btn-xs btn-secondary" id="btn-add-ball">+1</button>
+                        </div>
+                        <div class="bso-row-input margin-top-xs">
+                            <span class="bso-lbl text-strike">S</span>
+                            <div class="bso-dots-input" id="bso-strikes-input">
+                                <span class="bso-dot-btn" data-index="1"></span>
+                                <span class="bso-dot-btn" data-index="2"></span>
+                            </div>
+                            <button class="btn btn-xs btn-secondary" id="btn-add-strike">+1</button>
+                        </div>
+                        <div class="bso-row-input margin-top-xs">
+                            <span class="bso-lbl text-out">O</span>
+                            <div class="bso-dots-input" id="bso-outs-input">
+                                <span class="bso-dot-btn" data-index="1"></span>
+                                <span class="bso-dot-btn" data-index="2"></span>
+                            </div>
+                            <button class="btn btn-xs btn-secondary" id="btn-add-out">+1</button>
+                        </div>
+                    </div>
+
+                    <!-- ランナー（ダイヤモンド）操作 -->
+                    <div class="runner-controls-block">
+                        <div class="base-diamond-input">
+                            <div class="base-input second" id="base-2nd-btn" title="二塁">2</div>
+                            <div class="base-input third" id="base-3rd-btn" title="三塁">3</div>
+                            <div class="base-input first" id="base-1st-btn" title="一塁">1</div>
+                            <div class="base-home">H</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-grid-4 margin-top-sm">
+                    <button class="btn btn-secondary btn-sm" id="btn-clear-bs">打者交代 (BSクリ)</button>
+                    <button class="btn btn-accent btn-sm" id="btn-clear-runner">ランナークリア</button>
+                    <button class="btn btn-danger-outline btn-sm" id="btn-change-sides">チェンジ (全クリ)</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-reset-bso-all">カウント全リセ</button>
+                </div>
+            </div>
+
+            <!-- 打者・投手・球数コントロール -->
+            <div class="control-group">
+                <label class="group-label">打者・投手・球数</label>
+                <div class="pitcher-batter-form">
+                    <div class="form-row">
+                        <div class="flex-1">
+                            <span class="sub-label">現在打者:</span>
+                            <input type="text" id="input-batter-name" class="form-input sm-input" placeholder="打者名">
+                        </div>
+                        <div style="width: 60px;">
+                            <span class="sub-label">背番号:</span>
+                            <input type="text" id="input-batter-number" class="form-input sm-input" placeholder="No">
+                        </div>
+                    </div>
+                    <div class="form-row margin-top-xs">
+                        <div class="flex-1">
+                            <span class="sub-label">現在投手:</span>
+                            <input type="text" id="input-pitcher-name" class="form-input sm-input" placeholder="投手名">
+                        </div>
+                        <div style="width: 60px;">
+                            <span class="sub-label">背番号:</span>
+                            <input type="text" id="input-pitcher-number" class="form-input sm-input" placeholder="No">
+                        </div>
+                    </div>
+                    <div class="flex-row items-center justify-between margin-top-sm" style="border-top: 1px dashed #334155; padding-top: 8px;">
+                        <div class="flex-row items-center gap-xs">
+                            <span class="sub-label" style="font-weight: bold;">投球数:</span>
+                            <span id="label-pitch-count" class="highlight-text" style="font-size: 20px;">0</span>
+                        </div>
+                        <div class="btn-group-row" style="width: 180px;">
+                            <button class="btn btn-xs btn-danger-outline" id="btn-pitch-minus">-1</button>
+                            <button class="btn btn-xs btn-primary" id="btn-pitch-plus">投球 +1</button>
+                            <button class="btn btn-xs btn-secondary" id="btn-pitch-reset">リセット</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- バックスクリーンカメラキャプチャ＆クロップ -->
+            <div class="control-group">
+                <label class="group-label">🎥 バックスクリーン映像キャプチャ</label>
+                <div class="camera-control-panel">
+                    <div class="flex-row items-center gap-xs">
+                        <select id="select-camera-device" class="form-input" style="flex: 1;">
+                            <option value="">デバイスを選択してください</option>
+                        </select>
+                        <button id="btn-toggle-camera" class="btn btn-primary btn-sm">カメラ開始</button>
+                    </div>
+
+                    <!-- キャプチャプレビュー領域 -->
+                    <div class="camera-preview-wrapper margin-top-sm">
+                        <video id="camera-video" autoplay playsinline muted></video>
+                        <canvas id="camera-debug-canvas" style="display:none;"></canvas>
+                        <!-- クロップ枠可視化用オーバーレイ -->
+                        <div class="crop-overlay-rect speed-rect" id="crop-visual-speed">球速</div>
+                        <div class="crop-overlay-rect pitch-rect" id="crop-visual-pitch">球数</div>
+                    </div>
+
+                    <!-- クロップスライダー調整 -->
+                    <div class="crop-sliders margin-top-sm">
+                        <div class="crop-section speed-crop">
+                            <span class="sub-label" style="color: #38bdf8; font-weight: bold;">1. 球速クロップ領域 (青枠)</span>
+                            <div class="slider-grid">
+                                <div>
+                                    <span class="sub-label-xs">X:</span>
+                                    <input type="range" id="crop-speed-x" min="0" max="100" value="10">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">Y:</span>
+                                    <input type="range" id="crop-speed-y" min="0" max="100" value="10">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">幅:</span>
+                                    <input type="range" id="crop-speed-w" min="5" max="50" value="20">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">高:</span>
+                                    <input type="range" id="crop-speed-h" min="5" max="50" value="15">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="crop-section pitch-crop margin-top-xs" style="border-top: 1px dashed #334155; padding-top: 8px;">
+                            <span class="sub-label" style="color: #eab308; font-weight: bold;">2. 球数クロップ領域 (黄枠)</span>
+                            <div class="slider-grid">
+                                <div>
+                                    <span class="sub-label-xs">X:</span>
+                                    <input type="range" id="crop-pitch-x" min="0" max="100" value="50">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">Y:</span>
+                                    <input type="range" id="crop-pitch-y" min="0" max="100" value="10">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">幅:</span>
+                                    <input type="range" id="crop-pitch-w" min="5" max="50" value="20">
+                                </div>
+                                <div>
+                                    <span class="sub-label-xs">高:</span>
+                                    <input type="range" id="crop-pitch-h" min="5" max="50" value="15">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 右側：選手データ＆テロップ操作 ==================== -->
+        <section class="panel-section section-players">
+            <h2 class="panel-title">選手データ＆ワンショットテロップ</h2>
+
+            <!-- データ連携設定 -->
+            <div class="control-group">
+                <label class="group-label">選手一覧データ連携 (CSV / Excel / スプレッドシート)</label>
+                
+                <!-- 先攻チーム個別ロード -->
+                <div class="team-load-section away-load-section">
+                    <span class="sub-label" style="color: #3b82f6; font-weight: bold;">🔵 先攻 (表) 選手データ (.csv / .xlsx)</span>
+                    <div class="sheet-input-row margin-top-xs">
+                        <input type="file" id="input-sheet-file-away" accept=".csv, .xlsx, .xls" class="file-input flex-1">
+                        <button id="btn-load-sheet-file-away" class="btn btn-primary">読込</button>
+                    </div>
+                </div>
+
+                <!-- 後攻チーム個別ロード -->
+                <div class="team-load-section home-load-section margin-top-sm">
+                    <span class="sub-label" style="color: #10b981; font-weight: bold;">🔴 後攻 (裏) 選手データ (.csv / .xlsx)</span>
+                    <div class="sheet-input-row margin-top-xs">
+                        <input type="file" id="input-sheet-file-home" accept=".csv, .xlsx, .xls" class="file-input flex-1">
+                        <button id="btn-load-sheet-file-home" class="btn btn-primary">読込</button>
+                    </div>
+                </div>
+                
+                <!-- 一括スプレッドシートURL -->
+                <div class="url-load-section margin-top-sm" style="border-top: 1px solid #334155; padding-top: 10px;">
+                    <span class="sub-label" style="font-weight: bold;">🔗 スプレッドシートURL連携 (一括データ用)</span>
+                    <div class="sheet-input-row margin-top-xs">
+                        <input type="text" id="input-sheet-url" class="form-input" placeholder="ウェブに公開したCSVのURLを入力してください">
+                        <button id="btn-load-sheet" class="btn btn-primary">URL読込</button>
+                    </div>
+                </div>
+
+                <div class="btn-group-row margin-top-sm">
+                    <button id="btn-load-demo-away" class="btn btn-secondary btn-sm flex-1">🔵 デモ選手(先攻)</button>
+                    <button id="btn-load-demo-home" class="btn btn-secondary btn-sm flex-1">🔴 デモ選手(後攻)</button>
+                </div>
+            </div>
+
+            <!-- カスタム画像テロップ送信 -->
+            <div class="control-group" id="custom-image-drop-zone" style="border: 1px dashed transparent; border-radius: 8px; padding: 6px; transition: border-color 0.2s, background-color 0.2s;" title="画像ファイルをこのパネル全体にドラッグ＆ドロップして登録できます">
+                <label class="group-label">画像テロップ (Googleスライド / ローカル画像)</label>
+                <div class="sheet-input-row">
+                    <input type="text" id="input-custom-image-url" class="form-input" placeholder="Googleスライドの画像URLなどを入力">
+                    <button id="btn-show-image-telop" class="btn btn-accent">URL送信</button>
+                </div>
+                <div class="sheet-input-row margin-top-xs">
+                    <input type="file" id="input-custom-image-file" accept="image/*" class="file-input flex-1">
+                    <button id="btn-show-image-file-telop" class="btn btn-accent">ファイル送信</button>
+                </div>
+                <div class="btn-group-row margin-top-xs">
+                    <button id="btn-hide-image-telop" class="btn btn-danger-outline btn-sm flex-1">画像テロップ非表示</button>
+                    <div class="flex-row items-center gap-xs">
+                        <label for="select-image-duration" class="sub-label nowrap">表示時間(秒):</label>
+                        <select id="select-image-duration" class="form-input sm-input">
+                            <option value="5">5秒</option>
+                            <option value="8" selected>8秒</option>
+                            <option value="12">12秒</option>
+                            <option value="0">手動消去</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 選手リスト表示とテロップ送信 -->
+            <div class="control-group">
+                <div class="section-header">
+                    <label class="group-label">選手一覧</label>
+                    <div class="flex-row items-center gap-xs">
+                        <label for="select-telop-duration" class="sub-label nowrap">表示時間(秒):</label>
+                        <select id="select-telop-duration" class="form-input sm-input">
+                            <option value="5">5秒</option>
+                            <option value="8" selected>8秒</option>
+                            <option value="12">12秒</option>
+                            <option value="0">手動消去</option>
+                        </select>
+                        <button id="btn-hide-player-telop" class="btn btn-danger-outline btn-sm" style="margin-left: 8px;">テロップ消去</button>
+                    </div>
+                </div>
+                
+                <div class="player-list-container">
+                    <div class="team-tab-buttons">
+                        <button class="tab-btn active" id="tab-away">先攻 (表) 選手</button>
+                        <button class="tab-btn" id="tab-home">後攻 (裏) 選手</button>
+                    </div>
+                    <div class="player-table-wrapper">
+                        <table class="player-table" id="player-table-body">
+                            <thead>
+                                <tr>
+                                    <th width="10%">打順</th>
+                                    <th width="10%">No</th>
+                                    <th width="15%">守備</th>
+                                    <th width="30%">名前</th>
+                                    <th width="15%">成績</th>
+                                    <th width="20%">クイック交代 / 操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6" class="no-data">選手データを読み込んでください。</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== カメラキャプチャ ＆ 放送出力 ＆ Stream Deck コントロール ==================== -->
+    <div style="padding: 0 20px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 15px;">
+        <!-- 📷 外付けUSB Webカメラ 超軽量キャプチャ設定 -->
+        <div class="panel-section" style="background:#1e293b; border-radius:8px; padding:15px; border:1px solid #334155;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 class="panel-title" style="font-size:14px; margin:0;">📷 外付けUSBカメラ (スコアボード/BSO枠)</h2>
+                <span id="camera-status-badge" style="font-size:11px; padding:2px 8px; border-radius:12px; background:#334155; color:#94a3b8;">停止中</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 6px;">
+                    <select id="camera-device-select" style="flex:2; background:#0f172a; border:1px solid #475569; color:#fff; padding:6px; border-radius:4px; font-size:12px;"></select>
+                    <button id="btn-toggle-camera" class="btn btn-primary" style="flex:1; font-size:12px; padding:6px 10px; background:#0284c7; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">カメラ起動</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <video id="camera-raw-video" playsinline muted autoplay style="display:none;"></video>
+                    <div style="flex:1; position:relative; background:#000; border-radius:4px; overflow:hidden; height:100px; display:flex; align-items:center; justify-content:center;">
+                        <canvas id="camera-crop-canvas" style="max-height:100px; max-width:100%; object-fit:contain;"></canvas>
+                    </div>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:4px; font-size:11px; color:#cbd5e1;">
+                        <div>X位置: <input type="range" id="crop-x" min="0" max="100" value="0" style="width:100%;"></div>
+                        <div>Y位置: <input type="range" id="crop-y" min="0" max="100" value="0" style="width:100%;"></div>
+                        <div>拡大率: <input type="range" id="crop-zoom" min="100" max="400" value="100" style="width:100%;"></div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <button id="btn-toggle-camera-overlay" class="btn btn-success" style="flex:1; font-size:11px; padding:6px; background:#16a34a; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">テロップ画面へ送出 (ON)</button>
+                    <span style="font-size:10px; color:#94a3b8;">※200ms間隔超軽量転送</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 放送出力方式 (クロマキー ＆ フィル/キー 2系統同時出力) -->
+        <div class="panel-section" style="background:#1e293b; border-radius:8px; padding:15px; border:1px solid #334155;">
+            <h2 class="panel-title" style="font-size:14px; margin-bottom:10px;">放送出力設定 (クロマキー / フィル＆キー 2系統同時出力)</h2>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div>
+                    <span style="display:block; margin-bottom:4px; font-size:11px; color:#38bdf8; font-weight:bold;">1. フィル＆キー方式 (DSK / スイッチャー2系統合成用):</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="window.open('baseball_overlay.html?mode=fill', 'baseball_overlay_fill', 'width=1920,height=1080');" class="btn btn-success" style="flex:1; font-size:11px; padding:6px; background:#16a34a; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🎬 Fill映像 (単体)</button>
+                        <button onclick="window.open('baseball_overlay.html?mode=key', 'baseball_overlay_key', 'width=1920,height=1080');" class="btn btn-warning" style="flex:1; font-size:11px; padding:6px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🔲 Keyマスク (単体)</button>
+                    </div>
+                </div>
+                <div style="border-top: 1px solid #334155; padding-top: 6px;">
+                    <span style="display:block; margin-bottom:4px; font-size:11px; color:#94a3b8;">2. クロマキー背景色 (OBS取込用):</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn btn-chroma chroma-green" onclick="setChromaKey('green')" style="flex:1; font-size:11px; padding:5px; background:#00ff00; color:#000; border:none; border-radius:4px; font-weight:700; cursor:pointer;">グリーン</button>
+                        <button class="btn btn-chroma chroma-blue" onclick="setChromaKey('blue')" style="flex:1; font-size:11px; padding:5px; background:#0000ff; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">ブルー</button>
+                        <button class="btn btn-chroma chroma-magenta" onclick="setChromaKey('magenta')" style="flex:1; font-size:11px; padding:5px; background:#ff00ff; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">マゼンタ</button>
+                        <button class="btn btn-chroma chroma-transparent active" onclick="setChromaKey('transparent')" style="flex:1; font-size:11px; padding:5px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">透過</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🎮 Stream Deck USB直接接続 ＆ 自動認識コントロール -->
+        <div class="panel-section" style="background:#1e293b; border-radius:8px; padding:15px; border:1px solid #334155;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 class="panel-title" style="font-size:14px; margin:0;">🎮 Stream Deck (USB直接接続・自動認識)</h2>
+                <span id="streamdeck-status-badge" style="font-size:11px; padding:2px 8px; border-radius:12px; background:#334155; color:#94a3b8;">未接続</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                    <button id="btn-connect-streamdeck" class="btn btn-primary" style="flex:2; font-size:12px; padding:6px 10px; background:#0284c7; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🔌 Stream DeckをUSB接続する</button>
+                    <button id="btn-shift-left" class="btn btn-secondary" style="font-size:11px; padding:6px 8px; background:#334155; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="キー認識位置を1つ左へ移動">⬅️ 1個左へ</button>
+                    <button id="btn-shift-right" class="btn btn-secondary" style="font-size:11px; padding:6px 8px; background:#334155; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="キー認識位置を1つ右へ移動">➡️ 1個右へ</button>
+                    <button id="btn-flip-streamdeck" class="btn btn-secondary" style="font-size:11px; padding:6px 8px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="ボタンの上下配置や文字が逆さまの場合にクリックして180度反転させます">🔄 上下反転</button>
+                    <button id="btn-disconnect-streamdeck" class="btn btn-danger hidden" style="font-size:12px; padding:6px 10px; background:#dc2626; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">切断</button>
+                </div>
+                <div id="streamdeck-device-info" style="font-size:11px; color:#94a3b8; line-height:1.4;">
+                    ※USBで接続されるとWeb HID経由で自動認識され、B・S・O・得点・アウト・ランナー等のキー割り振りとLCD描画が自動起動します。
+                </div>
+                <!-- 仮想キーレイアウト表示 -->
+                <div id="streamdeck-keypad-preview" class="hidden" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #334155;">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 下部：ライブプレビュー ==================== -->
+    <footer class="preview-panel">
+        <h2 class="panel-title">ライブプレビュー (16:9)</h2>
+        <div class="preview-container">
+            <iframe id="overlay-preview" src="baseball_overlay.html?v=16"></iframe>
+        </div>
+        <div class="preview-actions">
+            <button id="btn-open-overlay" class="btn btn-secondary">🔗 配信画面(オーバーレイ)を別ウィンドウで開く</button>
+            <span class="tip-text-white">※配信ソフト(OBS等)では、別窓のURLまたは「baseball_overlay.html」のローカルパスを直接ブラウザソースに入力してください。</span>
+        </div>
+    </footer>
+
+    <!-- JavaScript の読み込み -->
+    <script src="js/baseball_dashboard.js"></script>
+</body>
+</html>

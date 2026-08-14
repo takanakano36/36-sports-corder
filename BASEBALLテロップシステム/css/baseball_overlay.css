@@ -1,0 +1,1374 @@
+/* ==========================================================================
+   配信画面用オーバーレイ CSS (16:9 Full HD)
+   ========================================================================== */
+
+/* 全体設定 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body, html {
+    width: 1920px;
+    height: 1080px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Inter', 'Noto Sans JP', sans-serif;
+}
+
+/* クロマキー用背景 */
+.chromakey-green { background-color: #00ff00; }
+.chromakey-blue { background-color: #0000ff; }
+.chromakey-magenta { background-color: #ff00ff; }
+.chromakey-transparent { background-color: transparent; }
+
+/* 16:9 コンテナ */
+#overlay-container {
+    width: 1920px;
+    height: 1080px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 非表示ユーティリティ */
+.hidden {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   1. 小得点モード (左上表示)
+   ========================================================================== */
+#scoreboard-small {
+    position: absolute;
+    top: 54px;
+    left: 96px;
+    z-index: 100;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#scoreboard-small.hidden {
+    transform: translateY(-100px);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+.small-overlay-wrapper {
+    position: relative;
+    background: linear-gradient(180deg, #1c232e 0%, #0d1117 100%);
+    border: 2px solid #2e3b4e;
+    border-radius: 12px;
+    padding: 30px 12px 10px 12px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
+    width: 480px; /* 620px -> 480px へコンパクト化 */
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.small-logo-text {
+    position: absolute;
+    top: 6px;
+    left: 14px;
+    font-size: 12px;
+    font-weight: 900;
+    color: #475569;
+    letter-spacing: 0.5px;
+    font-family: 'Oswald', sans-serif;
+}
+
+.small-inning-display {
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+}
+
+#small-inning-text {
+    font-size: 22px;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.small-main-content {
+    display: flex;
+    width: 100%;
+    height: 68px;
+    gap: 8px;
+    align-items: stretch;
+}
+
+/* 左側：チーム名＆スコアのホワイトプレート（1/4狭小化） */
+.small-teams-plate {
+    background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+    border-radius: 6px;
+    width: 190px; /* 固定幅に狭めて 1/4 狭くします */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    flex-shrink: 0;
+}
+
+.small-team-row {
+    display: flex;
+    align-items: center;
+    height: 50%;
+    position: relative;
+    padding-right: 10px;
+    border-bottom: 1.5px solid #cbd5e1;
+}
+
+.small-team-row:last-child {
+    border-bottom: none;
+}
+
+.small-team-color-bar {
+    width: 8px;
+    height: 100%;
+    background-color: #94a3b8;
+}
+
+.small-team-name {
+    font-size: 16px; /* 幅が狭くなったためフォントを16pxに縮小 */
+    font-weight: 900;
+    color: #0f172a;
+    margin-left: 8px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.small-team-score {
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #000000;
+    text-align: right;
+    line-height: 1;
+}
+
+/* 右側：ランナー・SBO・球速球数をまとめたブロック */
+.small-right-block {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    align-items: stretch;
+}
+
+/* ランナー＆BSOプレート（距離を詰めた極小設計） */
+.small-bso-runner-plate {
+    width: 180px; /* 固定幅でぎゅっと密着 */
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: #000000;
+    border: 1px solid #1e293b;
+    border-radius: 6px;
+    padding: 4px 8px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
+    flex-shrink: 0;
+}
+
+/* ダイヤモンドのひし形ベースライン */
+.small-diamond-bg {
+    position: absolute;
+    right: 22px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+    width: 32px;
+    height: 32px;
+    border: 2px solid #2e3b4e;
+    background: rgba(30, 41, 59, 0.4);
+    z-index: 1;
+}
+
+.base-diamond {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    background-color: #0f172a;
+    border: 1.5px solid #475569;
+    transform: rotate(45deg);
+    transition: background-color 0.3s, box-shadow 0.3s, border-color 0.3s;
+    z-index: 2;
+}
+
+/* 座標を極小化して密着配置 */
+.base-diamond.second { /* 二塁（上） */
+    right: 32px;
+    top: 11px;
+}
+
+.base-diamond.third { /* 三塁（左） */
+    right: 50px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.base-diamond.first { /* 一塁（右） */
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.base-diamond.active {
+    background-color: #f97316;
+    border-color: #fdba74;
+    box-shadow: 0 0 8px #f97316;
+}
+
+/* BSOランプ */
+.small-bso-container {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 95px;
+}
+
+.bso-row {
+    display: flex;
+    align-items: center;
+    height: 16px;
+}
+
+.bso-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    font-weight: 900;
+    color: #ffffff;
+    width: 12px;
+    margin-right: 6px;
+    line-height: 1;
+}
+
+.bso-lamps {
+    display: flex;
+    gap: 4px;
+}
+
+.bso-lamp {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #1e293b;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.lamp-b.active {
+    background-color: #22c55e;
+    box-shadow: 0 0 8px #22c55e;
+}
+
+.lamp-s.active {
+    background-color: #eab308;
+    box-shadow: 0 0 8px #eab308;
+}
+
+.lamp-o.active {
+    background-color: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+}
+
+/* 球速・球数表示エリア (インライン組み込み) */
+.small-inline-captures {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    justify-content: space-between;
+}
+
+.capture-inline-box {
+    display: flex;
+    align-items: center;
+    background: #000000;
+    border: 1.5px solid #2e3b4e;
+    border-radius: 4px;
+    height: 32px;
+    padding: 0 4px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+}
+
+.inline-label {
+    font-size: 8px;
+    font-weight: bold;
+    color: #64748b;
+    width: 22px;
+    text-align: center;
+    border-right: 1px solid #1e293b;
+    padding-right: 2px;
+    margin-right: 4px;
+    font-family: 'Oswald', sans-serif;
+}
+
+.inline-img-container {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.inline-img-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 2;
+}
+
+.capture-placeholder {
+    position: absolute;
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fbbf24;
+    text-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
+    z-index: 1;
+}
+
+/* 大得点表示トグルの制御クラス */
+.he-col {
+    display: table-cell;
+}
+.he-col.hide-col {
+    display: none !important;
+}
+
+.extra-inning-col {
+    display: none !important;
+}
+.extra-inning-col.show-col {
+    display: table-cell !important;
+}
+
+/* ==========================================================================
+   2. 対戦モード (VS)
+   ========================================================================== */
+#overlay-vs {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#overlay-vs.hidden {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+/* 大会名プレート */
+.vs-tournament {
+    background: linear-gradient(180deg, #0f1c30 0%, #030810 100%) !important;
+    border: 1.5px solid #1e293b !important;
+    border-bottom: none !important;
+    border-radius: 9px 9px 0 0 !important;
+    padding: 9px 36px !important;
+    min-width: 720px !important;
+    text-align: center !important;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.3) !important;
+    z-index: 1;
+}
+
+.tournament-display-text {
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    color: #f1f5f9 !important;
+    letter-spacing: 1.5px !important;
+    text-shadow: none !important;
+}
+
+/* メインプレート */
+.vs-plate {
+    display: flex;
+    width: 1560px !important; /* サッカーのサイズ */
+    height: 126px !important;
+    background: linear-gradient(180deg, 
+        #f8fafc 0%, 
+        #ffffff 5%, 
+        #e2e8f0 15%, 
+        #cbd5e1 30%, 
+        #94a3b8 55%, 
+        #cbd5e1 85%, 
+        #475569 100%) !important;
+    border: 3px solid #334155 !important;
+    border-radius: 0 0 30px 30px !important;
+    box-shadow: 
+        inset 0 3px 3px #ffffff,
+        inset 0 -3px 4.5px rgba(0, 0, 0, 0.3),
+        0 22.5px 45px rgba(0, 0, 0, 0.5) !important;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+    padding: 0 !important;
+}
+
+/* ドット柄背景を左右のチーム背景に配置 */
+.vs-plate::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1.2px, transparent 1.2px) !important;
+    background-size: 6px 6px !important;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.vs-team {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 48px !important; /* サッカーのパディング */
+    z-index: 1;
+    position: static !important; /* absolute配置を解除 */
+    transition: none !important;
+}
+
+/* 左側のアウェイ（野球での左側）は左寄せ（サッカーのvs-homeに対応） */
+.vs-team.vs-away {
+    justify-content: flex-start !important;
+    padding-left: 48px !important;
+}
+.vs-team.vs-away .logo-box {
+    position: static !important; /* absoluteを解除 */
+}
+.vs-team.vs-away .vs-team-name {
+    text-align: left !important;
+    margin-left: 30px !important;
+    margin-right: 0 !important;
+    width: auto !important;
+}
+
+/* 右側のホーム（野球での右側）は右寄せ（サッカーのvs-awayに対応） */
+.vs-team.vs-home {
+    justify-content: flex-end !important;
+    padding-right: 48px !important;
+}
+.vs-team.vs-home .logo-box {
+    position: static !important; /* absoluteを解除 */
+}
+.vs-team.vs-home .vs-team-name {
+    text-align: right !important;
+    margin-right: 30px !important;
+    margin-left: 0 !important;
+    width: auto !important;
+}
+
+.vs-team-name {
+    font-size: 42px !important; /* サッカーのサイズ */
+    font-weight: 900 !important;
+    color: #1e293b !important;
+    text-shadow: 0 1.5px 3px rgba(255,255,255,0.8) !important;
+    letter-spacing: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* VSプレート専用の大きめのロゴボックス */
+.vs-plate .logo-box {
+    width: 90px !important;
+    height: 90px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255,255,255,0.4) !important;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.15) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.vs-plate .logo-box img {
+    width: 80% !important;
+    height: 80% !important;
+    object-fit: contain !important;
+}
+
+/* 中央VSロゴ台形 */
+.vs-center-box {
+    width: 210px !important; /* サッカーのサイズ */
+    height: 100% !important;
+    background: linear-gradient(180deg, #0b1f3c 0%, #030a14 100%) !important;
+    clip-path: polygon(0% 0%, 100% 0%, 82% 100%, 18% 100%) !important;
+    border-left: 3px solid #0ea5e9 !important;
+    border-right: 3px solid #0ea5e9 !important;
+    box-shadow: 
+        0 0 22.5px rgba(14, 165, 233, 0.8),
+        inset 0 0 15px rgba(14, 165, 233, 0.4) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 2 !important;
+    position: relative !important;
+    border-bottom: 4.5px solid #38bdf8 !important;
+    transform: none !important;
+}
+
+.vs-label {
+    font-family: 'Oswald', sans-serif !important;
+    font-size: 60px !important; /* サッカーのサイズ */
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    font-style: italic !important;
+    letter-spacing: 1.5px !important;
+    text-shadow: 
+        0 0 15px #0ea5e9,
+        0 0 30px #0ea5e9 !important;
+    transform: translateY(-3px) !important;
+}
+
+/* ==========================================================================
+   3. 大得点モード (ランニングスコアボード)
+   ========================================================================== */
+#scoreboard-large {
+    position: absolute;
+    bottom: 108px; /* セーフマージン(10%)を考慮し 80px -> 108px へ引き上げ */
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 60;
+}
+
+#scoreboard-large.hidden {
+    transform: translateX(-50%) translateY(100px);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+.large-plate {
+    background: rgba(0, 0, 0, 0.7) !important;
+    border: 2px solid rgba(0, 0, 0, 0.7) !important; /* シルバーの枠を黒透過に変更 */
+    border-radius: 24px;
+    padding: 16px 36px;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
+    width: 1360px;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+}
+
+.large-board-title {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffffff;
+    background: linear-gradient(180deg, #071731 0%, #020914 100%);
+    border: 1.5px solid #0095ff;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5), 0 0 12px rgba(0, 149, 255, 0.5);
+    border-radius: 12px;
+    padding: 8px 32px;
+    width: fit-content;
+    margin: 0 auto 4px auto !important; /* テーブルとの隙間のマージンを縮めて密着化 */
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(0, 149, 255, 0.6);
+}
+
+.running-score-board {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 22px;
+    color: #0f172a;
+    text-align: center;
+}
+
+.running-score-board th, 
+.running-score-board td {
+    padding: 12px 10px;
+    border: 1px solid #94a3b8;
+}
+
+.running-score-board th {
+    font-family: 'Oswald', sans-serif;
+    background: linear-gradient(180deg, #071731 0%, #020914 100%) !important;
+    color: #ffffff !important;
+    font-weight: bold;
+    border: 1.5px solid #1e293b !important;
+}
+
+.running-score-board td {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    background: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%) !important; /* シルバーの透過なし */
+    color: #0f172a !important;
+    border: 1px solid #94a3b8 !important;
+}
+
+.team-col {
+    text-align: left;
+    width: 280px;
+    font-family: 'Noto Sans JP', sans-serif !important;
+    font-weight: 900 !important;
+    color: #0f172a !important;
+}
+
+.large-team-name-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.large-team-color {
+    width: 6px;
+    height: 24px;
+    border-radius: 3px;
+}
+
+.stats-col {
+    background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%) !important; /* H, Eは少し濃い目のシルバー */
+    width: 60px;
+    color: #0f172a !important;
+}
+
+.total-score {
+    font-size: 28px;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    background: linear-gradient(180deg, #071731 0%, #020914 100%) !important; /* Rはネイビーで強調 */
+    border: 1.5px solid #0095ff !important;
+    box-shadow: 0 0 10px rgba(0, 149, 255, 0.5);
+}
+
+/* ==========================================================================
+   3.5. 大得点モード (サッカー風)
+   ========================================================================== */
+#scoreboard-large-soccer {
+    position: absolute;
+    bottom: 108px;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 60;
+}
+
+#scoreboard-large-soccer.hidden {
+    transform: translateX(-50%) translateY(100px);
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+.large-soccer-plate {
+    display: flex;
+    width: 1560px;
+    height: 126px;
+    background: linear-gradient(180deg, 
+        #f8fafc 0%, 
+        #ffffff 5%, 
+        #e2e8f0 15%, 
+        #cbd5e1 30%, 
+        #94a3b8 55%, 
+        #cbd5e1 85%, 
+        #475569 100%) !important;
+    border: 3px solid #334155 !important;
+    border-radius: 0 0 30px 30px !important;
+    box-shadow: 
+        inset 0 3px 3px #ffffff,
+        inset 0 -3px 4.5px rgba(0, 0, 0, 0.3),
+        0 22.5px 45px rgba(0, 0, 0, 0.5) !important;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.large-soccer-plate::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.12) 1.2px, transparent 1.2px) !important;
+    background-size: 6px 6px !important;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.large-soccer-team {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 48px;
+    z-index: 1;
+}
+
+.large-soccer-away {
+    justify-content: flex-start;
+}
+
+.large-soccer-home {
+    justify-content: flex-end;
+}
+
+.large-soccer-plate .logo-box {
+    width: 90px !important;
+    height: 90px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255,255,255,0.4) !important;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2), 0 2px 5px rgba(0,0,0,0.15) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.large-soccer-plate .logo-box img {
+    width: 80% !important;
+    height: 80% !important;
+    object-fit: contain !important;
+}
+
+.large-soccer-team-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.large-soccer-away .large-soccer-team-info {
+    margin-left: 30px;
+    align-items: flex-start;
+}
+
+.large-soccer-home .large-soccer-team-info {
+    margin-right: 30px;
+    align-items: flex-end;
+}
+
+.large-soccer-team-name-ja {
+    font-size: 39px;
+    font-weight: 900;
+    color: #1e293b;
+    text-shadow: 0 1.5px 3px rgba(255,255,255,0.8);
+    line-height: 1.1;
+}
+
+.large-soccer-team-name-en {
+    font-size: 16.5px;
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: 0.75px;
+    margin-top: 3px;
+}
+
+.large-soccer-center-box {
+    width: 360px;
+    height: 100%;
+    background: linear-gradient(180deg, #0b1f3c 0%, #030a14 100%) !important;
+    clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%) !important;
+    border-left: 3px solid #0ea5e9 !important;
+    border-right: 3px solid #0ea5e9 !important;
+    box-shadow: 
+        0 0 22.5px rgba(14, 165, 233, 0.8),
+        inset 0 0 15px rgba(14, 165, 233, 0.4) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 2;
+    position: relative;
+    border-bottom: 4.5px solid #38bdf8 !important;
+    border-top: 4.5px solid #38bdf8 !important;
+}
+
+.large-soccer-score-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 105px;
+    height: 100%;
+}
+
+.large-soccer-score-num {
+    font-family: 'Oswald', sans-serif;
+    font-size: 66px;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 
+        0 0 15px rgba(255, 255, 255, 0.4),
+        0 0 30px rgba(14, 165, 233, 0.6);
+}
+
+.large-soccer-period-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 120px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    margin: 0 6px;
+}
+
+.large-soccer-period-box .period-display-text {
+    font-size: 21px;
+    font-weight: 900;
+    color: #38bdf8;
+    text-shadow: 0 0 9px rgba(56, 189, 248, 0.5);
+    letter-spacing: 0.75px;
+}
+
+/* ==========================================================================
+   4. ワンショットテロップ (選手カード)
+   ========================================================================== */
+#telop-wrapper {
+    position: absolute;
+    bottom: 108px; /* セーフマージン(10%)を考慮し 80px -> 108px へ引き上げ */
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    width: 960px; /* サッカーと同等の標準サイズ感(960px x 120px)へ再縮小 */
+    height: 120px;
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 110;
+}
+
+#telop-wrapper.hidden {
+    transform: translateX(-50%) translateY(120px) scale(0.95);
+    opacity: 0 !important;
+}
+
+#player-card {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #f8fafc 0%, #ffffff 50%, #e2e8f0 100%);
+    border: 3px solid rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    box-shadow: 
+        0 20px 40px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(0, 0, 0, 0.1),
+        inset 0 1.5px 2px #ffffff;
+    overflow: hidden;
+    position: relative;
+}
+
+/* 下部の立体的な黒帯プレート */
+#player-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(180deg, #0f172a 0%, #020617 100%);
+    z-index: 10;
+}
+
+.player-team-color-box {
+    width: 120px;
+    height: 100%;
+    background-color: var(--player-team-color, #059669);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+    border-right: 2px solid rgba(0, 0, 0, 0.2);
+    box-shadow: inset -5px 0 10px rgba(0, 0, 0, 0.15);
+}
+
+.logo-box-wrapper {
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    border: 2px solid #ffffff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.logo-box-wrapper img {
+    max-width: 80%;
+    max-height: 80%;
+    object-fit: contain;
+}
+
+.player-main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    height: 100%;
+    padding-bottom: 8px;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 30%, #ffffff 70%, #cbd5e1 100%);
+}
+
+/* メインエリアの斜めラインテクスチャ */
+.player-main-area::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.5) 75%, transparent 75%, transparent);
+    background-size: 30px 30px;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.player-team-name-strip {
+    background: linear-gradient(180deg, #071731 0%, #020914 100%);
+    border-bottom: 1.5px solid #0095ff;
+    box-shadow: 0 4px 10px rgba(0, 149, 255, 0.3);
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    width: fit-content;
+    min-width: 280px;
+    border-radius: 0 0 10px 0;
+    z-index: 5;
+    position: relative;
+}
+
+.player-team-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 1px;
+    text-shadow: 0 0 6px rgba(0, 149, 255, 0.6);
+}
+
+.player-details-row {
+    display: flex;
+    align-items: center;
+    height: 82px;
+    padding: 0 16px;
+    z-index: 5;
+    position: relative;
+}
+
+
+.player-pos-num {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    width: 100px;
+    flex-shrink: 0;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    color: #0f172a;
+    padding-top: 6px;
+}
+
+.player-pos {
+    font-size: 28px;
+    letter-spacing: 0.5px;
+    color: #0f172a;
+}
+
+.player-num {
+    font-size: 44px;
+    line-height: 1;
+    color: #0f172a;
+}
+
+.player-name-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 6px;
+    padding-top: 6px;
+}
+
+.player-name-ja {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 900;
+    font-size: 42px;
+    color: #0f172a;
+    letter-spacing: 4px;
+    text-shadow: 0.5px 0.5px 0px rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    line-height: 1.0;
+}
+
+.player-comment {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: #475569;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    text-align: center;
+    max-width: 320px;
+    width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    display: block;
+}
+
+/* 野球成績表示エリア */
+.player-stats-box {
+    display: flex;
+    gap: 10px;
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 0 12px;
+    margin-right: 8px;
+    height: 48px;
+    align-items: center;
+}
+
+.stats-field {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 60px;
+}
+
+.stats-label {
+    font-size: 11px;
+    font-weight: bold;
+    color: #64748b;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.stats-val {
+    font-family: 'Oswald', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.player-memo-box {
+    width: 60px;
+    flex-shrink: 0;
+    display: flex;
+    align-self: flex-start;
+    align-items: baseline;
+    justify-content: center;
+    padding-top: 4px;
+}
+
+.player-memo {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 800;
+    font-size: 32px;
+    color: #1e293b;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   5. カスタム画像テロップ
+   ========================================================================== */
+#image-telop-wrapper {
+    position: absolute;
+    bottom: 108px; /* セーフマージン(10%)を考慮し 80px -> 108px へ引き上げ */
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+    transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 80;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+    max-width: 1200px;
+    max-height: 675px;
+}
+
+#image-telop-src {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ==========================================================================
+   5. スタメン一覧 (Lineup) テロップ (全競技共通デザイン)
+   ========================================================================== */
+#overlay-lineup {
+    position: absolute;
+    bottom: 96px; /* 右下セーフエリア */
+    right: 96px; /* 右側セーフエリア */
+    width: 400px; /* 横幅を引き締めて間延び感を解消 */
+    display: flex;
+    flex-direction: column;
+    z-index: 85;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#overlay-lineup.hidden {
+    transform: translateY(40px); /* 下からのシャープなフェードイン */
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+/* ヘッダー */
+.lineup-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 56px; /* フォントサイズに合わせて高さを調整 */
+    background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.4) 100%), var(--lineup-team-color, #1e293b);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px 8px 0 0;
+    padding: 0 14px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+.lineup-header .logo-box {
+    width: 38px;
+    height: 38px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.lineup-header .logo-box img {
+    max-width: 80%;
+    max-height: 80%;
+    object-fit: contain;
+}
+
+#lineup-team-name {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 24px; /* 24pxに拡張 */
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* 選手リストコンテナ */
+.lineup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    width: 100%;
+}
+
+/* 選手行 */
+.lineup-player-row {
+    display: flex;
+    width: 100%;
+    height: 42px; /* 大きなフォントサイズに合わせて42pxに戻す */
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 左ブロック（ポジションと背番号）: 黒背景・黄色背番号 */
+.lineup-left-block {
+    display: flex;
+    align-items: center;
+    background: #0f172a;
+    width: 125px;
+    height: 100%;
+    clip-path: polygon(0 0, 100% 0, 85% 100%, 0 100%);
+    padding: 0 14px 0 18px;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    z-index: 5;
+}
+
+.lineup-pos-label {
+    font-size: 15px;
+    color: #94a3b8;
+    width: 42px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.lineup-num-label {
+    font-size: 22px; /* 少し大きめに調整 */
+    color: #eab308;
+    flex: 1;
+    text-align: right;
+    padding-right: 18px;
+}
+
+/* 右ブロック（氏名と学年）: シルバーグラデーション */
+.lineup-right-block {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #f8fafc 0%, #cbd5e1 100%);
+    height: 100%;
+    margin-left: -20px;
+    padding: 0 80px 0 24px; /* 右側に学年タグ用の余白80pxを確保して完全な対称性のあるセンタリングへ */
+    position: relative;
+    z-index: 1;
+}
+
+.lineup-name-label {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 24px; /* 氏名のフォントサイズをチーム名と同じ24pxに拡張 */
+    font-weight: 900;
+    color: #0f172a;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px; /* 氏名表示の最大幅 */
+    text-align: center;
+    margin-left: 10px;
+}
+
+/* 学年タグ: 白丸角 */
+.lineup-grade-tag {
+    position: absolute;
+    right: 12px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 18px; /* 学年のフォントサイズを18pxに拡張 */
+    font-weight: 700;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 2px 6px; /* ボタン内の余白を適正化 */
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* ==========================================================================
+   6. フルスクリーンボタン ＆ HDMI・スイッチャー出力支援 (自動フェードアウト)
+   ========================================================================== */
+.fullscreen-btn {
+    display: block; /* 常に描画させ、ホバーで現れるようにCSS主導にする */
+    position: fixed !important; /* 絶対配置から固定配置に変更してウインドウ基準にする */
+    bottom: 24px !important;
+    right: 24px !important;
+    z-index: 2147483647 !important; /* 最大値にして全ての要素より前面に配置 */
+    background: rgba(15, 23, 42, 0.85);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s ease, background 0.2s, transform 0.2s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+}
+
+.fullscreen-btn:hover {
+    background: #0f172a;
+    border-color: #0095ff;
+    transform: scale(1.05);
+}
+
+/* マウスが動いている間のみボタンを薄く表示（マウスを外すと完全に消える） */
+body:not(.mouse-idle) .fullscreen-btn {
+    opacity: 0.65;
+}
+body:not(.mouse-idle) .fullscreen-btn:hover {
+    opacity: 1;
+}
+
+/* 3秒以上マウス操作がない時、カーソルとボタンを完全に非表示にする */
+.mouse-idle {
+    cursor: none !important;
+}
+
+.mouse-idle .fullscreen-btn {
+    opacity: 0 !important;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   フィル＆キー方式 (Fill / Key 放送規格出力)
+   ========================================================================== */
+
+/* Fillモード: 通常描画、背景は黒（スイッチャーFill入力用） */
+body.fill-mode {
+    background-color: #000000 !important;
+}
+body.fill-mode .chromakey-bg {
+    background-color: #000000 !important;
+}
+
+/* Key (Mask) モード: 放送用アルファキー（白=不透明、黒=透明、スイッチャーKey入力用） */
+body.key-mode {
+    background-color: #000000 !important;
+}
+body.key-mode .chromakey-bg {
+    background-color: #000000 !important;
+}
+body.key-mode #overlay-large-board,
+body.key-mode #overlay-small-board,
+body.key-mode #overlay-ransko,
+body.key-mode #overlay-vs,
+body.key-mode #overlay-batter-card,
+body.key-mode #overlay-lineup,
+body.key-mode #overlay-pitcher-change,
+body.key-mode #overlay-batter-change,
+body.key-mode #image-telop-wrapper,
+body.key-mode #camera-crop-overlay-wrapper {
+    filter: brightness(0) invert(1) contrast(100);
+}
+body.key-mode .fullscreen-btn {
+    display: none !important;
+}
+
+/* ==========================================================================
+   外付けUSBカメラ クロップテロップ表示枠
+   ========================================================================== */
+#camera-crop-overlay-wrapper {
+    position: absolute;
+    bottom: 24px;
+    right: 320px;
+    width: 240px;
+    height: 135px;
+    background: #0f172a;
+    border: 2px solid #38bdf8;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    z-index: 50;
+    transition: opacity 0.3s;
+}
+#camera-crop-overlay-wrapper.hidden {
+    display: none;
+}
+#camera-crop-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

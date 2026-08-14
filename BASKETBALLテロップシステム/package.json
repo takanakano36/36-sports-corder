@@ -1,0 +1,17 @@
+{
+  "name": "basketball-telop-system",
+  "version": "1.0.0",
+  "description": "Basketball Sports Coder overlay and dashboard system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "basketball",
+    "sports-coder",
+    "overlay",
+    "obs"
+  ],
+  "author": "",
+  "license": "ISC"
+}

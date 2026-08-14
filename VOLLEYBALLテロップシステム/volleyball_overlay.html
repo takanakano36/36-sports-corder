@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>バレーボール/ビーチバレー配信画面 (Overlay)</title>
+    <link rel="stylesheet" href="css/volleyball_overlay.css">
+</head>
+<body>
+    <!-- グリーンバック等のクロマキー調整用背景 -->
+    <div id="chromakey-bg" class="chromakey-bg transparent"></div>
+
+    <!-- ==========================================================================
+       得点経過タイムライン (Score History Timeline - 左端縦2列配置、オンオフ対応)
+       ========================================================================== -->
+    <div id="overlay-score-timeline" class="hidden">
+        <span class="timeline-label">History</span>
+        <div class="timeline-grid-header">
+            <span class="timeline-grid-team-title home">HOME</span>
+            <span class="timeline-grid-team-title away">AWAY</span>
+        </div>
+        <div id="timeline-rows-area" class="timeline-rows-container">
+            <!-- JSで直近15点の得点経過行が動的に挿入されます -->
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       大得点板 (DISPLAY_MODE: large - 最新バスケの縦並び・1280pxサイズ準拠)
+       ========================================================================== -->
+    <div id="overlay-large-board" class="hidden">
+        <!-- HOMEチームエリア -->
+        <div class="large-team home">
+            <div class="team-color-bar team-home-color-bar"></div>
+            <!-- 大得点用ロゴマーク -->
+            <div class="large-logo-box" id="large-logo-box-home" style="display: none; width: 46px; height: 46px; align-items: center; justify-content: center; margin-right: 16px; margin-left: 25px; background: transparent; border: none; box-shadow: none; flex-shrink: 0;">
+                <img class="team-home-logo-display" src="" alt="" style="max-width: 100%; max-height: 100%; object-fit: contain;" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+            </div>
+            
+            <!-- チーム名・ドット縦並びブロック (バスケと完全同期) -->
+            <div class="large-name-to-block">
+                <span class="large-name-container team-home-name-display">HOME</span>
+                <div class="timeout-dots" id="home-timeout-dots" style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+                    <!-- タイムアウト行 -->
+                    <div class="indicator-group" style="display:flex; align-items:center; gap:6px;">
+                        <span class="indicator-label" style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; width:24px;">T.O</span>
+                        <div id="sb-large-home-to-dots" class="timeout-dots-row" style="display:flex; gap:4px;"></div>
+                    </div>
+                    <!-- チャレンジ行 (インジケーターON時のみ) -->
+                    <div class="indicator-group" id="sb-large-home-challenge-group" style="display:flex; align-items:center; gap:6px;">
+                        <span class="indicator-label" style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; width:24px;">CHG</span>
+                        <div id="sb-large-home-challenge-dots" class="timeout-dots-row" style="display:flex; gap:4px;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="large-score team-home-score-display">0</div>
+        </div>
+
+        <!-- 中央情報ブロック -->
+        <div class="large-center">
+            <!-- ホーム側サーブ権 (三角 ▶) -->
+            <div id="sb-large-home-serve" class="serve-indicator">▶</div>
+
+            <!-- セットカウント＆セパレーター -->
+            <div class="large-mid-area">
+                <span class="set-label">SET</span>
+                <div class="set-count-container">
+                    <!-- ホーム側セット獲得ランプ -->
+                    <div id="sb-large-home-set-dots" class="set-count-container" style="display:flex; gap:5px;"></div>
+                    <!-- アウェイ側セット獲得ランプ -->
+                    <div id="sb-large-away-set-dots" class="set-count-container" style="display:flex; gap:5px;"></div>
+                </div>
+            </div>
+
+            <!-- アウェイ側サーブ権 (三角 ◀) -->
+            <div id="sb-large-away-serve" class="serve-indicator">◀</div>
+        </div>
+
+        <!-- AWAYチームエリア (HTMLの物理順序はHOMEと同一にし、CSSのrow-reverseで対称配置にする) -->
+        <div class="large-team away">
+            <div class="team-color-bar team-away-color-bar"></div>
+            <!-- 大得点用ロゴマーク -->
+            <div class="large-logo-box" id="large-logo-box-away" style="display: none; width: 46px; height: 46px; align-items: center; justify-content: center; margin-right: 25px; margin-left: 16px; background: transparent; border: none; box-shadow: none; flex-shrink: 0;">
+                <img class="team-away-logo-display" src="" alt="" style="max-width: 100%; max-height: 100%; object-fit: contain;" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+            </div>
+            
+            <!-- チーム名・ドット縦並びブロック (バスケと完全同期) -->
+            <div class="large-name-to-block">
+                <span class="large-name-container team-away-name-display">AWAY</span>
+                <div class="timeout-dots" id="away-timeout-dots" style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+                    <!-- タイムアウト行 -->
+                    <div class="indicator-group" style="display:flex; align-items:center; gap:6px;">
+                        <span class="indicator-label" style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; width:24px;">T.O</span>
+                        <div id="sb-large-away-to-dots" class="timeout-dots-row" style="display:flex; gap:4px;"></div>
+                    </div>
+                    <!-- チャレンジ行 -->
+                    <div class="indicator-group" id="sb-large-away-challenge-group" style="display:flex; align-items:center; gap:6px;">
+                        <span class="indicator-label" style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; width:24px;">CHG</span>
+                        <div id="sb-large-away-challenge-dots" class="timeout-dots-row" style="display:flex; gap:4px;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="large-score team-away-score-display">0</div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       小得点板 (DISPLAY_MODE: small - 横長660px拡張 ＆ 縦並びスリム配置)
+       ========================================================================== -->
+    <div id="overlay-small-board" class="hidden">
+        <!-- HOMEチーム -->
+        <div class="small-team home">
+            <div class="small-team-indicator team-home-color-bar"></div>
+            <!-- チーム名・ドット縦並びブロック (バスケ小得点と同一) -->
+            <div class="small-name-to-block">
+                <span class="small-name team-home-name-display">HOME</span>
+                <!-- ミニT.Oドット -->
+                <div id="small-home-timeout-dots" class="small-timeout-dots" style="display:flex; gap:3px;">
+                    <div id="sb-small-home-to-dots" style="display:flex; gap:3px;"></div>
+                </div>
+            </div>
+            <!-- ミニサーブ権 (三角 ▶) -->
+            <div id="sb-small-home-serve" class="small-serve-indicator">▶</div>
+            <span class="small-score team-home-score-display">0</span>
+        </div>
+
+        <!-- 中央情報 (セットカウント部) -->
+        <div class="small-center">
+            <span class="small-period-display">SET</span>
+            <div id="sb-small-sets-val" class="small-sets-display">0 - 0</div>
+        </div>
+
+        <!-- AWAYチーム (物理順序はHOMEと同一にし、CSSのrow-reverseで対称配置にする) -->
+        <div class="small-team away">
+            <div class="small-team-indicator team-away-color-bar"></div>
+            <!-- チーム名・ドット縦並びブロック -->
+            <div class="small-name-to-block">
+                <span class="small-name team-away-name-display">AWAY</span>
+                <!-- ミニT.Oドット -->
+                <div id="small-away-timeout-dots" class="small-timeout-dots" style="display:flex; gap:3px;">
+                    <div id="sb-small-away-to-dots" style="display:flex; gap:3px;"></div>
+                </div>
+            </div>
+            <!-- ミニサーブ権 (三角 ◀) -->
+            <div id="sb-small-away-serve" class="small-serve-indicator">◀</div>
+            <span class="small-score team-away-score-display">0</span>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       ランニングスコア (DISPLAY_MODE: ransko - バスケ最新1200pxサイズ・ロゴ・カラーバー配置)
+       ========================================================================== -->
+    <div id="overlay-ransko" class="hidden">
+        <div id="ransko-tournament-name" class="vs-tournament tournament-display-text" style="min-width: 960px !important; border-bottom: none !important; font-size: 14px; font-weight: 700; text-align: center; background: linear-gradient(180deg, #0f1c30 0%, #030810 100%); border: 1.5px solid #374151; border-radius: 9px 9px 0 0; padding: 6px 36px; color: #cbd5e1;">TOURNAMENT NAME</div>
+        <table class="ransko-table">
+            <thead>
+                <tr id="ransko-header-row">
+                    <!-- JSでヘッダーを動的構築 -->
+                </tr>
+            </thead>
+            <tbody id="ransko-table-body">
+                <!-- JSで動的に行を追加 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ==========================================================================
+       対戦カード (DISPLAY_MODE: vs - 全国共通デザイン標準準拠、イタリックなし)
+       ========================================================================== -->
+    <div id="overlay-vs" class="hidden">
+        <div class="vs-tournament">
+            <span class="tournament-display-text">CHAMPIONSHIP</span>
+        </div>
+        <div class="vs-plate">
+            <!-- 左チーム (HOME) -->
+            <div class="vs-team vs-left" id="vs-team-left">
+                <div class="logo-box" id="vs-logo-box-left">
+                    <img class="team-home-logo-display" src="" alt="Home Logo" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+                </div>
+                <span class="vs-team-name team-home-name-display">HOME TEAM</span>
+            </div>
+            
+            <!-- VS台形 -->
+            <div class="vs-center-box">
+                <div class="vs-label">VS</div>
+            </div>
+            
+            <!-- 右チーム (AWAY) -->
+            <div class="vs-team vs-right" id="vs-team-right">
+                <span class="vs-team-name team-away-name-display">AWAY TEAM</span>
+                <div class="logo-box" id="vs-logo-box-right">
+                    <img class="team-away-logo-display" src="" alt="Away Logo" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       選手紹介カード (ON AIR用 ワンショット - 最新バスケ960pxプレートスリットデザイン完全同期)
+       ========================================================================== -->
+    <div id="overlay-player-card" class="hidden">
+        <div id="player-card">
+            <div class="player-team-color-box" id="player-team-color-box">
+                <div class="logo-box-wrapper">
+                    <img id="player-team-logo" src="" alt="" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+                </div>
+            </div>
+            <div class="player-main-area">
+                <div class="player-team-name-strip">
+                    <span id="player-team" class="player-team-name">TEAM</span>
+                </div>
+                <div class="player-details-row">
+                    <div class="player-pos-num">
+                        <span id="player-position" class="player-pos">G</span>
+                        <span id="player-number" class="player-num">0</span>
+                    </div>
+                    <div class="player-name-box">
+                        <span id="player-name-ja" class="player-name-ja">PLAYER NAME</span>
+                        <span id="player-comment" class="player-comment"></span>
+                    </div>
+                    <div class="player-memo-box">
+                        <span id="player-memo" class="player-memo">3年</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       スタメン一覧 (Lineup - 大得点と重ね合わせ可能、イタリックなし)
+       ========================================================================== -->
+    <div id="overlay-lineup" class="hidden">
+        <div class="lineup-header" id="lineup-header-container">
+            <div class="lineup-logo-box" id="lineup-logo-box">
+                <img src="" alt="Team Logo" onload="this.style.opacity='1'" onerror="this.style.opacity='0'">
+            </div>
+            <span class="lineup-header-team-name" id="lineup-team-name">TEAM NAME</span>
+            <span class="lineup-title-badge">STARTERS</span>
+        </div>
+        <div class="lineup-rows" id="lineup-rows-container">
+            <!-- JSで各選手行を動的生成 -->
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+       全画面静静止画スライド (Full Screen Slide)
+       ========================================================================== -->
+    <div id="overlay-fullscreen-slide" class="hidden"></div>
+
+    <!-- 画面右下にホバー時のみ表示される全画面ボタン (HDMI/スイッチャー出力用) -->
+    <button id="btn-fullscreen-toggle" class="fullscreen-btn">全画面表示 (スイッチャー出力)</button>
+
+    <script src="js/volleyball_overlay.js"></script>
+    <script>
+        (function() {
+            const fullscreenBtn = document.getElementById('btn-fullscreen-toggle');
+            let mouseIdleTimer = null;
+
+            const isIframe = (window.self !== window.top);
+            if (isIframe && fullscreenBtn) {
+                fullscreenBtn.style.display = 'none';
+                fullscreenBtn.remove();
+            } else if (fullscreenBtn) {
+                fullscreenBtn.style.display = 'block';
+            }
+
+            function resetMouseIdleTimer() {
+                document.body.classList.remove('mouse-idle');
+                clearTimeout(mouseIdleTimer);
+                mouseIdleTimer = setTimeout(() => {
+                    document.body.classList.add('mouse-idle');
+                }, 3000);
+            }
+
+            if (!isIframe) {
+                window.addEventListener('mousemove', resetMouseIdleTimer);
+                window.addEventListener('click', resetMouseIdleTimer);
+                resetMouseIdleTimer();
+            }
+
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    document.exitFullscreen();
+                }
+            }
+
+            if (fullscreenBtn && !isIframe) {
+                fullscreenBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                });
+            }
+
+            document.addEventListener('dblclick', () => {
+                toggleFullscreen();
+            });
+
+            // 1920x1080 16:9 完全自動フィット制御 (トリミング・見切れ防止)
+            function fitWindow() {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                const scale = Math.min(w / 1920, h / 1080);
+                if (scale < 0.999 || scale > 1.001) {
+                    document.body.style.transform = `scale(${scale})`;
+                    document.body.style.transformOrigin = 'center center';
+                    document.body.style.position = 'absolute';
+                    document.body.style.left = `${(w - 1920 * scale) / 2}px`;
+                    document.body.style.top = `${(h - 1080 * scale) / 2}px`;
+                } else {
+                    document.body.style.transform = 'none';
+                    document.body.style.position = 'relative';
+                    document.body.style.left = '0';
+                    document.body.style.top = '0';
+                }
+            }
+
+            window.addEventListener('resize', fitWindow);
+            window.addEventListener('load', fitWindow);
+            fitWindow();
+        })();
+    </script>
+</body>
+</html>

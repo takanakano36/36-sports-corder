@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AAC Sports Corder | Sports Telop & Score Control Gate</title>
+  <meta name="description" content="ALL ARTS CREATE.Inc. が提供するスポーツ中継・配信専用の高品質テロップ＆スコアコーダー統合ランチャー。">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  
+  <!-- Fonts (Outfit, Noto Sans JP, Cormorant Garamond) - AAC / AAC GO Design Standard -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Noto+Sans+JP:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ==========================================================================
+       AAC Sports Corder — Gateway Portal
+       Design Standard: ALL ARTS CREATE / AAC GO (Apple, Porsche, NOT A HOTEL style)
+       Typography-led · Luxury Brand Architecture · Whitespace-first
+       ========================================================================== */
+
+    :root {
+      --aac-bg: #09090b;
+      --aac-surface: #121215;
+      --aac-surface-hover: #18181c;
+      --aac-card-bg: rgba(18, 18, 21, 0.75);
+      
+      --aac-white: #f5f4ef;
+      --aac-offwhite: #e4e2dc;
+      --aac-muted: #8e8e93;
+      --aac-dim: #48484a;
+      
+      --aac-gold: #d4af37;
+      --aac-gold-light: #e5c158;
+      --aac-gold-subtle: rgba(212, 175, 55, 0.12);
+      --aac-gold-glow: rgba(212, 175, 55, 0.25);
+      --aac-gold-border: rgba(212, 175, 55, 0.28);
+      
+      --aac-border: rgba(255, 255, 255, 0.08);
+      --aac-border-hover: rgba(255, 255, 255, 0.22);
+      
+      --font-en: 'Outfit', -apple-system, sans-serif;
+      --font-serif: 'Cormorant Garamond', Georgia, serif;
+      --font-ja: 'Noto Sans JP', -apple-system, sans-serif;
+      
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --radius-full: 9999px;
+      
+      --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
+      --transition-smooth: all 0.5s var(--ease-luxury);
+      --transition-fast: all 0.25s ease;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      background-color: var(--aac-bg);
+      color: var(--aac-white);
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      font-family: var(--font-ja);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.8;
+      letter-spacing: 0.03em;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(212, 175, 55, 0.06) 0%, transparent 60%),
+        radial-gradient(circle at 10% 90%, rgba(255, 255, 255, 0.02) 0%, transparent 50%);
+      background-attachment: fixed;
+      overflow-x: hidden;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1260px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    /* ──────────────────────────────────────────
+       HEADER
+    ────────────────────────────────────────── */
+    header {
+      padding: 1.75rem 0;
+      border-bottom: 1px solid var(--aac-border);
+      background: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      transition: var(--transition-fast);
+    }
+
+    .header-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-logo-img {
+      height: 36px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+    }
+
+    .brand-logo-fallback {
+      font-family: var(--font-en);
+      font-weight: 800;
+      font-size: 1.3rem;
+      letter-spacing: 0.15em;
+      color: var(--aac-white);
+    }
+
+    .brand-divider {
+      width: 1px;
+      height: 24px;
+      background-color: var(--aac-border);
+    }
+
+    .brand-titles {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .app-title {
+      font-family: var(--font-en);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--aac-white);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .app-title-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.6rem;
+      border-radius: var(--radius-full);
+      background: var(--aac-gold-subtle);
+      color: var(--aac-gold);
+      border: 1px solid var(--aac-gold-border);
+    }
+
+    .app-subtitle {
+      font-size: 0.75rem;
+      color: var(--aac-muted);
+      letter-spacing: 0.06em;
+      font-weight: 300;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    /* ──────────────────────────────────────────
+       BUTTONS (AAC Standard)
+    ────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: var(--radius-md);
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-family: var(--font-en);
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      text-decoration: none;
+      transition: var(--transition-smooth);
+      border: 1px solid transparent;
+      outline: none;
+      white-space: nowrap;
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, var(--aac-gold) 0%, #b89742 100%);
+      color: #09090b;
+      font-weight: 600;
+      box-shadow: 0 4px 18px var(--aac-gold-glow);
+    }
+
+    .btn-gold:hover {
+      background: linear-gradient(135deg, var(--aac-gold-light) 0%, var(--aac-gold) 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4);
+      color: #000;
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--aac-offwhite);
+      border: 1px solid var(--aac-border);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: var(--aac-border-hover);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .btn-icon-only {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: var(--radius-md);
+    }
+
+    /* ──────────────────────────────────────────
+       MAIN / HERO
+    ────────────────────────────────────────── */
+    main {
+      flex: 1;
+      padding: 4.5rem 0 6rem;
+    }
+
+    .hero-section {
+      text-align: center;
+      margin-bottom: 4.5rem;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: var(--font-en);
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--aac-gold);
+      margin-bottom: 1.2rem;
+    }
+
+    .hero-eyebrow-line {
+      width: 24px;
+      height: 1px;
+      background-color: var(--aac-gold);
+      opacity: 0.6;
+    }
+
+    .hero-title {
+      font-family: var(--font-en), var(--font-ja);
+      font-size: clamp(2.2rem, 4.5vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      margin-bottom: 1rem;
+      color: var(--aac-white);
+    }
+
+    .hero-title span {
+      background: linear-gradient(135deg, #ffffff 0%, var(--aac-gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 0.95rem;
+      color: var(--aac-muted);
+      max-width: 680px;
+      margin: 0 auto;
+      font-weight: 300;
+      line-height: 1.8;
+    }
+
+    /* ──────────────────────────────────────────
+       SPORTS GRID & CARDS
+    ────────────────────────────────────────── */
+    .sports-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 1.75rem;
+      margin-bottom: 4rem;
+    }
+
+    .sport-card {
+      background: var(--aac-card-bg);
+      border: 1px solid var(--aac-border);
+      border-radius: var(--radius-lg);
+      padding: 2.2rem;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition-smooth);
+      backdrop-filter: blur(14px);
+    }
+
+    .sport-card:hover {
+      background: var(--aac-surface-hover);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 0 30px rgba(212, 175, 55, 0.1);
+      border-color: rgba(212, 175, 55, 0.38);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.8rem;
+    }
+
+    /* 添付画像ピクトグラムコンテナ */
+    .pictogram-container {
+      width: 78px;
+      height: 78px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      transition: var(--transition-smooth);
+    }
+
+    .picto-img {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+      position: absolute;
+      transition: var(--transition-fast);
+    }
+
+    .picto-white {
+      opacity: 0.9;
+    }
+
+    .picto-gold {
+      opacity: 0;
+    }
+
+    .sport-card:hover .picto-white {
+      opacity: 0;
+      transform: scale(1.05);
+    }
+
+    .sport-card:hover .picto-gold {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+
+    .sport-card:hover .pictogram-container {
+      background: var(--aac-gold-subtle);
+      border-color: var(--aac-gold-border);
+      transform: scale(1.04);
+      box-shadow: 0 4px 20px rgba(212, 175, 55, 0.2);
+    }
+
+    .card-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.4rem;
+    }
+
+    .tag-gold {
+      font-family: var(--font-en);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-sm);
+      background: var(--aac-gold-subtle);
+      color: var(--aac-gold);
+      border: 1px solid var(--aac-gold-border);
+    }
+
+    .tag-spec {
+      font-family: var(--font-en);
+      font-size: 0.65rem;
+      color: var(--aac-muted);
+      letter-spacing: 0.06em;
+    }
+
+    .card-body {
+      flex: 1;
+      margin-bottom: 2rem;
+    }
+
+    .sport-en {
+      font-family: var(--font-en);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--aac-gold);
+      margin-bottom: 0.35rem;
+    }
+
+    .sport-ja {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--aac-white);
+      letter-spacing: 0.02em;
+      margin-bottom: 0.75rem;
+    }
+
+    .sport-desc {
+      font-size: 0.85rem;
+      color: var(--aac-muted);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    .card-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .btn-launch {
+      width: 100%;
+      padding: 0.85rem 1.4rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      font-family: var(--font-ja);
+      letter-spacing: 0.06em;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      background: linear-gradient(135deg, var(--aac-gold) 0%, #b89742 100%);
+      color: #09090b;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition-smooth);
+      box-shadow: 0 4px 15px var(--aac-gold-glow);
+    }
+
+    .btn-launch:hover {
+      background: linear-gradient(135deg, var(--aac-gold-light) 0%, var(--aac-gold) 100%);
+      box-shadow: 0 6px 22px rgba(212, 175, 55, 0.45);
+      transform: translateY(-2px);
+      color: #000;
+    }
+
+    .btn-launch svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+
+    .sub-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 0.25rem;
+    }
+
+    .btn-sub-link {
+      font-size: 0.75rem;
+      color: var(--aac-muted);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.7rem;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid var(--aac-border);
+      transition: var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .btn-sub-link:hover {
+      color: var(--aac-white);
+      border-color: var(--aac-border-hover);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .btn-config {
+      font-size: 0.75rem;
+      color: var(--aac-dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition-fast);
+    }
+
+    .btn-config:hover {
+      color: var(--aac-offwhite);
+    }
+
+    /* ──────────────────────────────────────────
+       ADD SPORT PLACEHOLDER
+    ────────────────────────────────────────── */
+    .add-sport-card {
+      border: 1px dashed rgba(255, 255, 255, 0.15);
+      background: rgba(18, 18, 21, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 3rem 2rem;
+      cursor: pointer;
+      border-radius: var(--radius-lg);
+      transition: var(--transition-smooth);
+      min-height: 320px;
+    }
+
+    .add-sport-card:hover {
+      border-color: var(--aac-gold);
+      background: var(--aac-gold-subtle);
+      transform: translateY(-4px);
+    }
+
+    .add-icon-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--aac-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--aac-muted);
+      margin-bottom: 1.2rem;
+      transition: var(--transition-smooth);
+    }
+
+    .add-sport-card:hover .add-icon-circle {
+      background: var(--aac-gold);
+      color: #09090b;
+      border-color: var(--aac-gold);
+      transform: scale(1.08);
+      box-shadow: 0 4px 20px var(--aac-gold-glow);
+    }
+
+    .add-card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--aac-white);
+      margin-bottom: 0.35rem;
+      letter-spacing: 0.04em;
+    }
+
+    .add-card-desc {
+      font-size: 0.8rem;
+      color: var(--aac-muted);
+      font-weight: 300;
+    }
+
+    /* ──────────────────────────────────────────
+       INFO BANNER
+    ────────────────────────────────────────── */
+    .info-banner {
+      background: var(--aac-surface);
+      border: 1px solid var(--aac-border);
+      border-radius: var(--radius-lg);
+      padding: 2.2rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2rem;
+      margin-top: 2rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .info-banner-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .info-banner-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-md);
+      background: var(--aac-gold-subtle);
+      border: 1px solid var(--aac-gold-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--aac-gold);
+      flex-shrink: 0;
+    }
+
+    .info-banner-text h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--aac-white);
+      margin-bottom: 0.25rem;
+      letter-spacing: 0.04em;
+    }
+
+    .info-banner-text p {
+      font-size: 0.85rem;
+      color: var(--aac-muted);
+      line-height: 1.6;
+      font-weight: 300;
+    }
+
+    /* ──────────────────────────────────────────
+       FOOTER
+    ────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--aac-border);
+      background: #060608;
+      padding: 4.5rem 0 3.5rem;
+      margin-top: auto;
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+      text-align: center;
+    }
+
+    .footer-brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .presented-label {
+      font-family: var(--font-en);
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--aac-muted);
+      font-weight: 500;
+    }
+
+    .company-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--aac-white);
+      font-family: var(--font-en);
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: 0.08em;
+      padding: 0.6rem 1.6rem;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--aac-border);
+      transition: var(--transition-smooth);
+    }
+
+    .company-link:hover {
+      background: var(--aac-gold-subtle);
+      border-color: var(--aac-gold);
+      color: var(--aac-gold);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px var(--aac-gold-glow);
+    }
+
+    .footer-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5rem;
+      font-family: var(--font-en);
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--aac-muted);
+    }
+
+    .footer-nav a {
+      color: inherit;
+      text-decoration: none;
+      transition: var(--transition-fast);
+    }
+
+    .footer-nav a:hover {
+      color: var(--aac-gold);
+    }
+
+    .footer-copy {
+      font-family: var(--font-en);
+      font-size: 0.75rem;
+      color: var(--aac-dim);
+      letter-spacing: 0.06em;
+    }
+
+    /* ──────────────────────────────────────────
+       MODAL
+    ────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: var(--transition-fast);
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-box {
+      background: var(--aac-surface);
+      border: 1px solid var(--aac-border-hover);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 620px;
+      box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.9);
+      overflow: hidden;
+      transform: scale(0.96);
+      transition: var(--transition-smooth);
+    }
+
+    .modal-overlay.active .modal-box {
+      transform: scale(1);
+    }
+
+    .modal-header {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid var(--aac-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--aac-white);
+      letter-spacing: 0.02em;
+    }
+
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--aac-muted);
+      cursor: pointer;
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition-fast);
+    }
+
+    .modal-close-btn:hover {
+      color: var(--aac-white);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .modal-body {
+      padding: 1.8rem 2rem;
+      max-height: 72vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .form-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--aac-offwhite);
+      letter-spacing: 0.04em;
+    }
+
+    .form-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--aac-border);
+      border-radius: var(--radius-md);
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      color: #fff;
+      font-family: inherit;
+      outline: none;
+      transition: var(--transition-fast);
+    }
+
+    .form-input:focus {
+      border-color: var(--aac-gold);
+      box-shadow: 0 0 12px var(--aac-gold-glow);
+    }
+
+    .icon-selector-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.4rem;
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 0.4rem;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--aac-border);
+    }
+
+    .icon-choice {
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 0.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      cursor: pointer;
+      transition: var(--transition-fast);
+      color: var(--aac-muted);
+      font-size: 0.65rem;
+      text-align: center;
+    }
+
+    .icon-choice:hover {
+      border-color: var(--aac-border-hover);
+      color: var(--aac-white);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .icon-choice.selected {
+      border-color: var(--aac-gold);
+      background: var(--aac-gold-subtle);
+      color: var(--aac-gold);
+    }
+
+    .icon-choice img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .modal-footer {
+      padding: 1.2rem 2rem;
+      border-top: 1px solid var(--aac-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.8rem;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .header-inner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .header-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .sports-grid {
+        grid-template-columns: 1fr;
+      }
+      .icon-selector-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+      .info-banner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container header-inner">
+      <a href="https://all-arts-create.com/" target="_blank" rel="noopener noreferrer" class="brand-group" title="ALL ARTS CREATE.Inc. 公式Webサイト">
+        <img src="assets/logo.png" alt="ALL ARTS CREATE" class="brand-logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+        <span class="brand-logo-fallback" style="display:none;">ALL ARTS CREATE</span>
+        <div class="brand-divider"></div>
+        <div class="brand-titles">
+          <div class="app-title">
+            AAC SPORTS CODER
+            <span class="app-title-badge">PORTAL</span>
+          </div>
+          <div class="app-subtitle">Broadcast Telop & Score Control Gate</div>
+        </div>
+      </a>
+
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btnOpenAddModal">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          競技を追加
+        </button>
+        <button class="btn btn-outline btn-icon-only" id="btnResetAll" title="競技設定をデフォルトに戻す">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+    <div class="container">
+      
+      <!-- HERO -->
+      <section class="hero-section">
+        <div class="hero-eyebrow">
+          <span class="hero-eyebrow-line"></span>
+          BROADCAST CONTROL GATE
+          <span class="hero-eyebrow-line"></span>
+        </div>
+        <h1 class="hero-title">
+          <span>AAC Sports Corder</span>
+        </h1>
+        <p class="hero-desc">
+          競技カードをクリックして各ダッシュボードを別ウィンドウで起動します。HDMIクリーン送出・Dual Screen同期に対応した高品質スポーツコーダーシステム。
+        </p>
+      </section>
+
+      <!-- SPORTS GRID -->
+      <section class="sports-grid" id="sportsGrid">
+        <!-- JSで動的にレンダリング -->
+      </section>
+
+      <!-- INFO BANNER -->
+      <section class="info-banner">
+        <div class="info-banner-left">
+          <div class="info-banner-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+            </svg>
+          </div>
+          <div class="info-banner-text">
+            <h4>HDMIクリーン出力（16:9 / 1080p）連動仕様</h4>
+            <p>ダッシュボードから送出画面を開くか、各カードの「送出窓」から直接フルHDテロップ画面を立ち上げ、スイッチャーへダイレクト送出可能です。</p>
+          </div>
+        </div>
+        <a href="https://all-arts-create.com/" target="_blank" rel="noopener noreferrer" class="btn btn-outline">
+          ALL ARTS CREATE 公式
+        </a>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <div class="presented-label">Presented by</div>
+        <a href="https://all-arts-create.com/" target="_blank" rel="noopener noreferrer" class="company-link" title="株式会社オールアーツクリエイト 公式Webサイト">
+          ALL ARTS CREATE.Inc.
+        </a>
+      </div>
+      <div class="footer-nav">
+        <a href="https://all-arts-create.com/about.html" target="_blank" rel="noopener noreferrer">About</a>
+        <a href="https://all-arts-create.com/services.html" target="_blank" rel="noopener noreferrer">Services</a>
+        <a href="https://all-arts-create.com/works.html" target="_blank" rel="noopener noreferrer">Works</a>
+        <a href="https://all-arts-create.com/aac-go.html" target="_blank" rel="noopener noreferrer">AAC GO</a>
+        <a href="https://all-arts-create.com/company.html" target="_blank" rel="noopener noreferrer">Company</a>
+      </div>
+      <div class="footer-copy">
+        &copy; ALL ARTS CREATE.Inc. All Rights Reserved. AAC Sports Corder System.
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="sportModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">競技の追加</h3>
+        <button class="modal-close-btn" id="btnCloseModal">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editSportId">
+        
+        <div class="form-group">
+          <label class="form-label">競技名（日本語）</label>
+          <input type="text" id="inputNameJa" class="form-input" placeholder="例: テニス">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">競技名（英語）</label>
+          <input type="text" id="inputNameEn" class="form-input" placeholder="例: TENNIS">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">説明文</label>
+          <input type="text" id="inputDesc" class="form-input" placeholder="例: セットカウント・ゲーム・タイブレーク管理対応">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ピクトグラムアイコン（全30競技から選択）</label>
+          <div class="icon-selector-grid" id="iconSelector">
+            <!-- JSで動的生成 -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">ダッシュボード HTML パス / URL</label>
+          <input type="text" id="inputDashUrl" class="form-input" placeholder="例: ./TENNISテロップシステム/tennis_dashboard.html">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">オーバーレイ HTML パス / URL（任意）</label>
+          <input type="text" id="inputOverlayUrl" class="form-input" placeholder="例: ./TENNISテロップシステム/tennis_overlay.html">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btnCancelModal">キャンセル</button>
+        <button class="btn btn-gold" id="btnSaveSport">保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       添付画像から抽出された30競技のピクトグラム辞書
+       ========================================================================== */
+    const SPORT_ICONS = {
+      soccer: { name: 'サッカー', file: 'soccer' },
+      basketball: { name: 'バスケ', file: 'basketball' },
+      volleyball: { name: 'バレー', file: 'volleyball' },
+      baseball: { name: '野球', file: 'baseball' },
+      americanfootball: { name: 'アメフト', file: 'americanfootball' },
+      tennis: { name: 'テニス', file: 'tennis' },
+      badminton: { name: 'バドミントン', file: 'badminton' },
+      tabletennis: { name: '卓球', file: 'tabletennis' },
+      golf: { name: 'ゴルフ', file: 'golf' },
+      boxing: { name: 'ボクシング', file: 'boxing' },
+      karate: { name: '空手・格闘技', file: 'karate' },
+      wrestling: { name: 'レスリング', file: 'wrestling' },
+      swimming: { name: '水泳', file: 'swimming' },
+      sprint: { name: '陸上・短距離', file: 'sprint' },
+      hurdles: { name: 'ハードル', file: 'hurdles' },
+      highjump: { name: '走高跳', file: 'highjump' },
+      javelin: { name: 'やり投', file: 'javelin' },
+      discus: { name: '円盤投', file: 'discus' },
+      cycling: { name: '自転車・ロード', file: 'cycling' },
+      rowing: { name: 'ボート', file: 'rowing' },
+      canoe: { name: 'カヌー', file: 'canoe' },
+      sailing: { name: 'セーリング', file: 'sailing' },
+      icehockey: { name: 'アイスホッケー', file: 'icehockey' },
+      speedskating: { name: 'スピードスケート', file: 'speedskating' },
+      figureskating: { name: 'フィギュアスケート', file: 'figureskating' },
+      skijump: { name: 'スキージャンプ', file: 'skijump' },
+      snowboard: { name: 'スノーボード', file: 'snowboard' },
+      fencing: { name: 'フェンシング', file: 'fencing' },
+      cricket: { name: 'クリケット', file: 'cricket' },
+      lacrosse: { name: 'ラクロス', file: 'lacrosse' }
+    };
+
+    // 初期5競技データ定義
+    const DEFAULT_SPORTS = [
+      {
+        id: 'soccer',
+        nameJa: 'サッカー',
+        nameEn: 'SOCCER',
+        icon: 'soccer',
+        desc: '得点、前後半タイマー、アディショナルタイム、スタメン/ベンチ、選手交代、カード管理対応',
+        dashUrl: './SOCCERテロップシステム/soccer_dashboard.html',
+        overlayUrl: './SOCCERテロップシステム/soccer_overlay.html'
+      },
+      {
+        id: 'basketball',
+        nameJa: 'バスケットボール',
+        nameEn: 'BASKETBALL',
+        icon: 'basketball',
+        desc: 'Q別スコア、ショットクロック(24s/14s)、ファウル数、タイムアウト、デュアル出力対応',
+        dashUrl: './BASKETBALLテロップシステム/basketball_dashboard.html',
+        overlayUrl: './BASKETBALLテロップシステム/basketball_overlay.html'
+      },
+      {
+        id: 'volleyball',
+        nameJa: 'バレーボール',
+        nameEn: 'VOLLEYBALL',
+        icon: 'volleyball',
+        desc: 'セットカウント(5セット制)、サーブ権インジケーター、タイムアウト、ローテーション管理対応',
+        dashUrl: './VOLLEYBALLテロップシステム/volleyball_dashboard.html',
+        overlayUrl: './VOLLEYBALLテロップシステム/volleyball_overlay.html'
+      },
+      {
+        id: 'baseball',
+        nameJa: '野球',
+        nameEn: 'BASEBALL',
+        icon: 'baseball',
+        desc: 'BSOカウント、ランナー塁状況、イニング表裏、打順/守備位置、投球数・打率表示対応',
+        dashUrl: './BASEBALLテロップシステム/baseball_dashboard.html',
+        overlayUrl: './BASEBALLテロップシステム/baseball_overlay.html'
+      },
+      {
+        id: 'americanfootball',
+        nameJa: 'アメリカンフットボール',
+        nameEn: 'AMERICAN FOOTBALL',
+        icon: 'americanfootball',
+        desc: 'ダウン＆ディスタンス(DOWN & TO GO)、ボールオン位置、クォーター時間、ポゼッション表示対応',
+        dashUrl: './AMERICANFOOTBALLテロップシステム/americanfootball_dashboard.html',
+        overlayUrl: './AMERICANFOOTBALLテロップシステム/americanfootball_overlay.html'
+      }
+    ];
+
+    const STORAGE_KEY = 'AAC_SPORTS_CODER_PORTAL_V4';
+
+    function getSportsList() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch(e) {
+          console.error(e);
+        }
+      }
+      return DEFAULT_SPORTS;
+    }
+
+    function saveSportsList(list) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
+
+    function launchWindow(url, title, width = 1280, height = 850) {
+      if (!url) {
+        alert('起動先パスが設定されていません。「設定」ボタンからパスを入力してください。');
+        return;
+      }
+      const left = Math.max(0, (window.screen.width - width) / 2);
+      const top = Math.max(0, (window.screen.height - height) / 2);
+      const win = window.open(
+        url,
+        '_blank',
+        `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`
+      );
+      if (!win) {
+        alert('ポップアップがブロックされました。ブラウザのアドレスバー右側から「ポップアップを許可」してください。');
+      }
+    }
+
+    function renderSportsCards() {
+      const sports = getSportsList();
+      const grid = document.getElementById('sportsGrid');
+      grid.innerHTML = '';
+
+      sports.forEach((sport) => {
+        const iconDef = SPORT_ICONS[sport.icon] || SPORT_ICONS.soccer;
+        const iconFile = iconDef.file;
+        const card = document.createElement('div');
+        card.className = 'sport-card';
+
+        card.innerHTML = `
+          <div class="card-top">
+            <div class="pictogram-container">
+              <img src="assets/pictograms/${iconFile}.png" class="picto-img picto-white" alt="${sport.nameJa}">
+              <img src="assets/pictograms/${iconFile}_gold.png" class="picto-img picto-gold" alt="${sport.nameJa}">
+            </div>
+            <div class="card-meta">
+              <span class="tag-gold">Official Live</span>
+              <span class="tag-spec">1080p FHD Clean</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="sport-en">${escapeHtml(sport.nameEn)}</div>
+            <div class="sport-ja">${escapeHtml(sport.nameJa)}</div>
+            <div class="sport-desc">${escapeHtml(sport.desc)}</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn-launch" onclick="launchDashboard('${sport.id}')">
+              <svg viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              ダッシュボードを起動
+            </button>
+            <div class="sub-actions">
+              ${sport.overlayUrl ? `
+                <button class="btn-sub-link" onclick="launchOverlay('${sport.id}')" title="送出用オーバーレイ画面を直接開く">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+                  </svg>
+                  送出窓を開く
+                </button>
+              ` : '<span></span>'}
+              <button class="btn-config" onclick="openEditModal('${sport.id}')" title="設定・パス編集">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                </svg>
+                設定
+              </button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // 追加用カード
+      const addCard = document.createElement('div');
+      addCard.className = 'add-sport-card';
+      addCard.onclick = () => openAddModal();
+      addCard.innerHTML = `
+        <div class="add-icon-circle">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+        </div>
+        <div class="add-card-title">＋ 競技を追加する</div>
+        <div class="add-card-desc">テニス・ハンドボール等の新コーダーを登録</div>
+      `;
+      grid.appendChild(addCard);
+    }
+
+    window.launchDashboard = function(id) {
+      const sports = getSportsList();
+      const item = sports.find(s => s.id === id);
+      if (item) {
+        launchWindow(item.dashUrl, `AAC_${item.nameEn}_Dashboard`, 1360, 900);
+      }
+    };
+
+    window.launchOverlay = function(id) {
+      const sports = getSportsList();
+      const item = sports.find(s => s.id === id);
+      if (item && item.overlayUrl) {
+        launchWindow(item.overlayUrl, `AAC_${item.nameEn}_Overlay`, 1920, 1080);
+      }
+    };
+
+    const modal = document.getElementById('sportModal');
+    let selectedIconKey = 'soccer';
+
+    function initIconSelector() {
+      const container = document.getElementById('iconSelector');
+      container.innerHTML = '';
+      Object.keys(SPORT_ICONS).forEach(key => {
+        const item = SPORT_ICONS[key];
+        const div = document.createElement('div');
+        div.className = `icon-choice ${key === selectedIconKey ? 'selected' : ''}`;
+        div.onclick = () => {
+          selectedIconKey = key;
+          document.querySelectorAll('.icon-choice').forEach(el => el.classList.remove('selected'));
+          div.classList.add('selected');
+        };
+        div.innerHTML = `
+          <img src="assets/pictograms/${item.file}.png" alt="${item.name}">
+          <span>${item.name}</span>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = '新しい競技の追加';
+      document.getElementById('editSportId').value = '';
+      document.getElementById('inputNameJa').value = '';
+      document.getElementById('inputNameEn').value = '';
+      document.getElementById('inputDesc').value = '';
+      document.getElementById('inputDashUrl').value = '';
+      document.getElementById('inputOverlayUrl').value = '';
+      selectedIconKey = 'soccer';
+      initIconSelector();
+      modal.classList.add('active');
+    }
+
+    window.openEditModal = function(id) {
+      const sports = getSportsList();
+      const item = sports.find(s => s.id === id);
+      if (!item) return;
+
+      document.getElementById('modalTitle').textContent = `「${item.nameJa}」の設定・編集`;
+      document.getElementById('editSportId').value = item.id;
+      document.getElementById('inputNameJa').value = item.nameJa;
+      document.getElementById('inputNameEn').value = item.nameEn;
+      document.getElementById('inputDesc').value = item.desc;
+      document.getElementById('inputDashUrl').value = item.dashUrl;
+      document.getElementById('inputOverlayUrl').value = item.overlayUrl || '';
+      selectedIconKey = item.icon || 'soccer';
+      initIconSelector();
+      modal.classList.add('active');
+    };
+
+    function closeModal() {
+      modal.classList.remove('active');
+    }
+
+    document.getElementById('btnCloseModal').onclick = closeModal;
+    document.getElementById('btnCancelModal').onclick = closeModal;
+    document.getElementById('btnOpenAddModal').onclick = openAddModal;
+
+    document.getElementById('btnSaveSport').onclick = function() {
+      const id = document.getElementById('editSportId').value.trim();
+      const nameJa = document.getElementById('inputNameJa').value.trim();
+      const nameEn = document.getElementById('inputNameEn').value.trim();
+      const desc = document.getElementById('inputDesc').value.trim();
+      const dashUrl = document.getElementById('inputDashUrl').value.trim();
+      const overlayUrl = document.getElementById('inputOverlayUrl').value.trim();
+
+      if (!nameJa || !nameEn || !dashUrl) {
+        alert('競技名（日本語/英語）とダッシュボードURLを入力してください。');
+        return;
+      }
+
+      let sports = getSportsList();
+
+      if (id) {
+        const index = sports.findIndex(s => s.id === id);
+        if (index !== -1) {
+          sports[index] = {
+            ...sports[index],
+            nameJa,
+            nameEn: nameEn.toUpperCase(),
+            desc: desc || `${nameJa}のスコア・テロップ送出管理`,
+            dashUrl,
+            overlayUrl,
+            icon: selectedIconKey
+          };
+        }
+      } else {
+        const newId = 'sport_' + Date.now();
+        sports.push({
+          id: newId,
+          nameJa,
+          nameEn: nameEn.toUpperCase(),
+          desc: desc || `${nameJa}のスコア・テロップ送出管理`,
+          dashUrl,
+          overlayUrl,
+          icon: selectedIconKey
+        });
+      }
+
+      saveSportsList(sports);
+      renderSportsCards();
+      closeModal();
+    };
+
+    document.getElementById('btnResetAll').onclick = function() {
+      if (confirm('競技設定をデフォルトの5競技に戻しますか？（追加・変更した設定はリセットされます）')) {
+        localStorage.removeItem(STORAGE_KEY);
+        renderSportsCards();
+      }
+    };
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, function(m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }[m];
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initIconSelector();
+      renderSportsCards();
+    });
+  </script>
+</body>
+</html>

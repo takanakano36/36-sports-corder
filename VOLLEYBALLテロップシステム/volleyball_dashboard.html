@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>バレーボール/ビーチバレー操作画面 (Dashboard)</title>
+    <link rel="stylesheet" href="css/volleyball_dashboard.css">
+</head>
+<body>
+
+    <header style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 20px;">
+        <h1 style="font-size:18px; margin:0;">🏐 VOLLEYBALLテロップシステム <span style="font-size:12px; color:#38bdf8; font-weight:normal;">Operator</span></h1>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button id="btn-open-fill" class="btn-success" style="padding:7px 14px; font-size:13px; font-weight:800; border-radius:4px; background:#16a34a; border:1px solid #22c55e; color:#fff; cursor:pointer;" title="スイッチャーFill入力用の通常カラー映像ウィンドウ(1920x1080)を開きます">🎬 Fill画面を開く (映像)</button>
+            <button id="btn-open-key" class="btn-warning" style="padding:7px 14px; font-size:13px; font-weight:800; border-radius:4px; background:#475569; border:1px solid #94a3b8; color:#fff; cursor:pointer;" title="スイッチャーKey入力用の白黒アルファマスクウィンドウ(1920x1080)を開きます">🔲 Key画面を開く (マスク)</button>
+            <button id="btn-open-dual" class="btn-primary" style="padding:7px 12px; font-size:12px; font-weight:700; border-radius:4px; background:#0284c7; border:1px solid #38bdf8; color:#fff; cursor:pointer;" title="FillとKeyの2枚のウィンドウを一度に開きます">🎬🔲 2画面一括起動</button>
+            <button id="btn-open-overlay" class="btn-primary" style="padding:7px 10px; font-size:12px; font-weight:700; border-radius:4px; background:#334155; border:1px solid #475569; color:#fff; cursor:pointer;" title="OBS取込等のクロマキー単一画面を開きます">📺 クロマキー画面</button>
+            <div class="connection-badge" id="connection-status">
+                <span class="status-dot">●</span> 同期確認中...
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        <!-- 左カラム: ゲームコントロール、セットスコア、タイマー -->
+        <div class="dashboard-column">
+            
+            <!-- 競技ルール・マッチ設定 -->
+            <div class="panel">
+                <div class="panel-title">競技ルール ＆ マッチ形式設定</div>
+                <div class="rules-preset-box">
+                    <div class="preset-card-group">
+                        <label>競技モード</label>
+                        <div class="preset-button-wrap">
+                            <button id="btn-mode-indoor" class="btn-preset active">インドア (6人制)</button>
+                            <button id="btn-mode-beach" class="btn-preset">ビーチ (2人制)</button>
+                        </div>
+                    </div>
+                    <div class="preset-card-group">
+                        <label>マッチ形式</label>
+                        <div class="preset-button-wrap">
+                            <button id="btn-match-3set" class="btn-preset">3セットマッチ</button>
+                            <button id="btn-match-5set" class="btn-preset active">5セットマッチ</button>
+                        </div>
+                    </div>
+                    <div class="preset-card-group">
+                        <label>チャレンジ表示</label>
+                        <div class="preset-button-wrap">
+                            <button id="btn-challenge-on" class="btn-preset active">表示する</button>
+                            <button id="btn-challenge-off" class="btn-preset">非表示</button>
+                        </div>
+                    </div>
+                    <div class="preset-card-group">
+                        <label>得点推移(ライン)</label>
+                        <div class="preset-button-wrap">
+                            <button id="btn-timeline-on" class="btn-preset">表示する</button>
+                            <button id="btn-timeline-off" class="btn-preset active">非表示 (OFF)</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- スコア ＆ 試合状況管理 -->
+            <div class="panel">
+                <div class="panel-title">スコア ＆ 試合状況管理</div>
+                <div class="game-mgmt-grid">
+                    
+                    <!-- HOMEチーム -->
+                    <div class="team-card home">
+                        <div class="team-card-header">
+                            <input type="text" id="home-name-in" class="team-name-input" value="HOME TEAM" title="ホームチーム名">
+                            <div class="team-color-picker">
+                                <label for="home-color-in">チームカラー:</label>
+                                <input type="color" id="home-color-in" value="#0ea5e9">
+                            </div>
+                        </div>
+                        
+                        <!-- ロゴ D&D 登録 -->
+                        <div class="drag-logo-wrapper">
+                            <div id="drag-home-logo" class="drag-logo-area">
+                                <img id="preview-home-logo" class="drag-logo-preview" src="" alt="Home Logo Preview">
+                                <span class="drag-text">ロゴ D&D 登録</span>
+                            </div>
+                            <input type="text" id="in-home-logo-url" readonly placeholder="[ドラッグ登録: 未登録]" class="logo-url-display">
+                        </div>
+
+                        <div class="score-display-row">
+                            <span class="score-num" id="home-score-num">0</span>
+                        </div>
+                        <div class="score-btns">
+                            <button id="btn-home-p1" class="btn-primary">+1</button>
+                            <button id="btn-home-m1" class="btn-danger">-1</button>
+                        </div>
+                        
+                        <div class="foul-timeout-row">
+                            <div class="foul-control">
+                                <span class="team-foul-label">SET:</span>
+                                <button id="btn-home-set-sub" style="padding: 2px 6px;">-</button>
+                                <span class="foul-num" id="home-set-num">0</span>
+                                <button id="btn-home-set-add" style="padding: 2px 6px;">+</button>
+                            </div>
+                            <div class="timeout-control">
+                                <span class="team-foul-label">T.O:</span>
+                                <div class="timeout-dots-editor" id="home-timeout-dots-editor"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- チャレンジ表示ONの時のみ操作可能にするためのコンテナ -->
+                        <div class="challenge-control-row" id="home-challenge-ctrl-row">
+                            <span class="team-foul-label">CHG (チャレンジ残り):</span>
+                            <div class="timeout-dots-editor" id="home-challenge-dots-editor"></div>
+                        </div>
+                        
+                        <button id="btn-home-serve" class="btn-serve">サーブ権</button>
+                    </div>
+
+                    <!-- AWAYチーム -->
+                    <div class="team-card away">
+                        <div class="team-card-header">
+                            <input type="text" id="away-name-in" class="team-name-input" value="AWAY TEAM" title="アウェイチーム名">
+                            <div class="team-color-picker">
+                                <label for="away-color-in">チームカラー:</label>
+                                <input type="color" id="away-color-in" value="#f97316">
+                            </div>
+                        </div>
+                        
+                        <!-- ロゴ D&D 登録 -->
+                        <div class="drag-logo-wrapper">
+                            <div id="drag-away-logo" class="drag-logo-area">
+                                <img id="preview-away-logo" class="drag-logo-preview" src="" alt="Away Logo Preview">
+                                <span class="drag-text">ロゴ D&D 登録</span>
+                            </div>
+                            <input type="text" id="in-away-logo-url" readonly placeholder="[ドラッグ登録: 未登録]" class="logo-url-display">
+                        </div>
+
+                        <div class="score-display-row">
+                            <span class="score-num" id="away-score-num">0</span>
+                        </div>
+                        <div class="score-btns">
+                            <button id="btn-away-p1" class="btn-primary">+1</button>
+                            <button id="btn-away-m1" class="btn-danger">-1</button>
+                        </div>
+                        
+                        <div class="foul-timeout-row">
+                            <div class="foul-control">
+                                <span class="team-foul-label">SET:</span>
+                                <button id="btn-away-set-sub" style="padding: 2px 6px;">-</button>
+                                <span class="foul-num" id="away-set-num">0</span>
+                                <button id="btn-away-set-add" style="padding: 2px 6px;">+</button>
+                            </div>
+                            <div class="timeout-control">
+                                <span class="team-foul-label">T.O:</span>
+                                <div class="timeout-dots-editor" id="away-timeout-dots-editor"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- チャレンジ表示ONの時のみ操作可能にするためのコンテナ -->
+                        <div class="challenge-control-row" id="away-challenge-ctrl-row">
+                            <span class="team-foul-label">CHG (チャレンジ残り):</span>
+                            <div class="timeout-dots-editor" id="away-challenge-dots-editor"></div>
+                        </div>
+                        
+                        <button id="btn-away-serve" class="btn-serve">サーブ権</button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- コートチェンジ警告 (ビーチバレー用) -->
+            <div id="court-switch-alert-box" class="court-switch-alert" style="display:none;">
+                <span id="court-alert-text" class="alert-text">コートチェンジ警告: 両チーム合計得点が7の倍数に達しました。</span>
+                <button id="btn-clear-court-alert" class="alert-btn">確認 (コートチェンジ完了)</button>
+            </div>
+
+            <!-- セット確定 ＆ 履歴管理 -->
+            <div class="panel">
+                <div class="panel-title" style="display:flex; justify-content:space-between;">
+                    <span>セットスコア履歴・確定 (ランニングスコア)</span>
+                    <button id="btn-add-set-score" class="btn-primary" style="font-size:12px; padding:4px 8px;">現在のセットを確定</button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <table style="width:100%; border-collapse:collapse; text-align:center; font-size:12px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left; color:#94a3b8;">TEAM</th>
+                                <th style="color:#94a3b8;">SET 1</th>
+                                <th style="color:#94a3b8;">SET 2</th>
+                                <th style="color:#94a3b8;">SET 3</th>
+                                <th style="color:#94a3b8;">SET 4</th>
+                                <th style="color:#94a3b8;">SET 5</th>
+                                <th style="color:#94a3b8; text-align:right;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align:left; font-weight:bold; color:#0ea5e9;">HOME</td>
+                                <td><input type="number" id="home-score-s1" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="home-score-s2" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="home-score-s3" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="home-score-s4" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="home-score-s5" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td rowspan="2" style="text-align:right; vertical-align:middle;">
+                                    <button id="btn-clear-set-score" class="btn-danger" style="padding:6px 10px; font-size:11px;">履歴クリア</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="text-align:left; font-weight:bold; color:#f97316;">AWAY</td>
+                                <td><input type="number" id="away-score-s1" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="away-score-s2" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="away-score-s3" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="away-score-s4" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                                <td><input type="number" id="away-score-s5" value="0" style="width:45px; background:#0f172a; border:1px solid #475569; color:white; text-align:center; padding:2px;"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 得点経過 (Timeline - 2行書き対応) プレビュー ＆ 操作 -->
+            <div class="panel">
+                <div class="panel-title" style="display:flex; justify-content:space-between;">
+                    <span>得点経過 (直近15点/2行書き)</span>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <!-- オンオフ表示 -->
+                        <button id="btn-timeline-toggle" class="btn-primary" style="padding:2px 8px; font-size:11px;">表示: ON</button>
+                        <button id="btn-undo-score" class="op-mini-btn" style="background:#ea580c; border:none; color:white; font-weight:bold; padding:2px 8px; font-size:11px;">◀ 1点戻す</button>
+                        <button id="btn-reset-timeline" class="op-mini-btn" style="padding:2px 8px; font-size:11px;">履歴リセット</button>
+                    </div>
+                </div>
+                <!-- 2行書きプレビュー -->
+                <div class="timeline-2rows-preview" style="margin-top:10px; background:#0f172a; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; font-weight:bold; color:#0ea5e9; width:45px; text-align:right;">HOME:</span>
+                        <div id="timeline-home-row-op" style="display:flex; gap:4px; overflow-x:auto; flex:1; min-height:24px;"></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; font-weight:bold; color:#f97316; width:45px; text-align:right;">AWAY:</span>
+                        <div id="timeline-away-row-op" style="display:flex; gap:4px; overflow-x:auto; flex:1; min-height:24px;"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 右カラム: 配信表示、選手管理、プレビュー -->
+        <div class="dashboard-column">
+            
+            <!-- 配信表示コントロール ＆ プレビュー (バスケに準拠) -->
+            <div class="panel preview-panel">
+                <div class="panel-title">
+                    表示コントロール ＆ 16:9プレビュー
+                    <input type="text" id="tournament-name-in" placeholder="大会名・リーグ名" style="width:200px; background:#1e293b; border:1px solid #475569; color:white; padding:4px 8px; border-radius:4px; font-size:12px;" title="大会名">
+                </div>
+                
+                <!-- サイズ可変 ＆ 100%縮小フィットプレビュー枠 -->
+                <div class="iframe-container">
+                    <iframe src="volleyball_overlay.html" id="preview-iframe" title="Overlay Preview"></iframe>
+                </div>
+                
+                <!-- クロマキー背景制御 -->
+                <div class="chromakey-controls" style="margin-top:10px; display:flex; gap:8px;">
+                    <span style="font-size:12px; color:#94a3b8; display:flex; align-items:center;">プレビュー背景:</span>
+                    <button class="btn-chroma active" data-chroma="transparent">透過</button>
+                    <button class="btn-chroma" data-chroma="green" style="background:#22c55e; color:black;">Green</button>
+                    <button class="btn-chroma" data-chroma="blue" style="background:#3b82f6; color:white;">Blue</button>
+                    <button class="btn-chroma" data-chroma="magenta" style="background:#d946ef; color:white;">Magenta</button>
+                </div>
+
+                <!-- テロップ切り替え (バスケに完全そっくりなUI) -->
+                <div class="global-ctrl-btns">
+                    <button class="display-mode-btn btn-primary" data-mode="large">大得点板 (Large)</button>
+                    <button class="display-mode-btn btn-primary" data-mode="small">小得点板 (Small)</button>
+                    <button class="display-mode-btn btn-primary" data-mode="ransko">ランニングスコア (Ransko)</button>
+                    <button class="display-mode-btn btn-primary" data-mode="vs">対戦カード (VS)</button>
+                </div>
+                <div class="global-ctrl-btns" style="margin-top: 8px; grid-template-columns: 1fr 1.2fr;">
+                    <button class="display-mode-btn btn-danger" data-mode="hidden">テロップ全面非表示 (ON AIR OFF)</button>
+                    <div style="display:flex; gap:6px;">
+                        <select id="lineup-team-select" class="capture-device-select" style="flex:1;" title="スタメン対象チーム">
+                            <option value="home">HOMEスタメン</option>
+                            <option value="away">AWAYスタメン</option>
+                        </select>
+                        <button id="btn-toggle-lineup" class="btn-primary" style="flex:1.5;">スタメン一覧表示 (ON AIR)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 全画面静止画スライド登録・送出 -->
+            <div class="panel">
+                <div class="panel-title">全画面静止画スライド送出 (ダイアログ不使用)</div>
+                <div id="drag-slide-panel" class="slide-dd-panel" style="border: 2px dashed #475569; border-radius:8px; padding:15px; text-align:center; background:#0f172a; cursor:pointer; min-height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;">
+                    <img id="slide-preview" class="slide-dd-preview" src="" alt="Slide Preview" style="max-height:80px; display:none; border-radius:4px;">
+                    <span class="slide-text">ここに全画面静止画スライド画像をドロップ</span>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button id="btn-send-slide" class="btn-primary" style="flex:1;">スライド表示 (ON AIR)</button>
+                    <button id="btn-clear-slide" class="btn-danger" style="padding:10px 15px;">非表示</button>
+                </div>
+            </div>
+
+            <!-- 選手登録 ＆ スタメン管理 ＆ EXCELインポート (Excelインポート対応) -->
+            <div class="panel">
+                <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>選手登録・スタメン・選手紹介 (ON AIR)</span>
+                    <div style="display:flex; gap:6px;">
+                        <button id="btn-hide-player" class="btn-danger" style="font-size:12px; padding:4px 8px;">紹介非表示 (OFF)</button>
+                        <button id="btn-add-player" class="btn-success" style="font-size:12px; padding:4px 8px;">＋選手追加</button>
+                    </div>
+                </div>
+                <div class="player-mgmt-tabs" style="display:flex; border-bottom:1px solid #334155; margin-bottom:12px;">
+                    <button class="tab-btn active" id="tab-home">HOMEメンバー</button>
+                    <button class="tab-btn" id="tab-away">AWAYメンバー</button>
+                </div>
+                
+                <!-- EXCELインポートパネル -->
+                <div class="excel-import-box" style="background:#0f172a; padding:10px; border-radius:6px; margin-bottom:12px; border:1px solid #334155;">
+                    <span style="font-size:12px; font-weight:bold; color:#cbd5e1; display:block; margin-bottom:6px;">EXCEL/CSVから一括インポート:</span>
+                    <textarea id="excel-import-area" placeholder="例:&#13;1	S	山田 太郎	大4&#13;3	OH	佐藤 次郎	大3" style="width:100%; height:60px; background:#1e293b; border:1px solid #475569; color:white; font-family:monospace; font-size:11px; padding:6px; border-radius:4px; resize:none;"></textarea>
+                    <button id="btn-excel-import" class="btn-primary" style="width:100%; font-size:11px; padding:6px; margin-top:6px;">インポートを実行 (現在のリストを上書き)</button>
+                </div>
+
+                <div class="player-list-container" id="player-list-editor" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
+                    <!-- JSで動的構築されます -->
+                </div>
+            </div>
+
+            <!-- 放送出力設定 (クロマキー / フィル＆キー 2系統同時出力) -->
+            <div class="panel">
+                <div class="panel-title">放送出力設定 (クロマキー / フィル＆キー 2系統同時出力)</div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                        <span style="display:block; margin-bottom:4px; font-size:11px; color:#38bdf8; font-weight:bold;">1. フィル＆キー方式 (DSK / スイッチャー2系統合成用):</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="window.open('volleyball_overlay.html?mode=fill', 'volleyball_overlay_fill', 'width=1920,height=1080');" class="btn-success" style="flex:1; font-size:11px; padding:6px; background:#16a34a; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🎬 Fill映像 (単体)</button>
+                            <button onclick="window.open('volleyball_overlay.html?mode=key', 'volleyball_overlay_key', 'width=1920,height=1080');" class="btn-warning" style="flex:1; font-size:11px; padding:6px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🔲 Keyマスク (単体)</button>
+                        </div>
+                    </div>
+                    <div style="border-top: 1px solid #334155; padding-top: 6px;">
+                        <span style="display:block; margin-bottom:4px; font-size:11px; color:#94a3b8;">2. クロマキー背景色 (OBS取込用):</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn-chroma chroma-green" onclick="setChromaKey('green')" style="flex:1; font-size:11px; padding:5px; background:#00ff00; color:#000; border:none; border-radius:4px; font-weight:700; cursor:pointer;">グリーン</button>
+                            <button class="btn-chroma chroma-blue" onclick="setChromaKey('blue')" style="flex:1; font-size:11px; padding:5px; background:#0000ff; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">ブルー</button>
+                            <button class="btn-chroma chroma-magenta" onclick="setChromaKey('magenta')" style="flex:1; font-size:11px; padding:5px; background:#ff00ff; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">マゼンタ</button>
+                            <button class="btn-chroma chroma-transparent active" onclick="setChromaKey('transparent')" style="flex:1; font-size:11px; padding:5px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">透過</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 🎮 Stream Deck USB直接接続 ＆ 自動認識コントロール -->
+            <div class="panel">
+                <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+                    🎮 Stream Deck (USB直接接続・自動認識)
+                    <span id="streamdeck-status-badge" style="font-size:11px; padding:2px 8px; border-radius:12px; background:#334155; color:#94a3b8;">未接続</span>
+                </div>
+                <div style="padding: 6px 0; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <button id="btn-connect-streamdeck" class="btn-primary" style="flex:2; font-size:12px; padding:6px 10px; background:#0284c7; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">🔌 Stream DeckをUSB接続する</button>
+                        <button id="btn-shift-left" class="btn-secondary" style="font-size:11px; padding:6px 8px; background:#334155; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="キー認識位置を1つ左へ移動">⬅️ 1個左へ</button>
+                        <button id="btn-shift-right" class="btn-secondary" style="font-size:11px; padding:6px 8px; background:#334155; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="キー認識位置を1つ右へ移動">➡️ 1個右へ</button>
+                        <button id="btn-flip-streamdeck" class="btn-secondary" style="font-size:11px; padding:6px 8px; background:#475569; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;" title="ボタンの上下配置や文字が逆さまの場合にクリックして180度反転させます">🔄 上下反転</button>
+                        <button id="btn-disconnect-streamdeck" class="btn-danger hidden" style="font-size:12px; padding:6px 10px; background:#dc2626; color:#fff; border:none; border-radius:4px; font-weight:700; cursor:pointer;">切断</button>
+                    </div>
+                    <div id="streamdeck-device-info" style="font-size:11px; color:#94a3b8; line-height:1.4;">
+                        ※USBで接続されるとWeb HID経由で自動認識され、得点(+1/-1)・セット・タイムアウト・選手紹介等のキー割り振りとLCD描画が自動起動します。
+                    </div>
+                    <!-- 仮想キーレイアウト表示 -->
+                    <div id="streamdeck-keypad-preview" class="hidden" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #334155;">
+                        <!-- JSで動的生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作履歴/ログ -->
+            <div class="panel">
+                <div class="panel-title">操作ログ履歴</div>
+                <div id="op-log-box" class="op-log-box" style="height:100px; overflow-y:auto; background:#0f172a; border-radius:6px; padding:10px; font-family:monospace; font-size:11px; color:#94a3b8;"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="js/volleyball_dashboard.js"></script>
+</body>
+</html>

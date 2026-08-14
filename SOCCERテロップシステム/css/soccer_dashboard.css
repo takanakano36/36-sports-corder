@@ -1,0 +1,780 @@
+/* ==========================================================================
+   オペレーター用ダッシュボード CSS
+   ========================================================================== */
+
+/* 全体設定 */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #020617; /* Slate 950 */
+    color: #f1f5f9; /* Slate 100 */
+    font-family: 'Inter', 'Noto Sans JP', sans-serif;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ヘッダー */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #1e293b;
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+}
+
+.badge {
+    font-size: 11px;
+    background: #ef4444;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.connection-status {
+    font-size: 14px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #0f172a;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid #1e293b;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.online {
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+}
+
+.status-indicator.offline {
+    background-color: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+}
+
+/* ダッシュボードレイアウト */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.2fr;
+    gap: 20px;
+    flex: 1;
+}
+
+@media (max-width: 1200px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* パネルセクション共通 */
+.panel-section {
+    background-color: #0f172a; /* Slate 900 */
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.panel-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #38bdf8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* コントロールグループ */
+.control-group {
+    background-color: #1e293b; /* Slate 800 */
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+.group-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+}
+
+.sub-label {
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+/* フォーム部品 */
+.form-input {
+    background-color: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #ffffff;
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-input:focus {
+    border-color: #38bdf8;
+}
+
+.num-input {
+    width: 70px;
+    text-align: center;
+}
+
+.sm-input {
+    width: 90px;
+    padding: 4px 8px;
+}
+
+.select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.select-input {
+    cursor: pointer;
+    appearance: none;
+}
+
+/* ボタン共通 */
+.btn {
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+.btn-primary {
+    background-color: #0284c7; /* Sky 600 */
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background-color: #0369a1;
+}
+
+.btn-secondary {
+    background-color: #475569; /* Slate 600 */
+    color: #f1f5f9;
+}
+
+.btn-secondary:hover {
+    background-color: #334155;
+}
+
+.btn-accent {
+    background-color: #d97706; /* Amber 600 */
+    color: #ffffff;
+}
+
+.btn-accent:hover {
+    background-color: #b45309;
+}
+
+.btn-danger {
+    background-color: #dc2626; /* Red 600 */
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c;
+}
+
+.btn-danger-outline {
+    background-color: transparent;
+    border: 1px solid #ef4444;
+    color: #f87171;
+}
+
+.btn-danger-outline:hover {
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+.btn-success {
+    background-color: #059669; /* Emerald 600 */
+    color: #ffffff;
+}
+
+.btn-success:hover {
+    background-color: #047857;
+}
+
+/* グリッド・レイアウトユーティリティ */
+.flex-row {
+    display: flex;
+    gap: 10px;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.nowrap { white-space: nowrap; }
+
+.margin-top-xs { margin-top: 6px; }
+.margin-top-sm { margin-top: 12px; }
+.margin-top-md { margin-top: 18px; }
+
+.btn-grid-4 {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.vs-text {
+    align-self: center;
+    font-weight: 800;
+    font-size: 14px;
+    color: #64748b;
+}
+
+/* スコアコントローラー */
+.score-controllers {
+    display: flex;
+    gap: 15px;
+}
+
+.team-controller {
+    flex: 1;
+    background: #0f172a;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    border: 1px solid #334155;
+}
+
+.team-lbl {
+    font-size: 12px;
+    font-weight: 700;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+}
+
+.score-val {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: center;
+}
+
+.btn-score {
+    padding: 4px 10px;
+}
+
+/* タイマー表示 */
+.timer-display-box {
+    background: #020617;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-bottom: 12px;
+    border: 1.5px solid #38bdf8;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+}
+
+.timer-digits {
+    font-family: 'Oswald', sans-serif;
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.period-badge {
+    font-size: 12px;
+    font-weight: 800;
+    background: #38bdf8;
+    color: #020617;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+/* スイッチトグル */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 22px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #475569;
+    transition: .3s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #10b981;
+}
+
+input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+.switch-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+/* クロマキーセレクター */
+.chromakey-selector {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.btn-chroma {
+    padding: 8px 4px;
+    font-size: 11px;
+    border: 2px solid transparent;
+    background: #1e293b;
+    color: #ffffff;
+    border-radius: 6px;
+}
+
+.btn-chroma.active {
+    border-color: #38bdf8;
+    font-weight: bold;
+}
+
+.chroma-green.active { background-color: #059669; }
+.chroma-blue.active { background-color: #1d4ed8; }
+.chroma-magenta.active { background-color: #be185d; }
+.chroma-transparent.active { background-color: #334155; }
+
+.tip-text {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.3;
+}
+
+.tip-text-white {
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+/* ==========================================================================
+   PK戦操作盤
+   ========================================================================== */
+.section-pk {
+    transition: opacity 0.3s;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.switch-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#pk-panel-body {
+    transition: all 0.3s;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+#pk-panel-body.pk-disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+.pk-current-turn {
+    background: #020617;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 16px;
+    border: 1px dashed #334155;
+}
+
+.highlight-text {
+    color: #38bdf8;
+    font-weight: 800;
+}
+
+.pk-setup-row {
+    background-color: #1e293b;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.pk-team-header {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.pk-team-header.home { color: #38bdf8; }
+.pk-team-header.away { color: #f43f5e; }
+
+.pk-actions {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.pk-action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid #475569;
+    background: #0f172a;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.pk-action-btn.active {
+    border-color: #38bdf8;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.pk-action-btn.success {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+}
+
+.pk-action-btn.miss {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: white;
+}
+
+.pk-controls-bottom {
+    margin-top: auto;
+    background: #1e293b;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.btn-group-row {
+    display: flex;
+    gap: 8px;
+}
+
+/* ==========================================================================
+   選手データ＆テロップ操作
+   ========================================================================== */
+.sheet-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.player-list-container {
+    background: #020617;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    overflow: hidden;
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    height: 320px;
+}
+
+.team-tab-buttons {
+    display: flex;
+    border-bottom: 1px solid #334155;
+    background: #0f172a;
+}
+
+.tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #94a3b8;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    color: #ffffff;
+    border-bottom-color: #38bdf8;
+    background: rgba(56, 189, 248, 0.05);
+}
+
+.player-table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.player-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+
+.player-table th {
+    background-color: #0f172a;
+    color: #cbd5e1;
+    padding: 8px 12px;
+    font-weight: 600;
+    border-bottom: 1px solid #1e293b;
+    position: sticky;
+    top: 0;
+}
+
+.player-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+}
+
+.player-table tr:hover td {
+    background-color: #0f172a;
+    color: #ffffff;
+}
+
+.player-table td.no-data {
+    text-align: center;
+    padding: 40px 0;
+    color: #64748b;
+    font-style: italic;
+}
+
+.btn-action-telop {
+    padding: 3px 8px;
+    font-size: 11px;
+    background: #0284c7;
+    color: white;
+    border-radius: 4px;
+}
+
+.btn-action-telop:hover {
+    background: #0369a1;
+}
+
+/* ==========================================================================
+   下部：ライブプレビュー
+   ========================================================================== */
+.preview-panel {
+    margin-top: 20px;
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.preview-container {
+    width: 100%;
+    max-width: 800px;
+    aspect-ratio: 16 / 9;
+    margin: 0 auto 12px auto;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid #334155;
+    position: relative;
+}
+
+#overlay-preview {
+    width: 1920px !important;
+    height: 1080px !important;
+    border: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+}
+
+/* プレビューコンテナの大きさに合わせてスケーリングをJS/CSSで微調整 */
+@media (max-width: 880px) {
+    .preview-container {
+        max-width: 100%;
+    }
+    /* レスポンシブスケールはJSで制御する */
+}
+
+.preview-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   追加：チーム情報設定・ファイル入力用スタイル
+   ========================================================================== */
+.team-settings-container {
+    display: flex;
+    gap: 15px;
+    align-items: stretch;
+    margin-top: 8px;
+}
+
+.team-setting-block {
+    flex: 1;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.team-setting-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: #64748b;
+    font-size: 14px;
+    padding: 0 4px;
+}
+
+.color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.color-picker {
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background: transparent;
+    width: 50px;
+    height: 28px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.logo-selector {
+    display: flex;
+    flex-direction: column;
+}
+
+.file-input {
+    font-size: 11px;
+    color: #cbd5e1;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 4px;
+    width: 100%;
+    cursor: pointer;
+}
+
+/* 表示モードボタン（アクティブ状態） */
+.display-mode-btn {
+    transition: all 0.2s ease;
+}
+.display-mode-btn.active {
+    background: #0284c7 !important; /* Sky 600 */
+    color: #ffffff !important;
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+.display-mode-btn[data-mode="none"].active {
+    background: #dc2626 !important; /* Red 600 */
+    border-color: #f87171 !important;
+    box-shadow: 0 0 10px rgba(248, 113, 113, 0.4);
+}
+
