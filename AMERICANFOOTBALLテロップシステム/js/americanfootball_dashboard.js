@@ -19,7 +19,7 @@ const state = {
     awayScore: 0,
     awayTO: 3,
 
-    tournament: "第54回 東海学生アメリカンフットボールリーグ戦",
+    tournament: "",
 
     // クロックキャプチャ画像 (Base64)
     gameClockImage: "",

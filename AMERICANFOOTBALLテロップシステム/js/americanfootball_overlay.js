@@ -17,21 +17,21 @@
 
 // デフォルトの状態（初期プレビュー用）
 const defaultState = {
-    homeName: "名城大学",
-    homeSub: "MEIJO",
+    homeName: "HOME TEAM",
+    homeSub: "HOME",
     homeColor: "#991b1b",
     homeLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzk5MWIxYiIvPjwvc3ZnPg==",
     homeScore: 0,
     homeTO: 3,
 
-    awayName: "中京大学",
-    awaySub: "CHUKYO",
+    awayName: "AWAY TEAM",
+    awaySub: "AWAY",
     awayColor: "#1d4ed8",
     awayLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgZmlsbD0iIzFkNGVkOCIvPjwvc3ZnPg==",
     awayScore: 0,
     awayTO: 3,
 
-    tournament: "第54回 東海学生アメリカンフットボールリーグ戦",
+    tournament: "",
     currentPeriod: "1Q",
     timerMinutes: 15,
     timerSeconds: 0,

@@ -14,11 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
             visible: true,
             displayMode: 'small', // 'none', 'small', 'large', 'vs'
             homeName: '後攻 TEAM',
-            homeSubName: 'NAGOYASANGYO',
+            homeSubName: 'HOME',
             homeColor: '#059669',
             homeLogo: '',
             awayName: '先攻 TEAM',
-            awaySubName: 'CHUKYO',
+            awaySubName: 'AWAY',
             awayColor: '#1d4ed8',
             awayLogo: '',
             tournamentName: '',

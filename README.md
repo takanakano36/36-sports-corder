@@ -22,7 +22,7 @@ ALL ARTS CREATE.Inc. が提供する各種競技スポーツコーダー（ス�
    - 各カードの「設定」ボタンから、起動先URLやファイルパスを現場の環境に合わせて変更・保存可能（ブラウザの LocalStorage に自動保存されます）。
 
 4. **ALL ARTS CREATE.Inc. 公式ブランディング**
-   - ヘッダーおよびフッターに公式ロゴ・表記「Presented by ALL ARTS CREATE.Inc.」と公式HP（[all-arts-create.com](https://all-arts-create.com/)）へのリンクを配置。
+   - ヘッダーおよびフッターに公式ロゴ・表記「Presented by ALL ARTS CREATE.Inc.」と公式HP（[allartscreate.com](https://allartscreate.com/)）へのリンクを配置。
 
 ---
 

@@ -8,11 +8,11 @@ let state = {
         visible: true,
         displayMode: 'small', // 'none', 'small', 'large', 'vs'
         homeName: 'HOME TEAM',
-        homeSubName: 'NAGOYASANGYO',
+        homeSubName: 'HOME',
         homeColor: '#059669',
         homeLogo: '',
         awayName: 'AWAY TEAM',
-        awaySubName: 'CHUKYO',
+        awaySubName: 'AWAY',
         awayColor: '#1d4ed8',
         awayLogo: '',
         tournamentName: '',
@@ -346,9 +346,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateTeamNames() {
         state.scoreboard.homeName = inputHomeName.value.trim() || 'HOME';
-        state.scoreboard.homeSubName = inputHomeSub.value.trim() || 'NAGOYASANGYO';
+        state.scoreboard.homeSubName = inputHomeSub.value.trim() || 'HOME';
         state.scoreboard.awayName = inputAwayName.value.trim() || 'AWAY';
-        state.scoreboard.awaySubName = inputAwaySub.value.trim() || 'CHUKYO';
+        state.scoreboard.awaySubName = inputAwaySub.value.trim() || 'AWAY';
         state.scoreboard.homeColor = inputHomeColor.value;
         state.scoreboard.awayColor = inputAwayColor.value;
         state.scoreboard.tournamentName = inputTournament.value.trim() || '';
@@ -1007,8 +1007,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnLoadDemoHome.addEventListener('click', () => {
         players.home = [...demoHomePlayers];
         initializeLineup('home');
-        inputHomeName.value = '名古屋産業大学';
-        inputHomeSub.value = 'NAGOYASANGYO';
+        inputHomeName.value = 'HOME TEAM';
+        inputHomeSub.value = 'HOME';
         inputHomeColor.value = '#059669';
         // 仮のHOMEロゴとしてSVGプレースホルダー（nマーク風）を設定
         state.scoreboard.homeLogo = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M20,80 L20,30 C20,30 40,10 60,30 L60,80 M60,45 C60,40 75,30 80,45 L80,80" fill="none" stroke="%23059669" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1020,8 +1020,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnLoadDemoAway.addEventListener('click', () => {
         players.away = [...demoAwayPlayers];
         initializeLineup('away');
-        inputAwayName.value = '中京大学';
-        inputAwaySub.value = 'CHUKYO';
+        inputAwayName.value = 'AWAY TEAM';
+        inputAwaySub.value = 'AWAY';
         inputAwayColor.value = '#1d4ed8';
         // 仮のAWAYロゴとしてSVGプレースホルダー（Cマーク風）を設定
         state.scoreboard.awayLogo = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M80,25 C70,12 40,12 30,25 C15,40 15,60 30,75 C40,88 70,88 80,75" fill="none" stroke="%231d4ed8" stroke-width="12" stroke-linecap="round"/></svg>';
@@ -1270,13 +1270,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 初期値の適用
-    inputHomeName.value = '名古屋産業大学';
-    inputHomeSub.value = 'NAGOYASANGYO';
+    inputHomeName.value = 'HOME TEAM';
+    inputHomeSub.value = 'HOME';
     inputHomeColor.value = '#059669';
-    inputAwayName.value = '中京大学';
-    inputAwaySub.value = 'CHUKYO';
+    inputAwayName.value = 'AWAY TEAM';
+    inputAwaySub.value = 'AWAY';
     inputAwayColor.value = '#1d4ed8';
-    inputTournament.value = '第62回 toumei 東海学生サッカーリーグ戦';
+    inputTournament.value = '';
 
     // 初期化実行
     setupServerSync();

@@ -14,15 +14,15 @@ let state = {
     scoreboard: {
         visible: true,
         displayMode: 'small', // 'none', 'small', 'large', 'vs'
-        homeName: '名古屋産業大',
-        homeSubName: 'NAGOYASANGYO',
+        homeName: 'HOME TEAM',
+        homeSubName: 'HOME',
         homeColor: '#059669',
         homeLogo: '',
-        awayName: '中京大学',
-        awaySubName: 'CHUKYO',
+        awayName: 'AWAY TEAM',
+        awaySubName: 'AWAY',
         awayColor: '#1d4ed8',
         awayLogo: '',
-        tournamentName: '第62回 東海学生野球リーグ戦',
+        tournamentName: '',
         
         // イニングとスコア
         inningNum: 1,
