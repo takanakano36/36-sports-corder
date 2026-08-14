@@ -561,10 +561,13 @@ function initPlayerEditor() {
     const tabHome = document.getElementById('tab-home');
     const tabAway = document.getElementById('tab-away');
     
+    const csvTargetLabel = document.getElementById('csv-import-target-label');
+
     tabHome.addEventListener('click', () => {
         currentMgmtTeam = 'home';
         tabHome.classList.add('active');
         tabAway.classList.remove('active');
+        if (csvTargetLabel) csvTargetLabel.textContent = 'HOME';
         renderPlayerListEditor();
     });
 
@@ -572,6 +575,7 @@ function initPlayerEditor() {
         currentMgmtTeam = 'away';
         tabAway.classList.add('active');
         tabHome.classList.remove('active');
+        if (csvTargetLabel) csvTargetLabel.textContent = 'AWAY';
         renderPlayerListEditor();
     });
 
@@ -589,6 +593,96 @@ function initPlayerEditor() {
         renderPlayerListEditor();
         broadcastState();
     });
+
+    const btnLoadPlayerCsv = document.getElementById('btn-load-player-csv');
+    const inputPlayerCsv = document.getElementById('input-player-csv');
+    if (btnLoadPlayerCsv && inputPlayerCsv) {
+        btnLoadPlayerCsv.addEventListener('click', () => {
+            const file = inputPlayerCsv.files[0];
+            if (!file) {
+                alert('CSVファイルを選択してください。');
+                return;
+            }
+            readCSVFileAuto(file, (text) => {
+                const players = parsePlayerCSV(text);
+                if (players.length === 0) {
+                    alert('有効な選手データが見つかりませんでした。\n形式: 背番号,ポジション,氏名,学年,コメント');
+                    return;
+                }
+                state.players[currentMgmtTeam] = players;
+                savePlayersToStorage();
+                renderPlayerListEditor();
+                broadcastState();
+                alert(`${currentMgmtTeam === 'home' ? 'HOME' : 'AWAY'}チームの選手データを${players.length}件読み込みました！`);
+            });
+        });
+    }
+}
+
+// CSVファイルの文字コードを自動判別して読み込む (UTF-8 / Shift-JIS(Excel等) 両対応)
+function readCSVFileAuto(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const bytes = new Uint8Array(e.target.result);
+        const encoding = isUTF8Bytes(bytes) ? 'utf-8' : 'shift-jis';
+        const text = new TextDecoder(encoding).decode(bytes);
+        callback(text);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// バイト列がUTF-8として妥当かを判定する簡易チェック
+function isUTF8Bytes(bytes) {
+    let i = 0;
+    while (i < bytes.length) {
+        if (bytes[i] <= 0x7F) {
+            i += 1;
+        } else if (bytes[i] >= 0xC2 && bytes[i] <= 0xDF) {
+            if (i + 1 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF) return false;
+            i += 2;
+        } else if (bytes[i] >= 0xE0 && bytes[i] <= 0xEF) {
+            if (i + 2 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF || bytes[i + 2] < 0x80 || bytes[i + 2] > 0xBF) return false;
+            i += 3;
+        } else if (bytes[i] >= 0xF0 && bytes[i] <= 0xF4) {
+            if (i + 3 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF || bytes[i + 2] < 0x80 || bytes[i + 2] > 0xBF || bytes[i + 3] < 0x80 || bytes[i + 3] > 0xBF) return false;
+            i += 4;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 選手名簿CSVパース (背番号,ポジション,氏名,学年,コメント の5列形式)
+function parsePlayerCSV(csvText) {
+    const lines = csvText.split(/\r?\n/);
+    const players = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const cols = line.split(',').map(c => c.trim());
+        if (cols.length < 3) continue;
+        if (cols[0].includes('背番号') || cols[2].includes('氏名')) continue; // ヘッダー行スキップ
+
+        const number = cols[0] || '';
+        const position = cols[1] || '';
+        const name = cols[2] || '';
+        if (!number || !name) continue;
+
+        players.push({
+            number,
+            position,
+            name,
+            memo: cols[3] || '',
+            comment: cols[4] || '',
+            fouls: 0,
+            starter: false
+        });
+    }
+
+    return players;
 }
 
 function savePlayersToStorage() {
