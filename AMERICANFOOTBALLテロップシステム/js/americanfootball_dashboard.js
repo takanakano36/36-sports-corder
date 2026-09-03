@@ -1596,8 +1596,8 @@ const AF_STREAMDECK_ACTIONS_32 = [
     { keyIndex: 3, label: "HOME 2Pt", sub: "+2点", bg: "#0284c7", action: () => { addScore('home', 2); updateStreamDeckLCD(); } },
     { keyIndex: 4, label: "HOME SAF", sub: "+2点", bg: "#0369a1", action: () => { addScore('home', 2); updateStreamDeckLCD(); } },
     { keyIndex: 5, label: "HOME TO", sub: "タイムアウト", bg: "#ca8a04", action: () => { adjustTO('home', -1); updateStreamDeckLCD(); } },
-    { keyIndex: 6, label: "⏱ START", sub: "STOP切替", bg: "#15803d", action: () => { toggleTimer(); } },
-    { keyIndex: 7, label: "⏱ 40s", sub: "プレイクロック", bg: "#475569", action: () => { state.playclock = 40; broadcastState(); updateStreamDeckLCD(); } },
+    { keyIndex: 6, label: "HOME -1", sub: "得点修正", bg: "#475569", action: () => { addScore('home', -1); updateStreamDeckLCD(); } },
+    { keyIndex: 7, label: "AWAY -1", sub: "得点修正", bg: "#475569", action: () => { addScore('away', -1); updateStreamDeckLCD(); } },
 
     // 2行目: AWAY得点・TO・時計
     { keyIndex: 8, label: "AWAY TD", sub: "+6点", bg: "#991b1b", action: () => { addScore('away', 6); updateStreamDeckLCD(); } },
