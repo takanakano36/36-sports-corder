@@ -949,9 +949,11 @@ function buildOneshotFromRows(rows) {
     return { parsedHome, parsedAway };
 }
 
+// 読み込んだCSV/Excelに含まれる側(HOME/AWAY)だけを上書きし、
+// 含まれていない側の既存データは保持する
 function applyOneshotRows({ parsedHome, parsedAway }) {
-    oneshotPlayers.HOME = parsedHome;
-    oneshotPlayers.AWAY = parsedAway;
+    if (parsedHome.length > 0) oneshotPlayers.HOME = parsedHome;
+    if (parsedAway.length > 0) oneshotPlayers.AWAY = parsedAway;
     renderOneshotListTable();
     alert(`紹介選手データをロードしました。\n(HOME: ${parsedHome.length}件 / AWAY: ${parsedAway.length}件)`);
 }
@@ -1119,7 +1121,7 @@ async function processRosterCSVFile(file) {
             const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
-            state.roster = buildRosterFromRows(rows);
+            mergeRosterRows(buildRosterFromRows(rows));
             updateRosterTable();
             broadcastState();
         };
@@ -1203,9 +1205,19 @@ function buildRosterFromRows(rows) {
 function parseRosterCSV(csvText) {
     const lines = csvText.split(/\r?\n/);
     const rows = lines.map(line => line.trim()).filter(line => line).map(line => line.split(",").map(c => c.trim()));
-    state.roster = buildRosterFromRows(rows);
+    mergeRosterRows(buildRosterFromRows(rows));
     updateRosterTable();
     broadcastState();
+}
+
+// 読み込んだ行に含まれるチーム(HOME/AWAY)分だけを入れ替え、
+// 含まれていない側のチームの既存データは保持する
+// (例: AWAYのみのCSVを読み込んでも、既に読み込み済みのHOMEデータは消さない)
+function mergeRosterRows(newRows) {
+    if (newRows.length === 0) return;
+    const incomingTeams = new Set(newRows.map(p => p.team));
+    const preserved = state.roster.filter(p => !incomingTeams.has(p.team));
+    state.roster = preserved.concat(newRows);
 }
 
 function getPositionPriority(side, pos) {
