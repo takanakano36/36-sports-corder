@@ -224,6 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     initCameraCapture();
     initRosterCSVDropZone();
+    initOneshotCSVDropZone();
     initStreamDeckHID();
     renderStreamDeckPreview();
     const previewEl = document.getElementById('streamdeck-keypad-preview');
@@ -867,48 +868,77 @@ function isUTF8Bytes(bytes) {
 }
 
 function handleOneshotCSVFile(input) {
-    const file = input.files[0];
+    processOneshotFile(input.files[0]);
+}
+
+async function processOneshotFile(file) {
     if (!file) return;
 
-    readCSVFileAuto(file, (text) => {
-        parseOneshotCSV(text);
+    const ext = file.name.split('.').pop().toLowerCase();
+    const looksLikeExcel = await isExcelFile(file, ext);
+
+    if (looksLikeExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+            applyOneshotRows(buildOneshotFromRows(rows));
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        readCSVFileAuto(file, (text) => {
+            const lines = text.split(/\r?\n/);
+            const rows = lines.map(l => l.trim()).filter(l => l).map(l => l.split(',').map(c => c.trim()));
+            applyOneshotRows(buildOneshotFromRows(rows));
+        });
+    }
+}
+
+function initOneshotCSVDropZone() {
+    const dropZone = document.getElementById('oneshot-csv-drop-zone');
+    if (!dropZone) return;
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#3b82f6';
+        dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0.08)';
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = 'transparent';
+        dropZone.style.backgroundColor = 'transparent';
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'transparent';
+        dropZone.style.backgroundColor = 'transparent';
+        const file = e.dataTransfer.files[0];
+        if (file) processOneshotFile(file);
     });
 }
 
-function parseOneshotCSV(csvText) {
-    const lines = csvText.split(/\r?\n/);
+// 行データ配列(CSV/Excel共通)から紹介選手リストを組み立てる
+// 列順: チーム,サイド,背番号,ポジション,氏名,学年,備考
+function buildOneshotFromRows(rows) {
     const parsedHome = [];
     const parsedAway = [];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        const cols = line.split(",").map(c => c.trim());
+    for (let i = 0; i < rows.length; i++) {
+        const cols = (rows[i] || []).map(c => String(c !== undefined && c !== null ? c : '').trim());
         if (cols.length < 5) continue;
-
-        if (cols[0].includes("チーム") || cols[2].includes("背番号") || cols[4].includes("氏名")) {
-            continue;
-        }
+        if (cols[0].includes("チーム") || cols[2].includes("背番号") || cols[4].includes("氏名")) continue;
 
         const team = cols[0].toUpperCase() === "AWAY" ? "AWAY" : "HOME";
         const side = (cols[1] || "").includes("ディフェンス") ? "defense" : "offense";
         const number = cols[2] || "";
         const position = (cols[3] || "").toUpperCase();
         const name = cols[4] || "";
-        const memo = cols[5] || ""; 
+        const memo = cols[5] || "";
         const comment = cols[6] || "";
 
-        const pObj = {
-            team,
-            side,
-            number,
-            position,
-            name,
-            memo,
-            comment
-        };
+        if (!number && !name) continue;
 
+        const pObj = { team, side, number, position, name, memo, comment };
         if (team === "HOME") {
             parsedHome.push(pObj);
         } else {
@@ -916,6 +946,10 @@ function parseOneshotCSV(csvText) {
         }
     }
 
+    return { parsedHome, parsedAway };
+}
+
+function applyOneshotRows({ parsedHome, parsedAway }) {
     oneshotPlayers.HOME = parsedHome;
     oneshotPlayers.AWAY = parsedAway;
     renderOneshotListTable();

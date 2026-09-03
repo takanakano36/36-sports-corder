@@ -318,12 +318,13 @@
                 
                 <!-- 紹介用CSVアップロード -->
                 <div class="control-group" style="margin-bottom: 12px;">
-                    <label class="group-label">紹介選手データ登録 (CSV)</label>
-                    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-                        <input type="file" id="oneshot-csv-file-input" accept=".csv" style="display: none;" onchange="handleOneshotCSVFile(this)">
+                    <label class="group-label">紹介選手データ登録 (CSV / Excel)</label>
+                    <div id="oneshot-csv-drop-zone" style="display: flex; gap: 8px; margin-bottom: 4px; border: 1px dashed transparent; border-radius: 6px; padding: 4px; transition: border-color 0.2s, background-color 0.2s;">
+                        <input type="file" id="oneshot-csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleOneshotCSVFile(this)">
                         <button class="btn btn-primary" onclick="document.getElementById('oneshot-csv-file-input').click()" style="flex: 1; font-size:12px; padding:6px;">紹介CSVロード</button>
                         <button class="btn btn-secondary" onclick="loadOneshotDemoList()" style="flex: 1; font-size:12px; padding:6px;">紹介デモデータ</button>
                     </div>
+                    <div style="font-size:10px; color:#64748b; margin-bottom:6px; text-align:center;">またはボタン付近の枠内にファイルをドラッグ&ドロップ</div>
                     
                     <!-- HOME / AWAY 切替タブ (サッカー/野球共通仕様) -->
                     <div style="display: flex; gap: 4px; margin-bottom: 8px;">
