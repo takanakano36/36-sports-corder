@@ -1259,16 +1259,8 @@ function updateRosterTable() {
     table.style.display = "table";
     tbody.innerHTML = "";
 
-    const sortedRoster = [...state.roster].sort((a, b) => {
-        if (a.team !== b.team) return a.team === "HOME" ? -1 : 1;
-        if (a.side !== b.side) return a.side === "offense" ? -1 : 1;
-        
-        const priA = getPositionPriority(a.side, a.position);
-        const priB = getPositionPriority(b.side, b.position);
-        if (priA !== priB) return priA - priB;
-        
-        return (parseInt(a.number) || 99) - (parseInt(b.number) || 99);
-    });
+    // 読み込んだCSV/Excelの元の並び順をそのまま表示する(自動並び替えはしない)
+    const sortedRoster = state.roster;
 
     sortedRoster.forEach(p => {
         const tr = document.createElement("tr");
