@@ -223,6 +223,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     initCameraCapture();
+    initRosterCSVDropZone();
     initStreamDeckHID();
     renderStreamDeckPreview();
     const previewEl = document.getElementById('streamdeck-keypad-preview');
@@ -1067,29 +1068,78 @@ function handleSlideFile(input) {
 // ==========================================================================
 
 function handleCSVFile(input) {
-    const file = input.files[0];
+    processRosterCSVFile(input.files[0]);
+}
+
+async function processRosterCSVFile(file) {
     if (!file) return;
 
     document.getElementById("csv-upload-text").textContent = file.name;
 
-    readCSVFileAuto(file, (text) => {
-        parseRosterCSV(text);
+    const ext = file.name.split('.').pop().toLowerCase();
+    const looksLikeExcel = await isExcelFile(file, ext);
+
+    if (looksLikeExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+            state.roster = buildRosterFromRows(rows);
+            updateRosterTable();
+            broadcastState();
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        readCSVFileAuto(file, (text) => {
+            parseRosterCSV(text);
+        });
+    }
+}
+
+// 拡張子だけでなく、実際のファイル中身の先頭バイト(ZIP形式の目印 "PK")も見て
+// Excel(.xlsx)かどうかを判定する。拡張子が.csvのまま保存されたExcelファイルにも対応。
+async function isExcelFile(file, ext) {
+    if (ext === 'xlsx' || ext === 'xls') return true;
+    try {
+        const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        return head[0] === 0x50 && head[1] === 0x4B; // "PK" = ZIP/xlsx signature
+    } catch (e) {
+        return false;
+    }
+}
+
+function initRosterCSVDropZone() {
+    const dropZone = document.querySelector('.csv-upload-box');
+    if (!dropZone) return;
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) processRosterCSVFile(file);
     });
 }
 
-function parseRosterCSV(csvText) {
-    const lines = csvText.split(/\r?\n/);
+// 行データ配列(CSV/Excel共通)から選手ロースターを組み立てる
+// 列順: チーム,サイド,背番号,ポジション,氏名,学年,備考
+function buildRosterFromRows(rows) {
     const rosterData = [];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        const cols = line.split(",").map(c => c.trim());
+    for (let i = 0; i < rows.length; i++) {
+        const cols = (rows[i] || []).map(c => String(c !== undefined && c !== null ? c : '').trim());
         if (cols.length < 5) continue;
+        if (!cols[0] && !cols[2] && !cols[4]) continue; // 完全な空行はスキップ
 
         if (cols[0].includes("チーム") || cols[2].includes("背番号") || cols[4].includes("氏名")) {
-            continue;
+            continue; // ヘッダー行スキップ
         }
 
         const team = cols[0].toUpperCase() === "AWAY" ? "AWAY" : "HOME";
@@ -1097,8 +1147,10 @@ function parseRosterCSV(csvText) {
         const number = cols[2] || "";
         const position = (cols[3] || "").toUpperCase();
         const name = cols[4] || "";
-        const memo = cols[5] || ""; 
-        const comment = cols[6] || ""; 
+        const memo = cols[5] || "";
+        const comment = cols[6] || "";
+
+        if (!number && !name) continue;
 
         rosterData.push({
             team,
@@ -1111,7 +1163,13 @@ function parseRosterCSV(csvText) {
         });
     }
 
-    state.roster = rosterData;
+    return rosterData;
+}
+
+function parseRosterCSV(csvText) {
+    const lines = csvText.split(/\r?\n/);
+    const rows = lines.map(line => line.trim()).filter(line => line).map(line => line.split(",").map(c => c.trim()));
+    state.roster = buildRosterFromRows(rows);
     updateRosterTable();
     broadcastState();
 }
@@ -1894,8 +1952,3 @@ function renderStreamDeckPreview() {
         container.appendChild(keyBtn);
     });
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    initCameraCapture();
-    initStreamDeckHID();
-});

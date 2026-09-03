@@ -424,8 +424,8 @@
                         <button class="btn btn-primary" id="btn-load-demo-away" onclick="loadRosterDemo('away')" style="flex:1; font-size:12px; padding:6px;">AWAYデモ名簿ロード</button>
                     </div>
                     <div class="csv-upload-box" onclick="document.getElementById('csv-file-input').click()">
-                        <span id="csv-upload-text">またはここにCSVファイルをドロップ、またはクリックして選択</span>
-                        <input type="file" id="csv-file-input" accept=".csv" style="display: none;" onchange="handleCSVFile(this)">
+                        <span id="csv-upload-text">またはここにCSV/Excelファイルをドロップ、またはクリックして選択</span>
+                        <input type="file" id="csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleCSVFile(this)">
                     </div>
                     <div class="roster-list-container">
                         <div id="roster-placeholder" class="placeholder-msg">選手データが読み込まれていません</div>

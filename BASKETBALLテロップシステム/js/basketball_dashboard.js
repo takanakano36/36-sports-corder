@@ -600,21 +600,75 @@ function initPlayerEditor() {
         btnLoadPlayerCsv.addEventListener('click', () => {
             const file = inputPlayerCsv.files[0];
             if (!file) {
-                alert('CSVファイルを選択してください。');
+                alert('CSV/Excelファイルを選択してください。');
                 return;
             }
-            readCSVFileAuto(file, (text) => {
-                const players = parsePlayerCSV(text);
-                if (players.length === 0) {
-                    alert('有効な選手データが見つかりませんでした。\n形式: 背番号,ポジション,氏名,学年,コメント');
-                    return;
-                }
-                state.players[currentMgmtTeam] = players;
-                savePlayersToStorage();
-                renderPlayerListEditor();
-                broadcastState();
-                alert(`${currentMgmtTeam === 'home' ? 'HOME' : 'AWAY'}チームの選手データを${players.length}件読み込みました！`);
-            });
+            processPlayerFile(file);
+        });
+    }
+
+    const dropZone = document.getElementById('player-csv-drop-zone');
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#3b82f6';
+            dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0.08)';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#334155';
+            dropZone.style.backgroundColor = 'transparent';
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#334155';
+            dropZone.style.backgroundColor = 'transparent';
+            const file = e.dataTransfer.files[0];
+            if (file) processPlayerFile(file);
+        });
+    }
+}
+
+// 拡張子だけでなく、実際のファイル中身の先頭バイト(ZIP形式の目印 "PK")も見て
+// Excel(.xlsx)かどうかを判定する。拡張子が.csvのまま保存されたExcelファイルにも対応。
+async function isExcelFile(file, ext) {
+    if (ext === 'xlsx' || ext === 'xls') return true;
+    try {
+        const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        return head[0] === 0x50 && head[1] === 0x4B; // "PK" = ZIP/xlsx signature
+    } catch (e) {
+        return false;
+    }
+}
+
+// 選手データファイル(CSVまたはExcel)を処理して現在のタブに反映する
+async function processPlayerFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    const applyPlayers = (players) => {
+        if (players.length === 0) {
+            alert('有効な選手データが見つかりませんでした。\n形式: 背番号,ポジション,氏名,学年,コメント');
+            return;
+        }
+        state.players[currentMgmtTeam] = players;
+        savePlayersToStorage();
+        renderPlayerListEditor();
+        broadcastState();
+        alert(`${currentMgmtTeam === 'home' ? 'HOME' : 'AWAY'}チームの選手データを${players.length}件読み込みました！`);
+    };
+
+    const looksLikeExcel = await isExcelFile(file, ext);
+    if (looksLikeExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+            applyPlayers(buildPlayersFromRows(rows));
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        readCSVFileAuto(file, (text) => {
+            applyPlayers(parsePlayerCSV(text));
         });
     }
 }
@@ -653,16 +707,13 @@ function isUTF8Bytes(bytes) {
     return true;
 }
 
-// 選手名簿CSVパース (背番号,ポジション,氏名,学年,コメント の5列形式)
-function parsePlayerCSV(csvText) {
-    const lines = csvText.split(/\r?\n/);
+// 行データ配列(CSV/Excel共通)から選手リストを組み立てる
+// 列順: 背番号,ポジション,氏名,学年,コメント
+function buildPlayersFromRows(rows) {
     const players = [];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        const cols = line.split(',').map(c => c.trim());
+    for (let i = 0; i < rows.length; i++) {
+        const cols = (rows[i] || []).map(c => String(c !== undefined && c !== null ? c : '').trim());
         if (cols.length < 3) continue;
         if (cols[0].includes('背番号') || cols[2].includes('氏名')) continue; // ヘッダー行スキップ
 
@@ -683,6 +734,12 @@ function parsePlayerCSV(csvText) {
     }
 
     return players;
+}
+
+function parsePlayerCSV(csvText) {
+    const lines = csvText.split(/\r?\n/);
+    const rows = lines.map(line => line.trim()).filter(line => line).map(line => line.split(',').map(c => c.trim()));
+    return buildPlayersFromRows(rows);
 }
 
 function savePlayersToStorage() {

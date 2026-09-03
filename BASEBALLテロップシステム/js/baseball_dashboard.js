@@ -1143,11 +1143,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 選手読み込み処理 (CSV & Excel)
-    function handleFileSelect(file, team) {
+    async function handleFileSelect(file, team) {
         const reader = new FileReader();
         const ext = file.name.split('.').pop().toLowerCase();
-        
-        if (ext === 'csv') {
+
+        // 拡張子だけでなく、ファイル中身の先頭バイト(ZIP形式の目印 "PK")も見て判定する。
+        // 拡張子が.csvのまま保存されたExcelファイルにも対応。
+        let isExcel = ext === 'xlsx' || ext === 'xls';
+        if (!isExcel) {
+            try {
+                const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+                isExcel = head[0] === 0x50 && head[1] === 0x4B;
+            } catch (e) { /* 判定失敗時はCSVとして処理 */ }
+        }
+
+        if (!isExcel) {
             reader.onload = (e) => {
                 let text = e.target.result;
                 let parsed = parseCSV(text);
@@ -1170,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             reader.readAsText(file);
-        } else if (ext === 'xlsx' || ext === 'xls') {
+        } else {
             reader.onload = (e) => {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
@@ -1212,6 +1222,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = inputSheetFileAway.files[0];
         if (file) handleFileSelect(file, 'away');
     });
+
+    // HOME/AWAY 選手データのドラッグ&ドロップ読み込み
+    const setupPlayerFileDropZone = (zoneId, team) => {
+        const zone = document.getElementById(zoneId);
+        if (!zone) return;
+        zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            zone.classList.add('dragover');
+        });
+        zone.addEventListener('dragleave', () => {
+            zone.classList.remove('dragover');
+        });
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileSelect(file, team);
+        });
+    };
+    setupPlayerFileDropZone('home-file-drop-zone', 'home');
+    setupPlayerFileDropZone('away-file-drop-zone', 'away');
 
     // デモ読み込み (ハードコード配列から読み込んでCORS回避)
     btnLoadDemoHome.addEventListener('click', () => {

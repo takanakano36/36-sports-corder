@@ -842,12 +842,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleFileLoad(file, teamKey) {
         if (!file) return;
 
-        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
         const reader = new FileReader();
 
         reader.onload = (e) => {
             try {
                 const data = e.target.result;
+                // 拡張子だけでなく、ファイル中身の先頭バイト(ZIP形式の目印 "PK")も見て判定する。
+                // 拡張子が.csvのまま保存されたExcelファイルにも対応。
+                const headBytes = new Uint8Array(data.slice(0, 2));
+                const isZipSignature = headBytes[0] === 0x50 && headBytes[1] === 0x4B;
+                const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || isZipSignature;
                 if (isExcel) {
                     // Excelパース (SheetJS)
                     const workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
@@ -941,6 +945,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         handleFileLoad(file, 'away');
     });
+
+    // HOME/AWAY 選手データのドラッグ&ドロップ読み込み
+    const setupPlayerFileDropZone = (zoneId, teamKey) => {
+        const zone = document.getElementById(zoneId);
+        if (!zone) return;
+        zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            zone.classList.add('dragover');
+        });
+        zone.addEventListener('dragleave', () => {
+            zone.classList.remove('dragover');
+        });
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileLoad(file, teamKey);
+        });
+    };
+    setupPlayerFileDropZone('home-file-drop-zone', 'home');
+    setupPlayerFileDropZone('away-file-drop-zone', 'away');
 
     // スプレッドシートURL読み込み時のパース互換性維持用
     function parseCsvData(csvText) {

@@ -233,21 +233,23 @@
                 <label class="group-label">選手一覧データ連携 (CSV / Excel / スプレッドシート)</label>
                 
                 <!-- HOMEチーム個別ロード -->
-                <div class="team-load-section home-load-section">
+                <div class="team-load-section home-load-section file-drop-zone" id="home-file-drop-zone">
                     <span class="sub-label" style="color: #10b981; font-weight: bold;">🏠 HOME 選手データ (.csv / .xlsx)</span>
                     <div class="sheet-input-row margin-top-xs">
                         <input type="file" id="input-sheet-file-home" accept=".csv, .xlsx, .xls" class="file-input flex-1">
                         <button id="btn-load-sheet-file-home" class="btn btn-primary">読込</button>
                     </div>
+                    <div class="drop-hint-text">またはこの枠内にファイルをドラッグ&ドロップ</div>
                 </div>
-                
+
                 <!-- AWAYチーム個別ロード -->
-                <div class="team-load-section away-load-section margin-top-sm">
+                <div class="team-load-section away-load-section margin-top-sm file-drop-zone" id="away-file-drop-zone">
                     <span class="sub-label" style="color: #3b82f6; font-weight: bold;">🚌 AWAY 選手データ (.csv / .xlsx)</span>
                     <div class="sheet-input-row margin-top-xs">
                         <input type="file" id="input-sheet-file-away" accept=".csv, .xlsx, .xls" class="file-input flex-1">
                         <button id="btn-load-sheet-file-away" class="btn btn-primary">読込</button>
                     </div>
+                    <div class="drop-hint-text">またはこの枠内にファイルをドラッグ&ドロップ</div>
                 </div>
                 
                 <!-- 一括スプレッドシートURL -->

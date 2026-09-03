@@ -403,6 +403,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // EXCELインポート処理
     document.getElementById('btn-excel-import').addEventListener('click', executeExcelImport);
 
+    // CSV/Excelファイル読込 & ドラッグ&ドロップ
+    const btnLoadPlayerFile = document.getElementById('btn-load-player-file');
+    const inputPlayerFile = document.getElementById('input-player-file');
+    if (btnLoadPlayerFile && inputPlayerFile) {
+        btnLoadPlayerFile.addEventListener('click', () => {
+            const file = inputPlayerFile.files[0];
+            if (!file) {
+                alert('CSV/Excelファイルを選択してください。');
+                return;
+            }
+            processVolleyballPlayerFile(file);
+        });
+    }
+    const playerFileDropZone = document.getElementById('player-file-drop-zone');
+    if (playerFileDropZone) {
+        playerFileDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            playerFileDropZone.style.borderColor = '#38bdf8';
+            playerFileDropZone.style.backgroundColor = 'rgba(56, 189, 248, 0.08)';
+        });
+        playerFileDropZone.addEventListener('dragleave', () => {
+            playerFileDropZone.style.borderColor = '#475569';
+            playerFileDropZone.style.backgroundColor = 'transparent';
+        });
+        playerFileDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            playerFileDropZone.style.borderColor = '#475569';
+            playerFileDropZone.style.backgroundColor = 'transparent';
+            const file = e.dataTransfer.files[0];
+            if (file) processVolleyballPlayerFile(file);
+        });
+    }
+
     // 初期起動 (デフォルトを3セットマッチに変更)
     setGameMode('indoor');
     setMatchType('3set');
@@ -792,6 +825,113 @@ function executeExcelImport() {
         logAction(`【インポート完了】Excelデータから ${imported.length} 名の選手を登録しました。`);
     } else {
         alert('正しい形式（背番号 ポジション 氏名 [一言] [学年/備考]）の行が見つかりませんでした。');
+    }
+}
+
+// 行データ配列(CSV/Excel共通)から選手リストを組み立てる (列順: 背番号,ポジション,氏名,[一言],[学年/備考])
+function buildVolleyballPlayersFromRows(rows) {
+    const imported = [];
+    rows.forEach(cols => {
+        if (!cols || cols.length < 3) return;
+        const number = String(cols[0] !== undefined && cols[0] !== null ? cols[0] : '').trim() || '99';
+        const position = String(cols[1] !== undefined && cols[1] !== null ? cols[1] : '').trim() || 'OH';
+        const name = String(cols[2] !== undefined && cols[2] !== null ? cols[2] : '').trim() || '選手名';
+        let comment = '';
+        let memo = '';
+
+        if (cols.length === 4) {
+            comment = String(cols[3] !== undefined && cols[3] !== null ? cols[3] : '').trim();
+        } else if (cols.length >= 5) {
+            comment = String(cols[3] !== undefined && cols[3] !== null ? cols[3] : '').trim();
+            memo = String(cols[4] !== undefined && cols[4] !== null ? cols[4] : '').trim();
+        }
+
+        imported.push({ number, position, name, comment, memo, starter: false });
+    });
+    return imported;
+}
+
+// CSVファイルの文字コードを自動判別して読み込む (UTF-8 / Shift-JIS(Excel等) 両対応)
+function readCSVFileAuto(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const bytes = new Uint8Array(e.target.result);
+        const encoding = isUTF8Bytes(bytes) ? 'utf-8' : 'shift-jis';
+        const text = new TextDecoder(encoding).decode(bytes);
+        callback(text);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+// バイト列がUTF-8として妥当かを判定する簡易チェック
+function isUTF8Bytes(bytes) {
+    let i = 0;
+    while (i < bytes.length) {
+        if (bytes[i] <= 0x7F) {
+            i += 1;
+        } else if (bytes[i] >= 0xC2 && bytes[i] <= 0xDF) {
+            if (i + 1 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF) return false;
+            i += 2;
+        } else if (bytes[i] >= 0xE0 && bytes[i] <= 0xEF) {
+            if (i + 2 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF || bytes[i + 2] < 0x80 || bytes[i + 2] > 0xBF) return false;
+            i += 3;
+        } else if (bytes[i] >= 0xF0 && bytes[i] <= 0xF4) {
+            if (i + 3 >= bytes.length || bytes[i + 1] < 0x80 || bytes[i + 1] > 0xBF || bytes[i + 2] < 0x80 || bytes[i + 2] > 0xBF || bytes[i + 3] < 0x80 || bytes[i + 3] > 0xBF) return false;
+            i += 4;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 選手データファイル(CSVまたはExcel)を処理して現在のタブに反映する
+// 拡張子だけでなく、実際のファイル中身の先頭バイト(ZIP形式の目印 "PK")も見て
+// Excel(.xlsx)かどうかを判定する。拡張子が.csvのまま保存されたExcelファイルにも対応。
+async function isExcelFile(file, ext) {
+    if (ext === 'xlsx' || ext === 'xls') return true;
+    try {
+        const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        return head[0] === 0x50 && head[1] === 0x4B; // "PK" = ZIP/xlsx signature
+    } catch (e) {
+        return false;
+    }
+}
+
+async function processVolleyballPlayerFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    const applyImported = (imported) => {
+        if (imported.length === 0) {
+            alert('正しい形式（背番号 ポジション 氏名 [一言] [学年/備考]）の行が見つかりませんでした。');
+            return;
+        }
+        state.players[currentTabTeam] = imported;
+        savePlayers();
+        renderPlayerListEditor();
+        broadcastState();
+        logAction(`【インポート完了】ファイルから ${imported.length} 名の選手を登録しました。`);
+    };
+
+    const looksLikeExcel = await isExcelFile(file, ext);
+    if (looksLikeExcel) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' })
+                .filter(r => !(String(r[0] || '').includes('背番号')));
+            applyImported(buildVolleyballPlayersFromRows(rows));
+        };
+        reader.readAsArrayBuffer(file);
+    } else {
+        readCSVFileAuto(file, (text) => {
+            const rows = text.split(/\r?\n/)
+                .map(l => l.trim())
+                .filter(l => l && !l.includes('背番号'))
+                .map(l => l.split(/\t|,/));
+            applyImported(buildVolleyballPlayersFromRows(rows));
+        });
     }
 }
 

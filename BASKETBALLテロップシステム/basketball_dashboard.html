@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>バスケットボール操作画面 (Dashboard)</title>
     <link rel="stylesheet" href="css/basketball_dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -365,12 +366,13 @@
                     <button class="tab-btn active" id="tab-home">HOMEメンバー</button>
                     <button class="tab-btn" id="tab-away">AWAYメンバー</button>
                 </div>
-                <div class="csv-import-box" style="background:#0f172a; padding:8px; border-radius:6px; margin-bottom:8px; border:1px solid #334155;">
-                    <span style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:4px;">選手データCSV一括読込 (現在のタブ「<span id="csv-import-target-label">HOME</span>」に反映・上書き)</span>
+                <div class="csv-import-box" id="player-csv-drop-zone" style="background:#0f172a; padding:8px; border-radius:6px; margin-bottom:8px; border:1px dashed #334155; transition: border-color 0.2s, background-color 0.2s;">
+                    <span style="font-size:11px; color:#cbd5e1; display:block; margin-bottom:4px;">選手データCSV/Excel一括読込 (現在のタブ「<span id="csv-import-target-label">HOME</span>」に反映・上書き)</span>
                     <div style="display:flex; gap:6px;">
-                        <input type="file" id="input-player-csv" accept=".csv" style="flex:1; font-size:11px;">
+                        <input type="file" id="input-player-csv" accept=".csv, .xlsx, .xls" style="flex:1; font-size:11px;">
                         <button id="btn-load-player-csv" class="btn-primary" style="font-size:11px; padding:4px 10px;">読込</button>
                     </div>
+                    <div style="font-size:10px; color:#64748b; margin-top:4px; text-align:center;">またはこの枠内にファイルをドラッグ&ドロップ</div>
                 </div>
                 <div class="player-list-container" id="player-list-editor">
                     <!-- JSで動的構築 -->

@@ -562,6 +562,25 @@ input:checked + .slider:before {
     gap: 8px;
 }
 
+.file-drop-zone {
+    border: 1px dashed transparent;
+    border-radius: 6px;
+    padding: 4px;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.file-drop-zone.dragover {
+    border-color: var(--accent-blue, #3b82f6);
+    background-color: rgba(59, 130, 246, 0.08);
+}
+
+.drop-hint-text {
+    font-size: 10px;
+    color: #64748b;
+    margin-top: 4px;
+    text-align: center;
+}
+
 .player-list-container {
     background: #020617;
     border-radius: 8px;

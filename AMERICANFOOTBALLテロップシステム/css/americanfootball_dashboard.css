@@ -694,6 +694,11 @@ body {
     border-color: var(--accent-blue);
 }
 
+.csv-upload-box.dragover {
+    border-color: var(--accent-blue);
+    background-color: rgba(59, 130, 246, 0.1);
+}
+
 .roster-list-container {
     max-height: 250px;
     overflow-y: auto;
