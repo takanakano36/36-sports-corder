@@ -664,36 +664,8 @@ function updateLineupOverlay() {
 
     if (!state.roster) return;
     const rosterTeamKey = teamKey.toUpperCase();
+    // 読み込んだCSV/Excelの元の並び順をそのまま表示する(自動並び替えはしない)
     let players = state.roster.filter(p => p.team === rosterTeamKey && p.side === sideKey);
-
-    function getPosPriority(pos) {
-        const p = pos ? pos.toUpperCase() : "";
-        if (sideKey === "offense") {
-            if (p.includes("OL") || p === "C" || p === "G" || p === "T" || p === "LT" || p === "LG" || p === "RG" || p === "RT") return 1;
-            if (p.includes("TE")) return 2;
-            if (p.includes("QB")) return 3;
-            if (p.includes("RB") || p.includes("FB") || p.includes("HB")) return 4;
-            if (p.includes("WR") || p.includes("SE") || p.includes("FL")) return 5;
-            if (p === "P") return 6;
-            if (p.includes("LS")) return 7;
-            return 99;
-        } else {
-            if (p.includes("DL") || p === "DE" || p === "DT" || p === "NT") return 1;
-            if (p.includes("LB") || p === "ILB" || p === "OLB" || p === "MLB") return 2;
-            if (p.includes("DB") || p === "CB" || p === "S" || p === "FS" || p === "SS" || p === "SF") return 3;
-            if (p === "K") return 4;
-            if (p.includes("SP")) return 5;
-            if (p === "H") return 6;
-            return 99;
-        }
-    }
-
-    players.sort((a, b) => {
-        const priA = getPosPriority(a.position);
-        const priB = getPosPriority(b.position);
-        if (priA !== priB) return priA - priB;
-        return (parseInt(a.number) || 99) - (parseInt(b.number) || 99);
-    });
 
     let maxPlayers = 12;
     if (sideKey === "offense") {
