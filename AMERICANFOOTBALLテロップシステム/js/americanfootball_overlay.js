@@ -154,18 +154,28 @@ function setupServerSync() {
     }
 }
 
+// 外付けカメラのクロップ映像を、手元確認用の浮動プレビュー枠と
+// スコアボードの時計表示位置(小得点板/大得点板)の両方へ反映する
+function updateCameraClockImage(visible, image) {
+    const cropWrapper = document.getElementById('camera-crop-overlay-wrapper');
+    const cropImg = document.getElementById('camera-crop-img');
+    if (cropWrapper && cropImg) {
+        if (visible && image) {
+            cropImg.src = image;
+            cropWrapper.classList.remove('hidden');
+        } else {
+            cropWrapper.classList.add('hidden');
+        }
+    }
+
+    state.gameClockImage = (visible && image) ? image : "";
+    updateSmallScoreboard();
+    updateLargeScoreboard();
+}
+
 channel.onmessage = function(event) {
     if (event.data && event.data.type === 'CLOCK_IMAGE') {
-        const cropWrapper = document.getElementById('camera-crop-overlay-wrapper');
-        const cropImg = document.getElementById('camera-crop-img');
-        if (cropWrapper && cropImg) {
-            if (event.data.visible && event.data.image) {
-                cropImg.src = event.data.image;
-                cropWrapper.classList.remove('hidden');
-            } else {
-                cropWrapper.classList.add('hidden');
-            }
-        }
+        updateCameraClockImage(event.data.visible, event.data.image);
         return;
     }
 
@@ -179,16 +189,7 @@ channel.onmessage = function(event) {
 
 window.addEventListener('message', function(event) {
     if (event.data && event.data.type === 'CLOCK_IMAGE') {
-        const cropWrapper = document.getElementById('camera-crop-overlay-wrapper');
-        const cropImg = document.getElementById('camera-crop-img');
-        if (cropWrapper && cropImg) {
-            if (event.data.visible && event.data.image) {
-                cropImg.src = event.data.image;
-                cropWrapper.classList.remove('hidden');
-            } else {
-                cropWrapper.classList.add('hidden');
-            }
-        }
+        updateCameraClockImage(event.data.visible, event.data.image);
         return;
     }
 
