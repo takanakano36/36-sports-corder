@@ -186,8 +186,8 @@ body, html {
 .sb-small-period {
     font-size: 13px;
     font-weight: 900;
-    color: var(--primary-neon);
-    text-shadow: 0 0 6px var(--primary-neon-glow);
+    color: #ffffff;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
     line-height: 1;
 }
 
@@ -437,8 +437,8 @@ body, html {
 .sb-large-period {
     font-size: 16px;
     font-weight: 900;
-    color: var(--primary-neon);
-    text-shadow: 0 0 6px var(--primary-neon-glow);
+    color: #ffffff;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
 }
 
 .sb-large-time {

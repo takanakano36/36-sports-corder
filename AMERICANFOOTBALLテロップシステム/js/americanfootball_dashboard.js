@@ -1352,13 +1352,12 @@ if (btnOpenKey) {
 
 // クロマキー背景色切り替え
 function setChromaKey(color) {
-    if (!state.chromaKey) state.chromaKey = color;
     state.chromaKey = color;
     const btns = document.querySelectorAll(".btn-chroma");
     btns.forEach(btn => btn.classList.remove("active"));
     const target = document.querySelector(`.chroma-${color}`);
     if (target) target.classList.add("active");
-    sendState();
+    broadcastState();
 }
 
 // ==========================================================================
