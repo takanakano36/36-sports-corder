@@ -157,17 +157,6 @@ function setupServerSync() {
 // 外付けカメラのクロップ映像を、手元確認用の浮動プレビュー枠と
 // スコアボードの時計表示位置(小得点板/大得点板)の両方へ反映する
 function updateCameraClockImage(visible, image) {
-    const cropWrapper = document.getElementById('camera-crop-overlay-wrapper');
-    const cropImg = document.getElementById('camera-crop-img');
-    if (cropWrapper && cropImg) {
-        if (visible && image) {
-            cropImg.src = image;
-            cropWrapper.classList.remove('hidden');
-        } else {
-            cropWrapper.classList.add('hidden');
-        }
-    }
-
     state.gameClockImage = (visible && image) ? image : "";
     updateSmallScoreboard();
     updateLargeScoreboard();

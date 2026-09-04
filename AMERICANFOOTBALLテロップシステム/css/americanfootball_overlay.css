@@ -1193,36 +1193,9 @@ body.key-mode #scoreboard-small,
 body.key-mode #overlay-vs,
 body.key-mode #player-telop-container,
 body.key-mode #overlay-lineup,
-body.key-mode #image-telop-wrapper,
-body.key-mode #camera-crop-overlay-wrapper {
+body.key-mode #image-telop-wrapper {
     filter: brightness(0) invert(1) contrast(100);
 }
 body.key-mode .fullscreen-btn {
     display: none !important;
-}
-
-/* ==========================================================================
-   外付けUSBカメラ クロップテロップ表示枠
-   ========================================================================== */
-#camera-crop-overlay-wrapper {
-    position: absolute;
-    bottom: 24px;
-    right: 320px;
-    width: 240px;
-    height: 135px;
-    background: #0f172a;
-    border: 2px solid #38bdf8;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-    z-index: 50;
-    transition: opacity 0.3s;
-}
-#camera-crop-overlay-wrapper.hidden {
-    display: none;
-}
-#camera-crop-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
