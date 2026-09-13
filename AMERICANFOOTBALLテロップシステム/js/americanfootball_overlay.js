@@ -700,7 +700,7 @@ function updateLineupOverlay() {
         gradeTag.className = "lineup-grade-tag";
         const memoVal = p.memo || "";
         const memoStr = String(memoVal);
-        gradeTag.textContent = memoStr ? (memoStr.includes("年") ? memoStr : `${memoStr}年`) : "-";
+        gradeTag.textContent = memoStr ? (/[年歳]/.test(memoStr) ? memoStr : `${memoStr}年`) : "-";
 
         rightBlock.appendChild(nameLabel);
         rightBlock.appendChild(gradeTag);
@@ -766,7 +766,7 @@ function updateOneshotOverlay() {
         if (memoEl) {
             const memoVal = state.oneshot.memo || state.oneshot.grade || "";
             const memoStr = String(memoVal);
-            memoEl.textContent = memoStr ? (memoStr.includes("年") ? memoStr : `${memoStr}年`) : "-";
+            memoEl.textContent = memoStr ? (/[年歳]/.test(memoStr) ? memoStr : `${memoStr}年`) : "-";
         }
     } else {
         telopWrapper.classList.add("hidden");
