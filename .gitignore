@@ -16,3 +16,17 @@ Thumbs.db
 /*.xlsx
 /*.xls
 /*.csv
+
+# 選手の顔写真(実在の個人の写真データ)を誤って公開しないための安全対策
+# 各競技フォルダの photos/ 配下に置かれる実写真は、フォルダ自体は残しつつ
+# 中身(チームごとの写真)だけをGit管理から除外する
+AMERICANFOOTBALLテロップシステム/photos/*
+!AMERICANFOOTBALLテロップシステム/photos/.gitkeep
+SOCCERテロップシステム/photos/*
+!SOCCERテロップシステム/photos/.gitkeep
+BASEBALLテロップシステム/photos/*
+!BASEBALLテロップシステム/photos/.gitkeep
+BASKETBALLテロップシステム/photos/*
+!BASKETBALLテロップシステム/photos/.gitkeep
+VOLLEYBALLテロップシステム/photos/*
+!VOLLEYBALLテロップシステム/photos/.gitkeep

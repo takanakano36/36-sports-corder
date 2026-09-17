@@ -340,6 +340,53 @@ document.addEventListener('DOMContentLoaded', () => {
         body.className = `chromakey-${color}`;
     }
 
+    // 選手紹介テロップの顔写真アイコン (photos/未設置・ロゴ未設定時の最終フォールバック)
+    const SPORT_FALLBACK_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+        '<circle cx="50" cy="50" r="46" fill="#e5e7eb" stroke="#94a3b8" stroke-width="3"/>' +
+        '<polygon points="50,30 61,38 57,51 43,51 39,38" fill="#334155"/>' +
+        '<path d="M50 30 L50 12 M61 38 L76 28 M57 51 L68 64 M43 51 L32 64 M39 38 L24 28" stroke="#334155" stroke-width="3" fill="none"/>' +
+        '</svg>'
+    );
+
+    // 選手紹介テロップの画像を「顔写真 > チームロゴ > 競技アイコン」の順で設定する
+    // 顔写真は photos/<チーム名>/player/<背番号>.(jpg|jpeg|png) を自動探索する
+    function setPlayerIntroImage(imgEl, teamName, number, logoUrl) {
+        if (!imgEl) return;
+        const exts = ['jpg', 'jpeg', 'png'];
+        const firstNumber = String(number || '').split('/')[0].trim();
+        let extIdx = 0;
+
+        function tryNextExt() {
+            if (extIdx < exts.length && teamName && firstNumber) {
+                const path = `photos/${encodeURIComponent(teamName)}/player/${encodeURIComponent(firstNumber)}.${exts[extIdx]}`;
+                extIdx++;
+                imgEl.onerror = tryNextExt;
+                imgEl.src = path;
+            } else {
+                tryLogo();
+            }
+        }
+
+        function tryLogo() {
+            if (logoUrl) {
+                imgEl.onerror = tryIcon;
+                imgEl.src = logoUrl;
+            } else {
+                tryIcon();
+            }
+        }
+
+        function tryIcon() {
+            imgEl.onerror = null;
+            imgEl.src = SPORT_FALLBACK_ICON;
+        }
+
+        imgEl.style.display = 'block';
+        imgEl.style.opacity = '1';
+        tryNextExt();
+    }
+
     // 選手テロップ（ワンショットテロップ）の表示
     function showPlayerTelop(player, duration) {
         // 既存のタイマーをクリア
@@ -365,18 +412,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.documentElement.style.setProperty('--player-team-color', '#059669');
         }
 
-        // チームロゴの適用
+        // 選手紹介画像の適用 (顔写真 > チームロゴ > 競技アイコン)
         const playerTeamLogo = document.getElementById('player-team-logo');
-        if (playerTeamLogo) {
-            if (player.teamLogo) {
-                playerTeamLogo.src = player.teamLogo;
-                playerTeamLogo.style.opacity = '1';
-                playerTeamLogo.style.display = 'block';
-            } else {
-                playerTeamLogo.style.opacity = '0';
-                playerTeamLogo.style.display = 'none';
-            }
-        }
+        setPlayerIntroImage(playerTeamLogo, player.team, player.number, player.teamLogo);
 
         // カスタム画像テロップが表示されている場合は非表示に
         imageTelopWrapper.classList.add('hidden');

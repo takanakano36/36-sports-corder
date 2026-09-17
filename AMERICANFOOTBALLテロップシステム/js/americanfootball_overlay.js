@@ -718,6 +718,55 @@ function updateLineupOverlay() {
     });
 }
 
+// 選手紹介テロップの顔写真アイコン (photos/未設置・ロゴ未設定時の最終フォールバック)
+const SPORT_FALLBACK_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<ellipse cx="50" cy="50" rx="46" ry="28" fill="#92400e" stroke="#451a03" stroke-width="3"/>' +
+    '<line x1="30" y1="50" x2="70" y2="50" stroke="#fef3c7" stroke-width="3"/>' +
+    '<line x1="42" y1="42" x2="42" y2="58" stroke="#fef3c7" stroke-width="2"/>' +
+    '<line x1="50" y1="42" x2="50" y2="58" stroke="#fef3c7" stroke-width="2"/>' +
+    '<line x1="58" y1="42" x2="58" y2="58" stroke="#fef3c7" stroke-width="2"/>' +
+    '</svg>'
+);
+
+// 選手紹介テロップの画像を「顔写真 > チームロゴ > 競技アイコン」の順で設定する
+// 顔写真は photos/<チーム名>/player/<背番号>.(jpg|jpeg|png) を自動探索する
+function setPlayerIntroImage(imgEl, teamName, number, logoUrl) {
+    if (!imgEl) return;
+    const exts = ['jpg', 'jpeg', 'png'];
+    const firstNumber = String(number || '').split('/')[0].trim();
+    let extIdx = 0;
+
+    function tryNextExt() {
+        if (extIdx < exts.length && teamName && firstNumber) {
+            const path = `photos/${encodeURIComponent(teamName)}/player/${encodeURIComponent(firstNumber)}.${exts[extIdx]}`;
+            extIdx++;
+            imgEl.onerror = tryNextExt;
+            imgEl.src = path;
+        } else {
+            tryLogo();
+        }
+    }
+
+    function tryLogo() {
+        if (logoUrl) {
+            imgEl.onerror = tryIcon;
+            imgEl.src = logoUrl;
+        } else {
+            tryIcon();
+        }
+    }
+
+    function tryIcon() {
+        imgEl.onerror = null;
+        imgEl.src = SPORT_FALLBACK_ICON;
+    }
+
+    imgEl.style.display = 'block';
+    imgEl.style.opacity = '1';
+    tryNextExt();
+}
+
 // 6. ワンショットテロップ (白背景時の黒文字化を適用)
 function updateOneshotOverlay() {
     const telopWrapper = document.getElementById("telop-wrapper");
@@ -749,15 +798,7 @@ function updateOneshotOverlay() {
             const contrastColor = getContrastColor(teamColor);
             if (teamNameEl) teamNameEl.style.color = contrastColor;
         }
-        if (logoEl) {
-            logoEl.src = teamLogo || "";
-            if (teamLogo) {
-                logoEl.style.display = "block";
-                logoEl.style.opacity = "1";
-            } else {
-                logoEl.style.display = "none";
-            }
-        }
+        setPlayerIntroImage(logoEl, teamName, state.oneshot.number, teamLogo);
         if (posEl) posEl.textContent = state.oneshot.position;
         if (numEl) numEl.textContent = state.oneshot.number;
         if (nameEl) nameEl.textContent = state.oneshot.name;

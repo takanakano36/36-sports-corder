@@ -653,6 +653,54 @@ function adjustTeamNameFontSize(element) {
     }
 }
 
+// 選手紹介テロップの顔写真アイコン (photos/未設置・ロゴ未設定時の最終フォールバック)
+const SPORT_FALLBACK_ICON = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<circle cx="50" cy="50" r="46" fill="#f8fafc" stroke="#334155" stroke-width="3"/>' +
+    '<path d="M10 40 Q50 20 90 40" stroke="#f59e0b" stroke-width="3" fill="none"/>' +
+    '<path d="M14 70 Q50 90 86 70" stroke="#2563eb" stroke-width="3" fill="none"/>' +
+    '<path d="M50 6 Q30 50 50 94" stroke="#334155" stroke-width="3" fill="none"/>' +
+    '</svg>'
+);
+
+// 選手紹介テロップの画像を「顔写真 > チームロゴ > 競技アイコン」の順で設定する
+// 顔写真は photos/<チーム名>/player/<背番号>.(jpg|jpeg|png) を自動探索する
+function setPlayerIntroImage(imgEl, teamName, number, logoUrl) {
+    if (!imgEl) return;
+    const exts = ['jpg', 'jpeg', 'png'];
+    const firstNumber = String(number || '').split('/')[0].trim();
+    let extIdx = 0;
+
+    function tryNextExt() {
+        if (extIdx < exts.length && teamName && firstNumber) {
+            const path = `photos/${encodeURIComponent(teamName)}/player/${encodeURIComponent(firstNumber)}.${exts[extIdx]}`;
+            extIdx++;
+            imgEl.onerror = tryNextExt;
+            imgEl.src = path;
+        } else {
+            tryLogo();
+        }
+    }
+
+    function tryLogo() {
+        if (logoUrl) {
+            imgEl.onerror = tryIcon;
+            imgEl.src = logoUrl;
+        } else {
+            tryIcon();
+        }
+    }
+
+    function tryIcon() {
+        imgEl.onerror = null;
+        imgEl.src = SPORT_FALLBACK_ICON;
+    }
+
+    imgEl.style.display = 'block';
+    imgEl.style.opacity = '1';
+    tryNextExt();
+}
+
 // 選手紹介カード (ON AIR用 ワンショット - バスケ最新 960px 移植、右ズレ対策の card-fade-in-up クラス適用)
 function showPlayerCard(player) {
     try {
@@ -667,13 +715,8 @@ function showPlayerCard(player) {
 
         const logoImg = card.querySelector('#player-team-logo');
         if (logoImg) {
-            if (player.teamLogo && player.teamLogo.length > 100) {
-                logoImg.src = player.teamLogo;
-                logoImg.style.display = 'block';
-            } else {
-                logoImg.src = '';
-                logoImg.style.display = 'none';
-            }
+            const hasLogo = player.teamLogo && player.teamLogo.length > 100;
+            setPlayerIntroImage(logoImg, player.teamName, player.number, hasLogo ? player.teamLogo : '');
         }
 
         const teamName = card.querySelector('#player-team');
