@@ -7,6 +7,7 @@ const state = {
     // チーム情報
     homeName: 'HOME TEAM',
     homeSub: 'HOME',
+    homePhotoTeam: '', // 顔写真フォルダ名(空欄ならhomeNameを使う。表示名を略称にした場合の写真連携用)
     homeColor: "#991b1b",
     homeLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzk5MWIxYiIvPjwvc3ZnPg==",
     homeScore: 0,
@@ -14,6 +15,7 @@ const state = {
 
     awayName: 'AWAY TEAM',
     awaySub: 'AWAY',
+    awayPhotoTeam: '', // 顔写真フォルダ名(空欄ならawayNameを使う。表示名を略称にした場合の写真連携用)
     awayColor: "#1d4ed8",
     awayLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgZmlsbD0iIzFkNGVkOCIvPjwvc3ZnPg==",
     awayScore: 0,
@@ -338,6 +340,10 @@ function updateDashboardUI() {
     if (inHomeSub) inHomeSub.value = state.homeSub;
     const inAwaySub = document.getElementById("input-away-sub");
     if (inAwaySub) inAwaySub.value = state.awaySub;
+    const inHomePhotoTeam = document.getElementById("input-home-photo-team");
+    if (inHomePhotoTeam) inHomePhotoTeam.value = state.homePhotoTeam || '';
+    const inAwayPhotoTeam = document.getElementById("input-away-photo-team");
+    if (inAwayPhotoTeam) inAwayPhotoTeam.value = state.awayPhotoTeam || '';
     const inHomeColor = document.getElementById("input-home-color");
     if (inHomeColor) inHomeColor.value = state.homeColor;
     const inAwayColor = document.getElementById("input-away-color");
@@ -456,6 +462,14 @@ function initEventListeners() {
     });
     document.getElementById("input-home-sub").addEventListener("input", (e) => {
         state.homeSub = e.target.value;
+        broadcastState();
+    });
+    document.getElementById("input-home-photo-team").addEventListener("input", (e) => {
+        state.homePhotoTeam = e.target.value;
+        broadcastState();
+    });
+    document.getElementById("input-away-photo-team").addEventListener("input", (e) => {
+        state.awayPhotoTeam = e.target.value;
         broadcastState();
     });
     document.getElementById("input-away-sub").addEventListener("input", (e) => {

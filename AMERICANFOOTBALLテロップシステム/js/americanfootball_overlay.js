@@ -788,6 +788,8 @@ function updateOneshotOverlay() {
         const teamName = isAway ? state.awayName : state.homeName;
         const teamColor = isAway ? state.awayColor : state.homeColor;
         const teamLogo = isAway ? state.awayLogo : state.homeLogo;
+        // 顔写真フォルダ名は「写真連携用チーム名」が入力されていればそちらを優先(表示名を略称にしている場合の対応)
+        const photoTeamName = (isAway ? state.awayPhotoTeam : state.homePhotoTeam) || teamName;
 
         if (teamNameEl) teamNameEl.textContent = teamName;
         if (colorBox) {
@@ -798,7 +800,7 @@ function updateOneshotOverlay() {
             const contrastColor = getContrastColor(teamColor);
             if (teamNameEl) teamNameEl.style.color = contrastColor;
         }
-        setPlayerIntroImage(logoEl, teamName, state.oneshot.number, teamLogo);
+        setPlayerIntroImage(logoEl, photoTeamName, state.oneshot.number, teamLogo);
         if (posEl) posEl.textContent = state.oneshot.position;
         if (numEl) numEl.textContent = state.oneshot.number;
         if (nameEl) nameEl.textContent = state.oneshot.name;

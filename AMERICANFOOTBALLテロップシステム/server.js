@@ -13,6 +13,7 @@ const PORT = 3001;
 let state = {
     homeName: "HOME TEAM",
     homeSub: "HOME",
+    homePhotoTeam: "",
     homeColor: "#991b1b",
     homeLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0iIzk5MWIxYiIvPjwvc3ZnPg==",
     homeScore: 0,
@@ -20,6 +21,7 @@ let state = {
 
     awayName: "AWAY TEAM",
     awaySub: "AWAY",
+    awayPhotoTeam: "",
     awayColor: "#1d4ed8",
     awayLogo: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgZmlsbD0iIzFkNGVkOCIvPjwvc3ZnPg==",
     awayScore: 0,
