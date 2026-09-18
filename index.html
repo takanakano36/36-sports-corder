@@ -957,6 +957,10 @@
         <p class="hero-desc">
           競技カードをクリックして各ダッシュボードを別ウィンドウで起動します。HDMIクリーン送出・Dual Screen同期に対応した高品質スポーツコーダーシステム。
         </p>
+        <div style="margin-top: 16px; padding: 14px 18px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; font-size: 13px; line-height: 1.7; color: #cbd5e1;">
+          <strong style="color:#38bdf8;">⚠ 起動前に1つだけ準備が必要です:</strong>
+          使いたい競技フォルダの中にある「サーバー起動.bat」を先にダブルクリックしてください(黒い画面が開いたままでOK)。これをしないと、カメラの権限設定などが正しく使えません。起動できたら、この画面のカードをクリックしてください。
+        </div>
       </section>
 
       <!-- SPORTS GRID -->
@@ -1002,7 +1006,7 @@
         <a href="https://allartscreate.com/company.html" target="_blank" rel="noopener noreferrer">Company</a>
       </div>
       <div class="footer-copy">
-        &copy; ALL ARTS CREATE.Inc. All Rights Reserved. AAC Sports Corder System. | Ver1.2.2
+        &copy; ALL ARTS CREATE.Inc. All Rights Reserved. AAC Sports Corder System. | Ver1.3.0
       </div>
     </div>
   </footer>
@@ -1105,8 +1109,8 @@
         nameEn: 'SOCCER',
         icon: 'soccer',
         desc: '得点、前後半タイマー、アディショナルタイム、スタメン/ベンチ、選手交代、カード管理対応',
-        dashUrl: './SOCCERテロップシステム/soccer_dashboard.html',
-        overlayUrl: './SOCCERテロップシステム/soccer_overlay.html'
+        dashUrl: 'http://localhost:3003/soccer_dashboard.html',
+        overlayUrl: 'http://localhost:3003/soccer_overlay.html'
       },
       {
         id: 'basketball',
@@ -1114,8 +1118,8 @@
         nameEn: 'BASKETBALL',
         icon: 'basketball',
         desc: 'Q別スコア、ショットクロック(24s/14s)、ファウル数、タイムアウト、デュアル出力対応',
-        dashUrl: './BASKETBALLテロップシステム/basketball_dashboard.html',
-        overlayUrl: './BASKETBALLテロップシステム/basketball_overlay.html'
+        dashUrl: 'http://localhost:3004/basketball_dashboard.html',
+        overlayUrl: 'http://localhost:3004/basketball_overlay.html'
       },
       {
         id: 'volleyball',
@@ -1123,8 +1127,8 @@
         nameEn: 'VOLLEYBALL',
         icon: 'volleyball',
         desc: 'セットカウント(5セット制)、サーブ権インジケーター、タイムアウト、ローテーション管理対応',
-        dashUrl: './VOLLEYBALLテロップシステム/volleyball_dashboard.html',
-        overlayUrl: './VOLLEYBALLテロップシステム/volleyball_overlay.html'
+        dashUrl: 'http://localhost:3005/volleyball_dashboard.html',
+        overlayUrl: 'http://localhost:3005/volleyball_overlay.html'
       },
       {
         id: 'baseball',
@@ -1132,8 +1136,8 @@
         nameEn: 'BASEBALL',
         icon: 'baseball',
         desc: 'BSOカウント、ランナー塁状況、イニング表裏、打順/守備位置、投球数・打率表示対応',
-        dashUrl: './BASEBALLテロップシステム/baseball_dashboard.html',
-        overlayUrl: './BASEBALLテロップシステム/baseball_overlay.html'
+        dashUrl: 'http://localhost:3002/baseball_dashboard.html',
+        overlayUrl: 'http://localhost:3002/baseball_overlay.html'
       },
       {
         id: 'americanfootball',
@@ -1141,12 +1145,12 @@
         nameEn: 'AMERICAN FOOTBALL',
         icon: 'americanfootball',
         desc: 'ダウン＆ディスタンス(DOWN & TO GO)、ボールオン位置、クォーター時間、ポゼッション表示対応',
-        dashUrl: './AMERICANFOOTBALLテロップシステム/americanfootball_dashboard.html',
-        overlayUrl: './AMERICANFOOTBALLテロップシステム/americanfootball_overlay.html'
+        dashUrl: 'http://localhost:3001/americanfootball_dashboard.html',
+        overlayUrl: 'http://localhost:3001/americanfootball_overlay.html'
       }
     ];
 
-    const STORAGE_KEY = 'AAC_SPORTS_CODER_PORTAL_V4';
+    const STORAGE_KEY = 'AAC_SPORTS_CODER_PORTAL_V5';
 
     function getSportsList() {
       const saved = localStorage.getItem(STORAGE_KEY);
