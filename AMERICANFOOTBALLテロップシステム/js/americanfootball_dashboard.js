@@ -1473,13 +1473,24 @@ function startCameraLoop() {
         const cropY = parseInt(document.getElementById('crop-y')?.value || '0', 10);
         const zoom = parseInt(document.getElementById('crop-zoom')?.value || '100', 10) / 100;
 
-        const sw = video.videoWidth / zoom;
-        const sh = video.videoHeight / zoom;
+        canvas.width = 320;
+        canvas.height = 180;
+
+        // カメラの映像比率(縦横比)に関わらず、出力(16:9)と同じ比率で切り出して
+        // 引き伸ばし(縦横比の歪み)が起きないようにする
+        const targetAspect = canvas.width / canvas.height;
+        const sourceAspect = video.videoWidth / video.videoHeight;
+        let sw, sh;
+        if (sourceAspect > targetAspect) {
+            sh = video.videoHeight / zoom;
+            sw = sh * targetAspect;
+        } else {
+            sw = video.videoWidth / zoom;
+            sh = sw / targetAspect;
+        }
         const sx = ((video.videoWidth - sw) * (cropX / 100));
         const sy = ((video.videoHeight - sh) * (cropY / 100));
 
-        canvas.width = 320;
-        canvas.height = 180;
         ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
         if (isCameraOverlayVisible) {
