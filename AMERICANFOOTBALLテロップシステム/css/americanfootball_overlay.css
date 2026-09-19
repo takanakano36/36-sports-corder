@@ -177,7 +177,7 @@ body, html {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    width: 300px;
+    width: 262px;
     background-color: rgba(15, 23, 42, 0.6);
     height: 100%;
     padding: 0 14px;
@@ -196,7 +196,7 @@ body, html {
     display: flex;
     gap: 6px;
     flex: 1;
-    height: 64px;
+    height: 46px; /* 得点の数字(58px)より少し小さく見えるサイズ */
     align-items: center;
     justify-content: center;
     padding: 0;
@@ -214,12 +214,12 @@ body, html {
 }
 
 .clock-stream-box.gameclock {
-    width: 190px;
+    width: 138px;
     height: 100%;
 }
 
 .clock-stream-box.playclock {
-    width: 70px;
+    width: 54px;
     height: 100%;
     border-left: 1px solid rgba(255, 255, 255, 0.15);
     padding-left: 6px;
@@ -445,14 +445,14 @@ body, html {
 
 .sb-large-time {
     font-family: var(--font-numeric);
-    font-size: 64px;
+    font-size: 74px;
     font-weight: 800;
     line-height: 1.1;
     display: flex;
     align-items: center;
     justify-content: center;
     flex: 1;
-    height: 104px;
+    height: 76px; /* 得点の数字(88px)と同等か少し小さく見えるサイズ */
     margin-top: 0;
 }
 

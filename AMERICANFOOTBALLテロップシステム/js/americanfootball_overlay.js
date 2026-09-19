@@ -283,7 +283,7 @@ function updateSmallScoreboard() {
                 textTimer = document.createElement("span");
                 textTimer.id = "sb-small-time-text";
                 textTimer.style.fontFamily = "Inter, sans-serif";
-                textTimer.style.fontSize = "36px";
+                textTimer.style.fontSize = "44px";
                 textTimer.style.fontWeight = "700";
                 boxGameClock.parentNode.appendChild(textTimer);
             }
@@ -397,7 +397,7 @@ function updateLargeScoreboard() {
                 textTimer = document.createElement("span");
                 textTimer.id = "sb-large-time-text";
                 textTimer.style.fontFamily = "Inter, sans-serif";
-                textTimer.style.fontSize = "64px";
+                textTimer.style.fontSize = "74px";
                 textTimer.style.fontWeight = "700";
                 imgClock.parentNode.appendChild(textTimer);
             }
