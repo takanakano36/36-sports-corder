@@ -447,7 +447,26 @@ function updateTODotsDashboard() {
     }
 }
 
+// photos/ 内のチーム名フォルダを、写真連携用チーム名欄の選択候補として読み込む
+async function loadPhotoTeamOptions() {
+    const list = document.getElementById("photo-team-list");
+    if (!list || !/^https?:$/.test(window.location.protocol)) return;
+    try {
+        const res = await fetch('/api/photo-teams');
+        const teams = await res.json();
+        list.innerHTML = '';
+        teams.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            list.appendChild(opt);
+        });
+    } catch (e) {
+        console.warn('写真フォルダ一覧の取得に失敗:', e);
+    }
+}
+
 function initEventListeners() {
+    loadPhotoTeamOptions();
     document.getElementById("input-home-name").addEventListener("input", (e) => {
         state.homeName = e.target.value;
         const rNameH = document.getElementById("ransko-name-home");
@@ -1473,10 +1492,11 @@ function startCameraLoop() {
         const cropY = parseInt(document.getElementById('crop-y')?.value || '0', 10);
         const zoom = parseInt(document.getElementById('crop-zoom')?.value || '100', 10) / 100;
 
-        canvas.width = 320;
-        canvas.height = 180;
+        // 時計は横長(例 12:34)なので、出力枠は横長(3:1)にして時計を大きく表示する
+        canvas.width = 480;
+        canvas.height = 160;
 
-        // カメラの映像比率(縦横比)に関わらず、出力(16:9)と同じ比率で切り出して
+        // カメラの映像比率(縦横比)に関わらず、出力と同じ比率で切り出して
         // 引き伸ばし(縦横比の歪み)が起きないようにする
         const targetAspect = canvas.width / canvas.height;
         const sourceAspect = video.videoWidth / video.videoHeight;

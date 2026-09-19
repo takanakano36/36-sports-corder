@@ -11,7 +11,7 @@
     --yellow-flag: #eab308;
     --dark-plate-bg: linear-gradient(180deg, #111827 0%, #030712 100%);
     --silver-plate-bg: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 50%, #94a3b8 100%);
-    --font-numeric: 'Oswald', sans-serif;
+    --font-numeric: 'Inter', 'Noto Sans JP', sans-serif; /* 縦長のOswaldから、幅と太さのあるInterに変更 */
     --font-japanese: 'Noto Sans JP', sans-serif;
 }
 
@@ -125,7 +125,7 @@ body, html {
     left: 96px;
     display: flex;
     align-items: center;
-    height: 64px;
+    height: 84px;
     background: var(--dark-plate-bg);
     border: 2.5px solid #374151;
     box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.05);
@@ -150,7 +150,7 @@ body, html {
 }
 
 .sb-small-name {
-    font-size: 20px;
+    font-size: 28px;
     font-weight: 900;
     letter-spacing: 0.5px;
     white-space: nowrap;
@@ -158,9 +158,9 @@ body, html {
 
 .sb-small-score {
     font-family: var(--font-numeric);
-    font-size: 38px;
-    font-weight: 700;
-    width: 64px;
+    font-size: 58px;
+    font-weight: 800;
+    width: 96px;
     text-align: center;
     background-color: rgba(0, 0, 0, 0.3);
     height: 100%;
@@ -173,18 +173,19 @@ body, html {
 
 .sb-small-vs-center {
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* Qと時計を1段に並べる(2段だと時計が小さくなるため) */
     align-items: center;
     justify-content: center;
-    width: 150px; /* ゲームクロックとプレイクロックを並べるため拡大 */
+    gap: 12px;
+    width: 300px;
     background-color: rgba(15, 23, 42, 0.6);
     height: 100%;
-    padding: 2px 0;
+    padding: 0 14px;
     position: relative;
 }
 
 .sb-small-period {
-    font-size: 13px;
+    font-size: 32px;
     font-weight: 900;
     color: #ffffff;
     text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
@@ -194,12 +195,12 @@ body, html {
 .sb-small-clocks-row {
     display: flex;
     gap: 6px;
-    width: 100%;
-    height: 32px;
+    flex: 1;
+    height: 64px;
     align-items: center;
     justify-content: center;
-    padding: 0 8px;
-    margin-top: 2px;
+    padding: 0;
+    margin-top: 0;
 }
 
 /* クロップされた時計映像をはめ込むコンテナ */
@@ -213,12 +214,12 @@ body, html {
 }
 
 .clock-stream-box.gameclock {
-    width: 75px;
+    width: 190px;
     height: 100%;
 }
 
 .clock-stream-box.playclock {
-    width: 45px;
+    width: 70px;
     height: 100%;
     border-left: 1px solid rgba(255, 255, 255, 0.15);
     padding-left: 6px;
@@ -238,8 +239,8 @@ body, html {
 }
 
 .sb-small-to-dot {
-    width: 6px;
-    height: 6px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background-color: #4b5563;
 }
@@ -251,7 +252,7 @@ body, html {
 
 /* ダウン＆ディスタンス ＆ FLAG エリア (小得点板の右側に連結) */
 .sb-small-dd-container {
-    width: 160px;
+    width: 250px;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.4);
     border-left: 2px solid #374151;
@@ -263,7 +264,7 @@ body, html {
 }
 
 #sb-small-down-dist-text {
-    font-size: 20px;
+    font-size: 34px;
     font-weight: 900;
     letter-spacing: 0.5px;
     color: #fff;
@@ -280,7 +281,7 @@ body, html {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    font-size: 34px;
     font-weight: 900;
     letter-spacing: 2px;
     z-index: 10;
@@ -301,8 +302,8 @@ body, html {
     bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
-    width: 1240px; /* 960px から 1240px に拡大し、8文字が綺麗に収まる横幅に設定 */
-    height: 110px;
+    width: 1560px; /* 時計を大きく見せるため拡大 */
+    height: 130px;
     background: var(--dark-plate-bg);
     border: 3px solid #374151;
     box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 1px 3px rgba(255, 255, 255, 0.05);
@@ -325,7 +326,7 @@ body, html {
 
 /* ロゴ専用のカラーブロック (チームカラー背景) */
 .sb-large-logo-bg-block {
-    width: 110px;
+    width: 130px;
     height: 100%;
     display: flex;
     align-items: center;
@@ -336,8 +337,8 @@ body, html {
 }
 
 .sb-large-team-logo {
-    width: 80px;
-    height: 80px;
+    width: 96px;
+    height: 96px;
     object-fit: contain;
 }
 
@@ -347,13 +348,13 @@ body, html {
 }
 
 .sb-large-team-name {
-    font-size: 26px;
+    font-size: 34px;
     font-weight: 900;
 }
 
 .sb-large-team-sub {
     font-family: var(--font-numeric);
-    font-size: 14px;
+    font-size: 18px;
     color: #94a3b8;
     letter-spacing: 1px;
 }
@@ -361,9 +362,9 @@ body, html {
 /* スコア表示 */
 .sb-large-score {
     font-family: var(--font-numeric);
-    font-size: 64px;
-    font-weight: 700;
-    width: 110px;
+    font-size: 88px;
+    font-weight: 800;
+    width: 150px;
     text-align: center;
     background-color: rgba(0, 0, 0, 0.4);
     height: 100%;
@@ -380,8 +381,8 @@ body, html {
 }
 
 .sb-large-to-dot {
-    width: 8px;
-    height: 8px;
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
     background-color: #1f2937;
     border: 1px solid #4b5563;
@@ -422,20 +423,21 @@ body, html {
 
 /* 中央の情報ブロック (タイマー・Q) */
 .sb-large-center-match {
-    flex: 2.2;
+    flex: 3.4;
     background-color: rgba(15, 23, 42, 0.8);
     border-left: 2.5px solid #374151;
     border-right: 2.5px solid #374151;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* Qと時計を1段に並べる */
     align-items: center;
     justify-content: center;
+    gap: 18px;
     position: relative;
-    padding: 6px 0;
+    padding: 6px 14px;
 }
 
 .sb-large-period {
-    font-size: 16px;
+    font-size: 42px;
     font-weight: 900;
     color: #ffffff;
     text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
@@ -443,15 +445,15 @@ body, html {
 
 .sb-large-time {
     font-family: var(--font-numeric);
-    font-size: 34px;
-    font-weight: 700;
+    font-size: 64px;
+    font-weight: 800;
     line-height: 1.1;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    height: 48px;
-    margin-top: 4px;
+    flex: 1;
+    height: 104px;
+    margin-top: 0;
 }
 
 

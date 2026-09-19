@@ -34,13 +34,14 @@
             <section class="panel-section">
                 <h2 class="panel-title">チーム情報・設定</h2>
                 <div class="control-group">
+                    <datalist id="photo-team-list"></datalist>
                     <div class="team-settings-container">
                         <!-- HOME -->
                         <div class="team-setting-block home">
                             <span class="sub-label" style="color: #10b981; font-weight: bold;">HOMEチーム</span>
                             <input type="text" id="input-home-name" class="form-input" value="HOME TEAM" placeholder="日本語チーム名">
                             <input type="text" id="input-home-sub" class="form-input" value="HOME" placeholder="英語表記(略称)">
-                            <input type="text" id="input-home-photo-team" class="form-input margin-top-xs" placeholder="顔写真フォルダ名(表示名を略した場合のみ入力)" title="photosフォルダ内のチーム名フォルダと完全一致させてください。空欄なら上の「日本語チーム名」がそのまま使われます。">
+                            <input type="text" id="input-home-photo-team" list="photo-team-list" class="form-input margin-top-xs" placeholder="顔写真フォルダ名(▼から選択 / 空欄なら日本語チーム名を使用)" title="photosフォルダ内のチーム名フォルダと完全一致させてください。空欄なら上の「日本語チーム名」がそのまま使われます。">
                             <div class="color-picker-row margin-top-xs">
                                 <span class="sub-label">カラー:</span>
                                 <input type="color" id="input-home-color" class="color-picker" value="#991b1b">
@@ -59,7 +60,7 @@
                             <span class="sub-label" style="color: #f43f5e; font-weight: bold;">AWAYチーム</span>
                             <input type="text" id="input-away-name" class="form-input" value="AWAY TEAM" placeholder="日本語チーム名">
                             <input type="text" id="input-away-sub" class="form-input" value="AWAY" placeholder="英語表記(略称)">
-                            <input type="text" id="input-away-photo-team" class="form-input margin-top-xs" placeholder="顔写真フォルダ名(表示名を略した場合のみ入力)" title="photosフォルダ内のチーム名フォルダと完全一致させてください。空欄なら上の「日本語チーム名」がそのまま使われます。">
+                            <input type="text" id="input-away-photo-team" list="photo-team-list" class="form-input margin-top-xs" placeholder="顔写真フォルダ名(▼から選択 / 空欄なら日本語チーム名を使用)" title="photosフォルダ内のチーム名フォルダと完全一致させてください。空欄なら上の「日本語チーム名」がそのまま使われます。">
                             <div class="color-picker-row margin-top-xs">
                                 <span class="sub-label">カラー:</span>
                                 <input type="color" id="input-away-color" class="color-picker" value="#1d4ed8">
@@ -476,7 +477,7 @@
                     <div style="flex:1; display:flex; flex-direction:column; gap:4px; font-size:11px; color:#cbd5e1;">
                         <div>X位置: <input type="range" id="crop-x" min="0" max="100" value="0" style="width:100%;"></div>
                         <div>Y位置: <input type="range" id="crop-y" min="0" max="100" value="0" style="width:100%;"></div>
-                        <div>拡大率: <input type="range" id="crop-zoom" min="100" max="400" value="100" style="width:100%;"></div>
+                        <div>拡大率: <input type="range" id="crop-zoom" min="100" max="1200" value="100" style="width:100%;"></div>
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; align-items: center;">

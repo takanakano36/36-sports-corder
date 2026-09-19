@@ -222,7 +222,10 @@ const server = http.createServer((req, res) => {
     }
 
     // 4. 静的ファイル配信
-    let filePath = path.join(__dirname, pathname === '/' ? 'soccer_dashboard.html' : pathname);
+    // URLは%エンコードされているため、日本語・スペースを含む写真フォルダ名などを読めるよう復号する
+    let decodedPath = pathname;
+    try { decodedPath = decodeURIComponent(pathname); } catch (e) { decodedPath = pathname; }
+    let filePath = path.join(__dirname, decodedPath === '/' ? 'soccer_dashboard.html' : decodedPath);
     
     if (!filePath.startsWith(__dirname)) {
         res.writeHead(403);
@@ -231,14 +234,15 @@ const server = http.createServer((req, res) => {
     }
 
     const cleanFilePath = filePath.split('?')[0];
-    const extname = path.extname(cleanFilePath);
+    const extname = path.extname(cleanFilePath).toLowerCase();
     let contentType = 'text/html';
     switch (extname) {
         case '.js': contentType = 'text/javascript'; break;
         case '.css': contentType = 'text/css'; break;
         case '.json': contentType = 'application/json'; break;
         case '.png': contentType = 'image/png'; break;
-        case '.jpg': contentType = 'image/jpg'; break;
+        case '.jpg': contentType = 'image/jpeg'; break;
+        case '.jpeg': contentType = 'image/jpeg'; break;
         case '.svg': contentType = 'image/svg+xml'; break;
         case '.csv': contentType = 'text/csv'; break;
     }

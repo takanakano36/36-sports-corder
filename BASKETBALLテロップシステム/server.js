@@ -86,6 +86,7 @@ const MIME_TYPES = {
   '.js': 'application/javascript; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.json': 'application/json'
@@ -261,7 +262,10 @@ const server = http.createServer((req, res) => {
   }
 
   // 4. 静的ファイルの配信
-  let filePath = path.join(__dirname, pathname === '/' ? 'basketball_dashboard.html' : pathname);
+  // URLは%エンコードされているため、日本語・スペースを含む写真フォルダ名などを読めるよう復号する
+  let decodedPath = pathname;
+  try { decodedPath = decodeURIComponent(pathname); } catch (e) { decodedPath = pathname; }
+  let filePath = path.join(__dirname, decodedPath === '/' ? 'basketball_dashboard.html' : decodedPath);
   
   // 安全性の確認 (ディレクトリトラバーサル防止)
   if (!filePath.startsWith(__dirname)) {

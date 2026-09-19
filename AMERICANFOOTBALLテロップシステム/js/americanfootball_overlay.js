@@ -156,8 +156,12 @@ function setupServerSync() {
 
 // 外付けカメラのクロップ映像を、手元確認用の浮動プレビュー枠と
 // スコアボードの時計表示位置(小得点板/大得点板)の両方へ反映する
+// ※カメラ映像はstate(ダッシュボードから届く状態)とは別に保持する。
+//   stateを丸ごと差し替える更新のたびに時計映像が一瞬消える(ちらつく)のを防ぐため。
+let cameraClockImage = "";
+
 function updateCameraClockImage(visible, image) {
-    state.gameClockImage = (visible && image) ? image : "";
+    cameraClockImage = (visible && image) ? image : "";
     updateSmallScoreboard();
     updateLargeScoreboard();
 }
@@ -262,10 +266,10 @@ function updateSmallScoreboard() {
 
     // ゲーム/プレイ両クロックの描画同期
     if (imgGameClock && imgPlayClock && boxGameClock && boxPlayClock) {
-        if (state.gameClockImage || state.playClockImage) {
-            imgGameClock.src = state.gameClockImage || "";
+        if (cameraClockImage || state.playClockImage) {
+            if (imgGameClock.src !== cameraClockImage) imgGameClock.src = cameraClockImage || "";
             imgPlayClock.src = state.playClockImage || "";
-            boxGameClock.style.display = state.gameClockImage ? "block" : "none";
+            boxGameClock.style.display = cameraClockImage ? "block" : "none";
             boxPlayClock.style.display = state.playClockImage ? "block" : "none";
 
             const textTimer = document.getElementById("sb-small-time-text");
@@ -278,8 +282,8 @@ function updateSmallScoreboard() {
             if (!textTimer) {
                 textTimer = document.createElement("span");
                 textTimer.id = "sb-small-time-text";
-                textTimer.style.fontFamily = "Oswald, sans-serif";
-                textTimer.style.fontSize = "20px";
+                textTimer.style.fontFamily = "Inter, sans-serif";
+                textTimer.style.fontSize = "36px";
                 textTimer.style.fontWeight = "700";
                 boxGameClock.parentNode.appendChild(textTimer);
             }
@@ -353,18 +357,18 @@ function updateLargeScoreboard() {
     if (nameHome) {
         nameHome.textContent = state.homeName;
         // 8文字までは元のサイズ(26px)を維持し、それ以上の長いチーム名はフォントサイズを自動で縮小して綺麗に収める
-        let fontSize = 26;
+        let fontSize = 34;
         nameHome.style.fontSize = `${fontSize}px`;
-        while (nameHome.scrollWidth > 290 && fontSize > 14) {
+        while (nameHome.scrollWidth > 380 && fontSize > 14) {
             fontSize -= 0.5;
             nameHome.style.fontSize = `${fontSize}px`;
         }
     }
     if (nameAway) {
         nameAway.textContent = state.awayName;
-        let fontSize = 26;
+        let fontSize = 34;
         nameAway.style.fontSize = `${fontSize}px`;
-        while (nameAway.scrollWidth > 290 && fontSize > 14) {
+        while (nameAway.scrollWidth > 380 && fontSize > 14) {
             fontSize -= 0.5;
             nameAway.style.fontSize = `${fontSize}px`;
         }
@@ -381,8 +385,8 @@ function updateLargeScoreboard() {
     if (logoBgAway) logoBgAway.style.backgroundColor = state.awayColor;
 
     if (imgClock) {
-        if (state.gameClockImage) {
-            imgClock.src = state.gameClockImage;
+        if (cameraClockImage) {
+            if (imgClock.src !== cameraClockImage) imgClock.src = cameraClockImage;
             imgClock.style.display = "block";
             const textTimer = document.getElementById("sb-large-time-text");
             if (textTimer) textTimer.style.display = "none";
@@ -392,8 +396,8 @@ function updateLargeScoreboard() {
             if (!textTimer) {
                 textTimer = document.createElement("span");
                 textTimer.id = "sb-large-time-text";
-                textTimer.style.fontFamily = "Oswald, sans-serif";
-                textTimer.style.fontSize = "34px";
+                textTimer.style.fontFamily = "Inter, sans-serif";
+                textTimer.style.fontSize = "64px";
                 textTimer.style.fontWeight = "700";
                 imgClock.parentNode.appendChild(textTimer);
             }
