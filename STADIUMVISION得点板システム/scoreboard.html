@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタジアムビジョン得点板 表示画面</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/scoreboard.css">
+</head>
+<body>
+    <!-- 得点板本体（常に1920×1080で作り、ウィンドウの大きさに合わせて拡大・縮小） -->
+    <div id="board" class="board waiting">
+        <div class="half h"><img class="wm" id="wm-home" alt=""></div>
+        <div class="half a"><img class="wm" id="wm-away" alt=""></div>
+        <div class="tn" id="tournament"></div>
+
+        <div class="team h">
+            <div class="hd">
+                <img class="tlogo" id="logo-home" alt="">
+                <div class="name" id="name-home"></div>
+                <span class="poss" id="poss-home"></span>
+            </div>
+            <div class="score" id="score-home"></div>
+            <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" id="to-home"></div></div>
+        </div>
+
+        <div class="team a">
+            <div class="hd">
+                <span class="poss" id="poss-away"></span>
+                <div class="name" id="name-away"></div>
+                <img class="tlogo" id="logo-away" alt="">
+            </div>
+            <div class="score" id="score-away"></div>
+            <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" id="to-away"></div></div>
+        </div>
+
+        <div class="center"><table class="qtable" id="qtable"></table></div>
+
+        <div class="ddbar" id="ddbar">
+            <span class="down" id="down"></span>
+            <span class="sep" id="dd-sep"></span>
+            <span class="ball" id="ball">BALL ON<b id="ballon"></b></span>
+        </div>
+    </div>
+    <script src="js/scoreboard.js"></script>
+</body>
+</html>

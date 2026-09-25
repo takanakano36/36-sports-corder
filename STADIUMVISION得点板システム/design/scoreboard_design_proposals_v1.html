@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタジアムビジョン得点板 デザイン案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800;900&family=Noto+Sans+JP:wght@700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   ページ全体（説明用の枠）
+   ========================================================================== */
+:root {
+    --page-bg: #f4f4f5;
+    --page-card: #ffffff;
+    --page-text: #18181b;
+    --page-sub: #52525b;
+    --page-line: #e4e4e7;
+    --page-accent: #b45309;
+
+    /* 得点板で使う色（既存アメフト画面と共通の考え方） */
+    --home: #8b1e2d;
+    --home-dark: #4a0f18;
+    --away: #1d4ed8;
+    --away-dark: #0f245f;
+    --gold: #f5b700;
+    --flag: #eab308;
+    --ink: #05070d;
+    --plate: #0d1220;
+    --plate-line: #1f2a44;
+    --font-num: 'Oswald', 'Inter', sans-serif;
+    --font-jp: 'Noto Sans JP', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --page-bg: #0b0b0e;
+        --page-card: #17171b;
+        --page-text: #f4f4f5;
+        --page-sub: #a1a1aa;
+        --page-line: #2a2a31;
+        --page-accent: #f59e0b;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: var(--page-bg);
+    color: var(--page-text);
+    font-family: var(--font-jp);
+    line-height: 1.7;
+}
+.page { max-width: 1280px; margin: 0 auto; padding: 32px 16px 80px; }
+.page h1 { font-size: 28px; font-weight: 900; }
+.page .lead { color: var(--page-sub); margin-top: 6px; font-weight: 700; font-size: 14px; }
+
+/* 操作パネル */
+.controls {
+    position: sticky; top: 0; z-index: 10;
+    margin: 24px 0 8px;
+    background: var(--page-card);
+    border: 1px solid var(--page-line);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+    font-size: 13px; font-weight: 700;
+}
+.controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.controls select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--page-line); background: var(--page-bg); color: var(--page-text); }
+.controls .title { color: var(--page-accent); }
+
+section.proposal { margin-top: 40px; }
+section.proposal h2 { font-size: 21px; font-weight: 900; }
+section.proposal h2 small { font-size: 13px; color: var(--page-accent); margin-left: 8px; }
+section.proposal ul.notes { margin: 8px 0 14px 20px; color: var(--page-sub); font-size: 14px; font-weight: 700; }
+
+/* 得点板の縮小表示枠 */
+.stage { width: 100%; position: relative; overflow: hidden; border-radius: 10px; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.stage .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; }
+.stage.r16x9 { aspect-ratio: 1920 / 1080; }
+.stage.r16x9 .canvas { width: 1920px; height: 1080px; }
+.stage.r3x1 { aspect-ratio: 1920 / 640; }
+.stage.r3x1 .canvas { width: 1920px; height: 640px; }
+
+.hide-down .opt-down { display: none !important; }
+.hide-sit .opt-sit { display: none !important; }
+
+/* ==========================================================================
+   共通パーツ
+   ========================================================================== */
+.logo svg { width: 100%; height: 100%; display: block; }
+.num { font-family: var(--font-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+.to-bars { display: flex; gap: 16px; }
+.to-bars i { display: block; width: 40px; height: 40px; border-radius: 50%; border: 5px solid rgba(255,255,255,.45); background: transparent; }
+.to-bars i.on { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 18px rgba(245,183,0,.6); }
+.hide-clock .opt-clock { display: none !important; }
+.redzone { background: linear-gradient(90deg, #7f1d1d, #b91c1c, #7f1d1d) !important; }
+.redzone .ball b { color: #fff !important; }
+
+/* シチュエーション帯（TOUCHDOWN / FLAG など） */
+.sit-banner { font-family: var(--font-num); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #111; background: var(--gold); display: flex; align-items: center; justify-content: center; gap: 24px; }
+.sit-banner.flag { background: var(--flag); }
+.sit-banner.review { background: #e5e7eb; }
+.sit-banner.timeout { background: #fff; }
+.sit-banner.touchdown { background: linear-gradient(90deg, #f5b700, #ffe27a, #f5b700); animation: shine 1.2s linear infinite; background-size: 200% 100%; }
+@keyframes shine { to { background-position: -200% 0; } }
+.sit-banner.none { display: none !important; }
+
+/* ==========================================================================
+   案A：クラシック・ボード（伝統的な電光掲示板を今風に）
+   ========================================================================== */
+.A { background: radial-gradient(ellipse at 50% 0%, #16203a 0%, var(--ink) 65%); color: #fff; font-family: var(--font-jp); }
+.A .top { position: absolute; left: 0; right: 0; top: 0; height: 110px; display: flex; align-items: center; justify-content: center; gap: 36px; border-bottom: 4px solid var(--gold); background: linear-gradient(180deg, #0c1428, #070b16); }
+.A .top .tn { font-size: 56px; font-weight: 900; letter-spacing: .06em; }
+.A .top .star { width: 18px; height: 18px; background: var(--gold); transform: rotate(45deg); }
+.A .main { position: absolute; top: 140px; left: 60px; right: 60px; height: 500px; display: grid; grid-template-columns: 1fr 470px 280px 470px 1fr; align-items: center; }
+.A .team { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.A .team .logo { width: 250px; height: 250px; }
+.A .team .name { font-size: 64px; font-weight: 900; line-height: 1; white-space: nowrap; }
+.A .score { height: 440px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 400px; line-height: 1; position: relative; }
+.A .score.h { background: linear-gradient(180deg, var(--home), var(--home-dark)); }
+.A .score.a { background: linear-gradient(180deg, var(--away), var(--away-dark)); }
+.A .score::after { content: ""; position: absolute; inset: 10px; border: 3px solid rgba(255,255,255,.18); border-radius: 12px; }
+.A .poss { position: absolute; top: 18px; width: 0; height: 0; border-top: 26px solid transparent; border-bottom: 26px solid transparent; }
+.A .score.h .poss { left: -54px; border-left: 40px solid var(--gold); }
+.A .score.a .poss { right: -54px; border-right: 40px solid var(--gold); }
+.A .center { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.A .center .per { font-family: var(--font-num); font-size: 120px; font-weight: 700; color: var(--gold); line-height: 1; }
+.A .center .clock { font-family: var(--font-num); font-size: 104px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.A .center .per-l { font-size: 30px; font-weight: 900; letter-spacing: .3em; color: #9aa6c4; }
+.A .qt { position: absolute; left: 60px; right: 60px; top: 672px; height: 250px; border-collapse: collapse; background: var(--plate); border: 2px solid var(--plate-line); border-radius: 14px; overflow: hidden; }
+.A .qt table { width: 100%; height: 100%; border-collapse: collapse; }
+.A .qt th { font-family: var(--font-num); font-size: 34px; color: #9aa6c4; font-weight: 600; height: 60px; line-height: 1; border-bottom: 2px solid var(--plate-line); }
+.A .qt td { font-family: var(--font-num); font-size: 78px; font-weight: 700; text-align: center; border-left: 2px solid var(--plate-line); line-height: 1; height: 95px; }
+.A .qt td.tm { text-align: left; padding-left: 28px; border-left: none; font-family: var(--font-jp); font-size: 52px; font-weight: 900; white-space: nowrap; }
+.A .qt td.tm span.chip { display: inline-block; width: 22px; height: 52px; vertical-align: middle; margin-right: 18px; border-radius: 3px; }
+.A .qt td.tot { background: rgba(245,183,0,.12); color: var(--gold); font-size: 92px; }
+.A .qt td.to { width: 260px; }
+.A .qt td.to .to-bars { justify-content: center; gap: 12px; }
+.A .qt td.to .to-bars i { width: 46px; height: 46px; }
+.A .qt tr.cur-row td { border-top: 2px solid var(--plate-line); }
+.A .qt th.cur { color: var(--gold); }
+.A .bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 130px; display: flex; }
+.A .dd { flex: 1; display: flex; align-items: center; justify-content: center; gap: 60px; background: #0a0f1d; border-top: 4px solid var(--plate-line); }
+.A .dd .down { font-family: var(--font-num); font-size: 84px; font-weight: 700; color: #fff; }
+.A .dd .ball { font-size: 52px; font-weight: 900; color: #cbd5e1; }
+.A .dd .ball b { color: var(--gold); font-family: var(--font-num); font-size: 70px; margin-left: 10px; }
+.A .dd .sep { width: 4px; height: 70px; background: var(--plate-line); }
+.A .bottom .sit-banner { position: absolute; inset: 0; font-size: 96px; }
+
+/* ==========================================================================
+   案B：ブロードキャスト（テレビ中継グラフィック風・チームカラーで大胆に）
+   ========================================================================== */
+.B { background: #04060c; color: #fff; }
+.B .half { position: absolute; top: 0; bottom: 0; width: 1010px; overflow: hidden; }
+.B .half.h { left: 0; background: linear-gradient(135deg, var(--home) 0%, var(--home-dark) 100%); clip-path: polygon(0 0, 100% 0, 91% 100%, 0 100%); }
+.B .half.a { right: 0; background: linear-gradient(225deg, var(--away) 0%, var(--away-dark) 100%); clip-path: polygon(9% 0, 100% 0, 100% 100%, 0 100%); }
+.B .half .wm { position: absolute; width: 760px; height: 760px; top: 120px; opacity: .13; }
+.B .half.h .wm { left: -150px; }
+.B .half.a .wm { right: -150px; }
+.B .tn { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); background: #000; padding: 10px 56px; font-size: 44px; font-weight: 900; letter-spacing: .08em; border-radius: 0 0 0 0; clip-path: polygon(4% 0, 96% 0, 100% 100%, 0 100%); white-space: nowrap; z-index: 2; }
+.B .team { position: absolute; top: 150px; width: 700px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.B .team.h { left: 80px; }
+.B .team.a { right: 80px; }
+.B .team .row { display: flex; align-items: center; gap: 26px; }
+.B .team .logo { width: 150px; height: 150px; filter: drop-shadow(0 6px 12px rgba(0,0,0,.4)); }
+.B .team .name { font-size: 70px; font-weight: 900; white-space: nowrap; text-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.B .team .score { font-size: 440px; line-height: .95; text-shadow: 0 10px 40px rgba(0,0,0,.45); }
+.B .team .to-bars i { width: 50px; height: 50px; border-color: rgba(255,255,255,.6); }
+.B .team .to-bars i.on { background: #fff; border-color: #fff; box-shadow: 0 0 16px rgba(255,255,255,.7); }
+.B .team .to-l { font-family: var(--font-num); font-size: 26px; letter-spacing: .3em; color: rgba(255,255,255,.75); margin-top: 6px; }
+.B .poss { position: absolute; top: 46px; width: 58px; height: 58px; }
+.B .team.h .poss { right: -10px; }
+.B .team.a .poss { left: -10px; }
+.B .poss::before { content: ""; position: absolute; inset: 0; background: var(--gold); border-radius: 50% / 50%; transform: rotate(-35deg) scaleX(1.5) scaleY(.85); box-shadow: 0 0 20px rgba(245,183,0,.8); }
+.B .mid { position: absolute; left: 50%; top: 360px; transform: translateX(-50%); width: 230px; height: 230px; background: #000; transform-origin: center; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 5px solid var(--gold); rotate: 45deg; margin-left: -115px; left: 50%; transform: none; }
+.B .mid > div { rotate: -45deg; text-align: center; }
+.B .mid .clock { font-family: var(--font-num); font-size: 58px; font-weight: 700; line-height: 1.1; }
+.B .mid .per { font-family: var(--font-num); font-size: 96px; font-weight: 700; color: var(--gold); line-height: 1; }
+.B .qcard { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; background: rgba(0,0,0,.82); border: 2px solid rgba(255,255,255,.15); border-radius: 16px; padding: 10px 26px; backdrop-filter: blur(6px); }
+.B .qcard table { border-collapse: collapse; }
+.B .qcard th { font-family: var(--font-num); font-size: 28px; color: #9aa6c4; font-weight: 600; padding: 0 22px; }
+.B .qcard th.cur { color: var(--gold); }
+.B .qcard td { font-family: var(--font-num); font-size: 60px; font-weight: 700; text-align: center; padding: 0 22px; line-height: 1.15; }
+.B .qcard td.tm { text-align: left; font-family: var(--font-jp); font-size: 40px; font-weight: 900; padding-left: 0; white-space: nowrap; }
+.B .qcard td.tm i { display: inline-block; width: 16px; height: 40px; vertical-align: middle; margin-right: 14px; border-radius: 2px; }
+.B .qcard td.tot { color: var(--gold); font-size: 68px; border-left: 2px solid rgba(255,255,255,.2); }
+.B .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 50px; border-top: 5px solid var(--gold); }
+.B .foot .down { font-family: var(--font-num); font-size: 76px; font-weight: 700; background: var(--gold); color: #000; padding: 0 30px; line-height: 1.2; border-radius: 6px; }
+.B .foot .ball { font-size: 50px; font-weight: 900; }
+.B .foot .ball b { font-family: var(--font-num); color: var(--gold); font-size: 64px; margin-left: 8px; }
+.B .foot .sit-banner { position: absolute; inset: 0; font-size: 90px; }
+
+/* ==========================================================================
+   案C：ワイドバンド（超横長ビジョン用 3:1）
+   ========================================================================== */
+.C { background: linear-gradient(180deg, #0b1122 0%, #03050a 100%); color: #fff; }
+.C .strip { position: absolute; left: 0; right: 0; top: 0; height: 64px; display: flex; align-items: center; justify-content: center; background: #000; border-bottom: 3px solid var(--gold); font-size: 38px; font-weight: 900; letter-spacing: .08em; }
+.C .row { position: absolute; top: 64px; left: 0; right: 0; height: 440px; display: grid; grid-template-columns: 150px minmax(0,1fr) 280px 480px 280px minmax(0,1fr) 150px; align-items: stretch; }
+.C .lg { display: flex; align-items: center; justify-content: center; }
+.C .lg.h { background: var(--home); }
+.C .lg.a { background: var(--away); }
+.C .lg .logo { width: 120px; height: 120px; }
+.C .tm { display: flex; flex-direction: column; justify-content: center; padding: 0 22px; gap: 22px; overflow: hidden; }
+.C .tm.a { align-items: flex-end; }
+.C .tm .name { font-size: 48px; font-weight: 900; line-height: 1; white-space: nowrap; }
+.C .tm .to-bars i { width: 42px; height: 42px; }
+.C .sc { display: flex; align-items: center; justify-content: center; font-size: 300px; line-height: 1; position: relative; }
+.C .sc.h { background: linear-gradient(180deg, #1a0a0e, #0a0507); border-bottom: 10px solid var(--home); }
+.C .sc.a { background: linear-gradient(180deg, #0a1026, #05070f); border-bottom: 10px solid var(--away); }
+.C .sc .poss { position: absolute; top: 22px; width: 34px; height: 34px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 18px rgba(245,183,0,.8); }
+.C .sc.h .poss { left: 22px; }
+.C .sc.a .poss { right: 22px; }
+.C .mid { display: flex; flex-direction: column; justify-content: center; padding: 0 20px; background: #070a14; border-left: 2px solid var(--plate-line); border-right: 2px solid var(--plate-line); }
+.C .mid .per .clock { color: #fff; margin-left: 24px; }
+.C .mid .per { text-align: center; font-family: var(--font-num); font-size: 60px; color: var(--gold); line-height: 1.1; }
+.C .mid table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.C .mid th { font-family: var(--font-num); font-size: 26px; color: #8a96b4; font-weight: 600; }
+.C .mid th.cur { color: var(--gold); }
+.C .mid td { font-family: var(--font-num); font-size: 54px; font-weight: 700; text-align: center; line-height: 1.3; }
+.C .mid td i { display: inline-block; width: 14px; height: 38px; border-radius: 2px; vertical-align: middle; }
+.C .mid td.tot { color: var(--gold); }
+.C .bot { position: absolute; left: 0; right: 0; bottom: 0; height: 136px; display: flex; align-items: center; justify-content: center; gap: 60px; background: #000; border-top: 3px solid var(--plate-line); }
+.C .bot .down { font-family: var(--font-num); font-size: 86px; font-weight: 700; }
+.C .bot .ball { font-size: 52px; font-weight: 900; color: #cbd5e1; }
+.C .bot .ball b { font-family: var(--font-num); font-size: 72px; color: var(--gold); margin-left: 8px; }
+.C .bot .sep { width: 4px; height: 76px; background: var(--plate-line); }
+.C .bot .sit-banner { position: absolute; inset: 0; font-size: 100px; }
+
+/* 下部の説明 */
+.box { margin-top: 44px; background: var(--page-card); border: 1px solid var(--page-line); border-radius: 12px; padding: 20px 24px; }
+.box h2 { font-size: 19px; font-weight: 900; margin-bottom: 8px; }
+.box ul { margin-left: 20px; font-size: 14px; font-weight: 700; color: var(--page-sub); }
+.box table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 700; }
+.box th, .box td { border-bottom: 1px solid var(--page-line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.box th { color: var(--page-accent); }
+.box a { color: var(--page-accent); word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>スタジアムビジョン得点板 デザイン案</h1>
+    <p class="lead">アメフト中継テロップ（大得点板・ランスコ）の配色とフォントを受け継ぎ、会場の大型ビジョン用に「遠くから読める大きさ」へ作り直した3案です。下のスイッチで表示を切り替えて比べられます。※チーム名・ロゴは仮のものです。</p>
+
+    <div class="controls" id="controls">
+        <span class="title">プレビュー操作</span>
+        <label><input type="checkbox" id="c-down" checked> ダウン＆ボール位置を表示</label>
+        <label><input type="checkbox" id="c-sit" checked> シチュエーションを表示</label>
+        <label><input type="checkbox" id="c-clock" checked> 試合時計を表示</label>
+        <label>ダウン見本
+            <select id="c-dd">
+                <option value="normal" selected>3rd &amp; 7（敵陣25）</option>
+                <option value="goal">1st &amp; GOAL（敵陣8・ゴール前）</option>
+            </select>
+        </label>
+        <label>シチュエーション
+            <select id="c-sitsel">
+                <option value="none" selected>（なし）</option>
+                <option value="touchdown">TOUCHDOWN</option>
+                <option value="fg">FIELD GOAL</option>
+                <option value="flag">FLAG（反則）</option>
+                <option value="timeout">TIMEOUT</option>
+                <option value="first">1ST DOWN</option>
+                <option value="review">REVIEW</option>
+            </select>
+        </label>
+        <label>攻撃権
+            <select id="c-poss">
+                <option value="home" selected>HOME</option>
+                <option value="away">AWAY</option>
+                <option value="none">なし</option>
+            </select>
+        </label>
+        <label>クォーター
+            <select id="c-q">
+                <option value="1">1Q</option><option value="2">2Q</option>
+                <option value="3" selected>3Q</option><option value="4">4Q</option>
+                <option value="5">OT</option>
+            </select>
+        </label>
+    </div>
+
+    <!-- ===================== 案A ===================== -->
+    <section class="proposal">
+        <h2>案A：クラシック・ボード <small>16:9／2:1のビジョン向け</small></h2>
+        <ul class="notes">
+            <li>昔ながらの電光掲示板の並び（上に大会名、中央に得点、下にQ別の表）。お客さんが見慣れた形で迷わない。</li>
+            <li>得点の数字を画面の高さの約4割まで大きく。チームカラーの枠で「どっちの点か」がひと目でわかる。</li>
+            <li>タイムアウト残数はQ表の右端に金色のランプ（残っている分だけ光る）。</li>
+            <li>最下段はダウン＆ボール位置。TOUCHDOWN等の時はここが金色の帯に切り替わる。</li>
+        </ul>
+        <div class="stage r16x9"><div class="canvas A" data-design="A">
+            <div class="top"><span class="star"></span><span class="tn" data-b="tournament"></span><span class="star"></span></div>
+            <div class="main">
+                <div class="team"><div class="logo" data-logo="home"></div><div class="name" data-b="homeName"></div></div>
+                <div class="score h num"><span data-b="homeScore"></span><span class="poss" data-poss="home"></span></div>
+                <div class="center"><span class="per-l">QUARTER</span><span class="per" data-b="period"></span><span class="clock opt-clock" data-b="clock"></span></div>
+                <div class="score a num"><span data-b="awayScore"></span><span class="poss" data-poss="away"></span></div>
+                <div class="team"><div class="logo" data-logo="away"></div><div class="name" data-b="awayName"></div></div>
+            </div>
+            <div class="qt"><table>
+                <thead><tr><th style="width:430px"></th><th data-q="1">1Q</th><th data-q="2">2Q</th><th data-q="3">3Q</th><th data-q="4">4Q</th><th data-q="5">OT</th><th style="color:var(--gold)">TOTAL</th><th>TIMEOUT</th></tr></thead>
+                <tbody>
+                    <tr><td class="tm"><span class="chip" style="background:var(--home)"></span><span data-b="homeShort"></span></td><td data-qs="h1"></td><td data-qs="h2"></td><td data-qs="h3"></td><td data-qs="h4"></td><td data-qs="h5"></td><td class="tot" data-b="homeScore"></td><td class="to"><div class="to-bars" data-to="home"></div></td></tr>
+                    <tr class="cur-row"><td class="tm"><span class="chip" style="background:var(--away)"></span><span data-b="awayShort"></span></td><td data-qs="a1"></td><td data-qs="a2"></td><td data-qs="a3"></td><td data-qs="a4"></td><td data-qs="a5"></td><td class="tot" data-b="awayScore"></td><td class="to"><div class="to-bars" data-to="away"></div></td></tr>
+                </tbody>
+            </table></div>
+            <div class="bottom">
+                <div class="dd opt-down"><span class="down" data-b="down"></span><span class="sep"></span><span class="ball">ボール位置<b data-b="ball"></b></span></div>
+                <div class="sit-banner opt-sit" data-sit></div>
+            </div>
+        </div></div>
+    </section>
+
+    <!-- ===================== 案B ===================== -->
+    <section class="proposal">
+        <h2>案B：ブロードキャスト <small>16:9／盛り上げ重視</small></h2>
+        <ul class="notes">
+            <li>画面を左右にチームカラーで斜めに分割。応援席から「自分のチーム側」が一瞬でわかる。</li>
+            <li>ロゴを大きく透かしで敷き、テレビ中継のような迫力。得点時の演出と相性が良い。</li>
+            <li>Q別得点は中央下のカードにまとめ、得点の大きさを邪魔しない。</li>
+            <li>ダウンは黄色いチップで強調。反則やTDは最下段が帯に切り替わる。</li>
+        </ul>
+        <div class="stage r16x9"><div class="canvas B" data-design="B">
+            <div class="half h"><div class="logo wm" data-logo="home"></div></div>
+            <div class="half a"><div class="logo wm" data-logo="away"></div></div>
+            <div class="tn" data-b="tournament"></div>
+            <div class="team h">
+                <span class="poss" data-poss="home"></span>
+                <div class="row"><div class="logo" data-logo="home"></div><div class="name" data-b="homeName"></div></div>
+                <div class="score num" data-b="homeScore"></div>
+                <div class="to-bars" data-to="home"></div><div class="to-l">TIMEOUTS</div>
+            </div>
+            <div class="team a">
+                <span class="poss" data-poss="away"></span>
+                <div class="row"><div class="name" data-b="awayName"></div><div class="logo" data-logo="away"></div></div>
+                <div class="score num" data-b="awayScore"></div>
+                <div class="to-bars" data-to="away"></div><div class="to-l">TIMEOUTS</div>
+            </div>
+            <div class="mid"><div><div class="per" data-b="period"></div><div class="clock opt-clock" data-b="clock"></div></div></div>
+            <div class="qcard"><table>
+                <thead><tr><th></th><th data-q="1">1Q</th><th data-q="2">2Q</th><th data-q="3">3Q</th><th data-q="4">4Q</th><th data-q="5">OT</th><th style="color:var(--gold)">T</th></tr></thead>
+                <tbody>
+                    <tr><td class="tm"><i style="background:var(--home)"></i><span data-b="homeShort"></span></td><td data-qs="h1"></td><td data-qs="h2"></td><td data-qs="h3"></td><td data-qs="h4"></td><td data-qs="h5"></td><td class="tot" data-b="homeScore"></td></tr>
+                    <tr><td class="tm"><i style="background:var(--away)"></i><span data-b="awayShort"></span></td><td data-qs="a1"></td><td data-qs="a2"></td><td data-qs="a3"></td><td data-qs="a4"></td><td data-qs="a5"></td><td class="tot" data-b="awayScore"></td></tr>
+                </tbody>
+            </table></div>
+            <div class="foot">
+                <span class="down opt-down" data-b="down"></span><span class="ball opt-down">ボール位置<b data-b="ball"></b></span>
+                <div class="sit-banner opt-sit" data-sit></div>
+            </div>
+        </div></div>
+    </section>
+
+    <!-- ===================== 案C ===================== -->
+    <section class="proposal">
+        <h2>案C：ワイドバンド <small>おすすめ／横長ビジョン用 3:1</small></h2>
+        <ul class="notes">
+            <li>リサーチの結果、関西の主な会場のビジョンは横長（長居 約2.7:1、パナスタ南 約3.2:1、甲子園 約3.6:1）が多いため、この形を第一候補にしています。</li>
+            <li>要素を横一列に並べた形。左右に大きな得点、中央にQ・時計・Q別得点表。</li>
+            <li>中央にQ別得点表をまとめ、左右に大きな得点。ロゴはチームカラーの四角に入れて端に固定。</li>
+            <li>16:9のビジョンの「下1/3だけ」に出す使い方もできる（残りに映像を映す）。</li>
+        </ul>
+        <div class="stage r3x1"><div class="canvas C" data-design="C">
+            <div class="strip" data-b="tournament"></div>
+            <div class="row">
+                <div class="lg h"><div class="logo" data-logo="home"></div></div>
+                <div class="tm"><div class="name" data-b="homeName"></div><div class="to-bars" data-to="home"></div></div>
+                <div class="sc h num"><span data-b="homeScore"></span><span class="poss" data-poss="home"></span></div>
+                <div class="mid">
+                    <div class="per"><span data-b="period"></span><span class="clock opt-clock" data-b="clock"></span></div>
+                    <table>
+                        <thead><tr><th></th><th data-q="1">1Q</th><th data-q="2">2Q</th><th data-q="3">3Q</th><th data-q="4">4Q</th><th data-q="5">OT</th><th style="color:var(--gold)">T</th></tr></thead>
+                        <tbody>
+                            <tr><td><i style="background:var(--home)"></i></td><td data-qs="h1"></td><td data-qs="h2"></td><td data-qs="h3"></td><td data-qs="h4"></td><td data-qs="h5"></td><td class="tot" data-b="homeScore"></td></tr>
+                            <tr><td><i style="background:var(--away)"></i></td><td data-qs="a1"></td><td data-qs="a2"></td><td data-qs="a3"></td><td data-qs="a4"></td><td data-qs="a5"></td><td class="tot" data-b="awayScore"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="sc a num"><span data-b="awayScore"></span><span class="poss" data-poss="away"></span></div>
+                <div class="tm a"><div class="name" data-b="awayName"></div><div class="to-bars" data-to="away"></div></div>
+                <div class="lg a"><div class="logo" data-logo="away"></div></div>
+            </div>
+            <div class="bot">
+                <span class="down opt-down" data-b="down"></span><span class="sep opt-down"></span><span class="ball opt-down">ボール位置<b data-b="ball"></b></span>
+                <div class="sit-banner opt-sit" data-sit></div>
+            </div>
+        </div></div>
+    </section>
+
+    <div class="box" id="research-box">
+        <h2>リサーチ結果（他競技・他会場の事例から取り入れた点）</h2>
+        <ul>
+            <li><b>画面の形：</b>16:9ちょうどは少なく、2:1〜3.6:1の横長が多い（甲子園 3720×1040ピクセル 約3.6:1／パナスタ吹田 南 約3.2:1／長居 北 約2.7:1／カシマ 2:1）。→ 案Cを第一候補に。</li>
+            <li><b>いちばん大事な情報：</b>得点と試合時計。その他（Q別得点・ダウン）は一段小さく。→ 時計を表示できるようにした（スイッチで非表示も可）。</li>
+            <li><b>タイムアウト：</b>「丸3つ・塗り＝残り、白抜き＝使用済み」が定番。→ 全案を丸表示に変更。</li>
+            <li><b>攻撃権：</b>「どちらのボールか絶対に迷わせない」こと。→ 金色の矢印／ボールマークで表示。</li>
+            <li><b>ゴール前：</b>「1st &amp; GOAL」表示や色の変化で知らせる例あり。→ ゴール前は最下段が赤くなる見本を用意。</li>
+            <li><b>反則・判定など：</b>短い帯で一時的に出し、得点と時計は隠さない。→ シチュエーション帯は最下段だけに出す。</li>
+            <li><b>文字の大きさ：</b>最低「見る距離÷300」、楽に読めるのは「÷120」（例：60m先なら最低約20cm）。細い書体はLEDでつぶれるので太字のみ使用。</li>
+            <li><b>色の差：</b>屋外では明るさの差の比 7:1 以上が望ましい。→ 暗い背景に白・金の文字を基本に。</li>
+        </ul>
+        <p style="font-size:12px;color:var(--page-sub);margin-top:8px;">主な出典：
+            <a href="https://www.daktronics.com/en-us/products/sports/scoreboard-model-page?model=FB-2025">Daktronics FB-2025</a> ／
+            <a href="https://www.daktronics.com/en-us/support/kb/000030569">Daktronics 文字の見える距離</a> ／
+            <a href="https://www.ligrsystems.com/blog/american-football-scoreboard">LIGR アメフト得点表示</a> ／
+            <a href="https://www.sportsvideo.org/2026/06/09/designing-the-modern-scorebug-how-broadcast-graphics-teams-are-rethinking-the-most-important-element-on-screen/">SVG 2026年6月</a> ／
+            <a href="https://av.watch.impress.co.jp/docs/news/1139983.html">AV Watch 甲子園</a> ／
+            <a href="https://www.hibino.co.jp/topics/2023/202303_stadium.html">ヒビノ パナスタ</a> ／
+            <a href="https://nagaipark.com/guide/stadium/">長居公園</a> ／
+            <a href="https://www.tsumura-f.co.jp/sports/basketball/bf5111.html">津村 Bリーグ</a><br>
+            ※ラグビーの会場ボードは確かな出典が見つかりませんでした。サッカーも事例は少なめです。</p>
+    </div>
+
+    <div class="box">
+        <h2>次の段階（管理画面）で操作できるようにする項目の案</h2>
+        <table>
+            <tr><th>項目</th><th>操作方法の案</th><th>既存アメフトシステムとの関係</th></tr>
+            <tr><td>大会名</td><td>文字入力</td><td>同じ項目あり（そのまま流用可）</td></tr>
+            <tr><td>チーム名・略称・ロゴ・チームカラー</td><td>文字入力・画像選択・色選択</td><td>同じ項目あり</td></tr>
+            <tr><td>Q毎の得点／合計</td><td>+6 / +3 / +2 / +1 ボタン（合計は自動計算）</td><td>ランスコの項目を流用</td></tr>
+            <tr><td>タイムアウト残数</td><td>−／＋ボタン（各チーム0〜3）</td><td>同じ項目あり</td></tr>
+            <tr><td>クォーター</td><td>1Q〜4Q・OT 切替</td><td>同じ項目あり</td></tr>
+            <tr><td>攻撃権</td><td>HOME／AWAY／なし</td><td>同じ項目あり</td></tr>
+            <tr><td>ダウン＆距離・ボール位置</td><td>ボタン＋数字入力、表示ON/OFF</td><td>ダウン＆距離はあり、ボール位置は新規</td></tr>
+            <tr><td>シチュエーション</td><td>TOUCHDOWN／FG／FLAG／TIMEOUT等をワンタッチ、表示ON/OFF</td><td>FLAGのみあり、他は新規</td></tr>
+        </table>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 見本データ（デザイン確認用の仮データ。実在チームではありません）
+// ============================================================
+const sample = {
+    tournament: "関西学生アメリカンフットボール リーグ戦",
+    homeName: "浪速大学", homeShort: "浪速大", awayName: "琵琶湖大学", awayShort: "琵琶湖大",
+    home: [7, 3, 7, 0, 0], away: [0, 14, 0, 0, 0],
+    homeTO: 2, awayTO: 3,
+    clock: "08:42"
+};
+const ddSamples = {
+    normal: { down: "3rd & 7", ball: "敵陣 25", red: false },
+    goal: { down: "1st & GOAL", ball: "敵陣 8", red: true }
+};
+
+const situations = {
+    none: "",
+    touchdown: "TOUCHDOWN",
+    fg: "FIELD GOAL",
+    flag: "FLAG",
+    timeout: "TIMEOUT",
+    first: "1ST DOWN",
+    review: "REVIEW"
+};
+
+// 仮ロゴ（盾型にイニシャル）
+function logoSvg(color, dark, letter) {
+    return `<svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 3 L94 16 V52 C94 80 74 98 50 107 C26 98 6 80 6 52 V16 Z" fill="${dark}" stroke="#fff" stroke-width="5"/>
+        <path d="M50 12 L86 22 V52 C86 75 70 90 50 98 C30 90 14 75 14 52 V22 Z" fill="${color}"/>
+        <text x="50" y="72" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="54" fill="#fff">${letter}</text>
+    </svg>`;
+}
+
+function render() {
+    const q = Number(document.getElementById("c-q").value);
+    const poss = document.getElementById("c-poss").value;
+    const sitKey = document.getElementById("c-sitsel").value;
+    const showDown = document.getElementById("c-down").checked;
+    const showSit = document.getElementById("c-sit").checked;
+    const showClock = document.getElementById("c-clock").checked;
+    const dd = ddSamples[document.getElementById("c-dd").value];
+
+    // 現在のクォーターまでの得点だけ表示（先のQは「-」）
+    const qs = (arr, i) => (i <= q ? String(arr[i - 1]) : (i === 5 ? "" : "-"));
+    const total = (arr) => arr.slice(0, q).reduce((s, v) => s + v, 0);
+
+    const data = {
+        tournament: sample.tournament,
+        homeName: sample.homeName, awayName: sample.awayName,
+        homeShort: sample.homeShort, awayShort: sample.awayShort,
+        homeScore: total(sample.home), awayScore: total(sample.away),
+        period: q === 5 ? "OT" : q + "Q",
+        down: dd.down, ball: dd.ball, clock: sample.clock
+    };
+
+    document.querySelectorAll("[data-b]").forEach(el => { el.textContent = data[el.dataset.b]; });
+    document.querySelectorAll("[data-qs]").forEach(el => {
+        const side = el.dataset.qs[0] === "h" ? sample.home : sample.away;
+        el.textContent = qs(side, Number(el.dataset.qs.slice(1)));
+    });
+    // OT列はOTの時だけ出す
+    document.querySelectorAll('[data-q="5"], [data-qs$="5"]').forEach(el => { el.style.display = q === 5 ? "" : "none"; });
+    document.querySelectorAll("[data-q]").forEach(el => { el.classList.toggle("cur", Number(el.dataset.q) === q); });
+
+    document.querySelectorAll("[data-to]").forEach(el => {
+        const n = el.dataset.to === "home" ? sample.homeTO : sample.awayTO;
+        el.innerHTML = [0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+    });
+    document.querySelectorAll("[data-poss]").forEach(el => { el.style.visibility = el.dataset.poss === poss ? "visible" : "hidden"; });
+
+    document.querySelectorAll("[data-sit]").forEach(el => {
+        el.className = "sit-banner opt-sit " + sitKey;
+        el.textContent = situations[sitKey];
+    });
+
+    document.querySelectorAll(".canvas").forEach(c => {
+        c.classList.toggle("hide-down", !showDown);
+        c.classList.toggle("hide-sit", !showSit);
+        c.classList.toggle("hide-clock", !showClock);
+    });
+    document.querySelectorAll(".A .dd, .B .foot, .C .bot").forEach(el => el.classList.toggle("redzone", dd.red));
+    document.querySelectorAll(".B .foot").forEach(el => {
+    });
+}
+
+function fit() {
+    document.querySelectorAll(".stage").forEach(stage => {
+        const canvas = stage.querySelector(".canvas");
+        canvas.style.transform = `scale(${stage.clientWidth / canvas.offsetWidth})`;
+    });
+}
+
+document.querySelectorAll('[data-logo="home"]').forEach(el => el.innerHTML = logoSvg("#8b1e2d", "#3a0a12", "N"));
+document.querySelectorAll('[data-logo="away"]').forEach(el => el.innerHTML = logoSvg("#1d4ed8", "#0b1c4d", "B"));
+document.getElementById("controls").addEventListener("input", render);
+window.addEventListener("resize", fit);
+render();
+fit();
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+/* ==========================================================================
+   書体の読み込み（インターネットなしで動かすため、fonts/ フォルダの書体を使う）
+   - Oswald       : 数字用（SIL Open Font License 1.1 / fonts/OFL_Oswald.txt）
+   - Noto Sans JP : 日本語用（SIL Open Font License 1.1 / fonts/OFL_NotoSansJP.txt）
+   どちらも太さを自由に変えられる書体（可変フォント）なので、1ファイルで全ての太さに対応
+   ========================================================================== */
+@font-face {
+    font-family: 'Oswald';
+    src: url('../fonts/Oswald-VariableFont_wght.ttf') format('truetype');
+    font-weight: 200 700;
+    font-style: normal;
+    font-display: block;
+}
+@font-face {
+    font-family: 'Noto Sans JP';
+    src: url('../fonts/NotoSansJP-VariableFont_wght.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: block;
+}

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタジアムビジョン得点板 管理画面</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+<header class="topbar">
+    <h1>スタジアムビジョン得点板 <small>管理画面</small></h1>
+    <span class="conn" id="conn">接続中…</span>
+    <div class="top-actions">
+        <div class="obs-box" title="OBSに得点板を入れるときに使います（最初の1回だけ）">
+            <span class="obs-label">OBSに入れる</span>
+            <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
+            <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
+        </div>
+        <button type="button" id="btn-open-output" class="btn">表示画面を開く</button>
+        <button type="button" id="btn-swap" class="btn">左右を入れ替え</button>
+        <button type="button" id="btn-reset" class="btn danger">試合をリセット</button>
+    </div>
+</header>
+
+<div class="toast" id="toast"></div>
+
+<main class="layout">
+    <!-- ===== 左列：プレビューと得点表 ===== -->
+    <section class="col">
+        <div class="panel">
+            <h2>いま出ている画面</h2>
+            <div class="preview"><iframe src="scoreboard.html" title="表示画面のプレビュー" tabindex="-1"></iframe></div>
+        </div>
+
+        <div class="panel">
+            <h2>Qごとの得点（直接修正）</h2>
+            <table class="qedit">
+                <thead><tr><th></th><th>1Q</th><th>2Q</th><th>3Q</th><th>4Q</th><th>OT</th><th>合計</th></tr></thead>
+                <tbody>
+                    <tr data-side="home"><th class="team-label" data-label="home"></th></tr>
+                    <tr data-side="away"><th class="team-label" data-label="away"></th></tr>
+                </tbody>
+            </table>
+            <p class="note">数字を書き換えてEnterキー（または別の場所をクリック）で反映します。</p>
+        </div>
+    </section>
+
+    <!-- ===== 中央列：試合中の操作 ===== -->
+    <section class="col">
+        <div class="panel">
+            <h2>クォーター</h2>
+            <div class="seg" id="period">
+                <button type="button" data-period="1">1Q</button>
+                <button type="button" data-period="2">2Q</button>
+                <button type="button" data-period="3">3Q</button>
+                <button type="button" data-period="4">4Q</button>
+                <button type="button" data-period="5">OT</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>得点 <small>いまのクォーターに加算されます</small></h2>
+            <div class="score-grid">
+                <div class="score-team" data-side="home">
+                    <div class="st-head"><span class="swatch" data-swatch="home"></span><span data-label="home"></span><b class="st-total" data-total="home"></b></div>
+                    <div class="score-btns">
+                        <button type="button" data-add="6">TD<b>+6</b></button>
+                        <button type="button" data-add="3">FG<b>+3</b></button>
+                        <button type="button" data-add="2">+2</button>
+                        <button type="button" data-add="1">+1</button>
+                        <button type="button" data-add="-1" class="minus">−1</button>
+                    </div>
+                </div>
+                <div class="score-team" data-side="away">
+                    <div class="st-head"><span class="swatch" data-swatch="away"></span><span data-label="away"></span><b class="st-total" data-total="away"></b></div>
+                    <div class="score-btns">
+                        <button type="button" data-add="6">TD<b>+6</b></button>
+                        <button type="button" data-add="3">FG<b>+3</b></button>
+                        <button type="button" data-add="2">+2</button>
+                        <button type="button" data-add="1">+1</button>
+                        <button type="button" data-add="-1" class="minus">−1</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>タイムアウト残数</h2>
+            <div class="to-grid">
+                <div class="to-team" data-side="home">
+                    <span data-label="home"></span>
+                    <button type="button" data-to="-1">−</button>
+                    <span class="dots" data-dots="home"></span>
+                    <button type="button" data-to="1">＋</button>
+                </div>
+                <div class="to-team" data-side="away">
+                    <span data-label="away"></span>
+                    <button type="button" data-to="-1">−</button>
+                    <span class="dots" data-dots="away"></span>
+                    <button type="button" data-to="1">＋</button>
+                </div>
+            </div>
+            <button type="button" class="btn small" id="btn-reset-to">両チームを3に戻す（後半開始など）</button>
+        </div>
+
+        <div class="panel">
+            <h2>攻撃権</h2>
+            <div class="seg" id="possession">
+                <button type="button" data-poss="home">◀ <span data-label="home"></span></button>
+                <button type="button" data-poss="none">なし</button>
+                <button type="button" data-poss="away"><span data-label="away"></span> ▶</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>ダウン ＆ BALL ON</h2>
+            <div class="dd-row">
+                <label class="toggle"><input type="checkbox" id="show-down"> ダウンを表示</label>
+                <div class="seg" id="down">
+                    <button type="button" data-down="1">1st</button>
+                    <button type="button" data-down="2">2nd</button>
+                    <button type="button" data-down="3">3rd</button>
+                    <button type="button" data-down="4">4th</button>
+                </div>
+            </div>
+            <div class="dd-row">
+                <span class="lbl">残り距離</span>
+                <input type="number" id="togo-num" min="1" max="99" class="num-input">
+                <div class="seg" id="togo">
+                    <button type="button" data-togo="10">10</button>
+                    <button type="button" data-togo="GOAL">GOAL</button>
+                    <button type="button" data-togo="INCHES">INCHES</button>
+                </div>
+                <button type="button" class="btn small" id="btn-first10">1st &amp; 10 にする</button>
+            </div>
+            <div class="dd-row">
+                <label class="toggle"><input type="checkbox" id="show-ball"> BALL ONを表示</label>
+                <button type="button" class="btn small" data-ball="-5">−5</button>
+                <button type="button" class="btn small" data-ball="-1">−1</button>
+                <input type="number" id="ballon" min="1" max="50" class="num-input">
+                <button type="button" class="btn small" data-ball="1">＋1</button>
+                <button type="button" class="btn small" data-ball="5">＋5</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== 右列：試合の設定 ===== -->
+    <section class="col">
+        <div class="panel">
+            <h2>大会名</h2>
+            <input type="text" id="tournament" maxlength="60" class="text-input" placeholder="例：関西学生アメリカンフットボールリーグ 1部">
+        </div>
+
+        <div class="panel team-setting" data-side="home">
+            <h2>左チーム</h2>
+            <label class="field">チーム名<input type="text" data-field="name" maxlength="30" class="text-input"></label>
+            <div class="field">ロゴ
+                <div class="logo-row">
+                    <img class="logo-thumb" data-thumb alt="">
+                    <select data-field="logo" class="logo-select"></select>
+                    <label class="btn small file-btn">画像を追加<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-upload hidden></label>
+                </div>
+            </div>
+            <div class="field">チームカラー
+                <div class="color-row">
+                    <input type="color" data-field="color">
+                    <input type="text" data-field="colorText" maxlength="7" class="text-input hex">
+                    <span class="cand-label">ロゴの色：</span><span class="cands" data-cands></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel team-setting" data-side="away">
+            <h2>右チーム</h2>
+            <label class="field">チーム名<input type="text" data-field="name" maxlength="30" class="text-input"></label>
+            <div class="field">ロゴ
+                <div class="logo-row">
+                    <img class="logo-thumb" data-thumb alt="">
+                    <select data-field="logo" class="logo-select"></select>
+                    <label class="btn small file-btn">画像を追加<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-upload hidden></label>
+                </div>
+            </div>
+            <div class="field">チームカラー
+                <div class="color-row">
+                    <input type="color" data-field="color">
+                    <input type="text" data-field="colorText" maxlength="7" class="text-input hex">
+                    <span class="cand-label">ロゴの色：</span><span class="cands" data-cands></span>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script src="js/dashboard.js"></script>
+</body>
+</html>

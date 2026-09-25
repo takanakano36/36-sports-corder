@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8123"],
       "port": 8123
+    },
+    {
+      "name": "stadiumvision-scoreboard",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["STADIUMVISION得点板システム/server.js"],
+      "port": 3006
     }
   ]
 }

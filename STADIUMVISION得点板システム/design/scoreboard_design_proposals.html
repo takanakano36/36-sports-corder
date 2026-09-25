@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタジアムビジョン得点板 デザイン案</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@700;800;900&family=Noto+Sans+JP:wght@700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   ページ全体（説明用の枠）
+   ========================================================================== */
+:root {
+    --page-bg: #f4f4f5;
+    --page-card: #ffffff;
+    --page-text: #18181b;
+    --page-sub: #52525b;
+    --page-line: #e4e4e7;
+    --page-accent: #b45309;
+
+    /* 得点板で使う色（既存アメフト画面と共通の考え方） */
+    --home: #8b1e2d;
+    --home-dark: #4a0f18;
+    --away: #1d4ed8;
+    --away-dark: #0f245f;
+    --gold: #f5b700;
+    --ink: #05070d;
+    --plate: #0d1220;
+    --plate-line: #24304d;
+    --font-num: 'Oswald', 'Inter', sans-serif;
+    --font-jp: 'Noto Sans JP', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --page-bg: #0b0b0e;
+        --page-card: #17171b;
+        --page-text: #f4f4f5;
+        --page-sub: #a1a1aa;
+        --page-line: #2a2a31;
+        --page-accent: #f59e0b;
+    }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page-bg); color: var(--page-text); font-family: var(--font-jp); line-height: 1.7; }
+.page { max-width: 1280px; margin: 0 auto; padding: 32px 16px 80px; }
+.page h1 { font-size: 28px; font-weight: 900; }
+.page .lead { color: var(--page-sub); margin-top: 6px; font-weight: 700; font-size: 14px; }
+
+/* 操作パネル */
+.controls {
+    position: sticky; top: 0; z-index: 10;
+    margin: 24px 0 8px;
+    background: var(--page-card); border: 1px solid var(--page-line); border-radius: 12px;
+    padding: 12px 16px;
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+    font-size: 13px; font-weight: 700;
+}
+.controls label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.controls select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--page-line); background: var(--page-bg); color: var(--page-text); }
+.controls .title { color: var(--page-accent); }
+
+section.proposal { margin-top: 40px; }
+section.proposal h2 { font-size: 21px; font-weight: 900; }
+section.proposal h2 small { font-size: 13px; color: var(--page-accent); margin-left: 8px; }
+section.proposal ul.notes { margin: 8px 0 14px 20px; color: var(--page-sub); font-size: 14px; font-weight: 700; }
+
+/* 得点板の縮小表示枠（中身は常に1920×1080で作り、枠に合わせて縮小） */
+.stage { width: 100%; aspect-ratio: 16 / 9; position: relative; overflow: hidden; border-radius: 10px; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.stage .canvas { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; color: #fff; }
+
+.hide-down .opt-down { display: none !important; }
+.hide-ball .opt-ball { display: none !important; }
+.no-ot .opt-ot { display: none !important; }
+
+/* ==========================================================================
+   共通パーツ
+   ========================================================================== */
+.logo svg { width: 100%; height: 100%; display: block; }
+.num { font-family: var(--font-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* タイムアウト残数：丸3つ（塗り＝残り／白抜き＝使用済み） */
+.to { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.to .to-l { font-family: var(--font-num); font-size: 34px; font-weight: 600; letter-spacing: .25em; color: #aab4cc; line-height: 1; }
+.to-dots { display: flex; gap: 22px; }
+.to-dots i { display: block; width: 50px; height: 50px; border-radius: 50%; border: 6px solid rgba(255,255,255,.5); }
+.to-dots i.on { background: var(--gold); border-color: var(--gold); }
+
+/* 攻撃権マーク（金色のボール） */
+.poss { display: inline-block; width: 64px; height: 40px; border-radius: 50%; background: var(--gold); position: relative; flex: none; }
+.poss::after { content: ""; position: absolute; left: 20px; right: 20px; top: 18px; height: 4px; background: #5a3d00; border-radius: 2px; }
+.poss.off { visibility: hidden; }
+
+/* チーム名の横幅自動調整（縦の大きさは変えず、横だけ縮める＝長体） */
+.fitx { white-space: nowrap; transform-origin: left center; }
+
+/* Q別得点表（縦並び：前年の得点盤と同じ並び） */
+.qtable { width: 100%; border-collapse: collapse; }
+.qtable td { text-align: center; line-height: 1; }
+.qtable .ql { font-family: var(--font-num); font-weight: 600; color: #aab4cc; }
+.qtable .qs { font-family: var(--font-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+.qtable tr.cur .ql { color: var(--gold); }
+.qtable tr.total td { border-top: 5px solid #fff; }
+.qtable tr.total .ql { color: #fff; }
+.qtable tr.total .qs { color: var(--gold); }
+
+/* ダウン＆BALL ON 帯 */
+.ddbar { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; display: flex; align-items: center; justify-content: center; gap: 56px; background: #0a0f1d; border-top: 4px solid var(--plate-line); }
+.ddbar .down { font-family: var(--font-num); font-size: 80px; font-weight: 700; line-height: 1; }
+.ddbar .ball { font-family: var(--font-num); font-size: 56px; font-weight: 600; color: #aab4cc; letter-spacing: .06em; line-height: 1; }
+.ddbar .ball b { font-size: 80px; color: var(--gold); margin-left: 18px; font-weight: 700; }
+.ddbar .sep { width: 4px; height: 70px; background: var(--plate-line); }
+.hide-down .ddbar .sep, .hide-ball .ddbar .sep { display: none; }
+.hide-down.hide-ball .ddbar { display: none; }
+
+/* ==========================================================================
+   案A：クラシック（前年の得点盤をそのまま進化）
+   ========================================================================== */
+.A { background: #000; }
+.A .tn { position: absolute; top: 0; left: 0; right: 0; height: 96px; display: flex; align-items: center; justify-content: center; font-size: 48px; font-weight: 900; letter-spacing: .06em; border-bottom: 4px solid var(--gold); background: #070b16; }
+.A .names { position: absolute; top: 118px; left: 60px; right: 60px; display: flex; justify-content: space-between; }
+.A .names .nm { display: flex; align-items: center; gap: 22px; font-size: 92px; font-weight: 900; line-height: 1.1; padding-bottom: 10px; border-bottom: 12px solid; }
+.A .names .nm.h { border-color: var(--home); }
+.A .names .nm.a { border-color: var(--away); flex-direction: row-reverse; }
+.A .side { position: absolute; top: 290px; width: 420px; display: flex; flex-direction: column; align-items: center; gap: 44px; }
+.A .side.h { left: 50px; }
+.A .side.a { right: 50px; }
+.A .side .logo { width: 330px; height: 330px; }
+.A .center { position: absolute; top: 270px; left: 520px; width: 880px; }
+.A .qtable td { height: 108px; }
+.A .qtable .ql { font-size: 76px; width: 260px; }
+.A .qtable .qs { font-size: 100px; }
+.A .qtable tr.total td { height: 170px; }
+.A .qtable tr.total .ql { font-size: 80px; }
+.A .qtable tr.total .qs { font-size: 170px; }
+/* OT表示時は5行になるので少し詰める */
+.A:not(.no-ot) .qtable td { height: 94px; }
+.A:not(.no-ot) .qtable .qs { font-size: 90px; }
+.A:not(.no-ot) .qtable tr.total td { height: 160px; }
+
+/* ==========================================================================
+   案B：チームカラー（左右をチームカラーで塗り分け、合計を特大に）
+   ========================================================================== */
+.B { background: #04060c; }
+.B .half { position: absolute; top: 0; bottom: 0; width: 760px; overflow: hidden; }
+.B .half.h { left: 0; background: linear-gradient(160deg, var(--home) 0%, var(--home-dark) 100%); }
+.B .half.a { right: 0; background: linear-gradient(200deg, var(--away) 0%, var(--away-dark) 100%); }
+.B .half .wm { position: absolute; width: 700px; height: 700px; top: 250px; opacity: .12; }
+.B .half.h .wm { left: -200px; }
+.B .half.a .wm { right: -200px; }
+.B .tn { position: absolute; top: 0; left: 0; right: 0; height: 90px; display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; letter-spacing: .06em; background: rgba(0,0,0,.75); z-index: 2; }
+.B .team { position: absolute; top: 120px; width: 760px; display: flex; flex-direction: column; align-items: center; }
+.B .team.h { left: 0; }
+.B .team.a { right: 0; }
+.B .team .hd { display: flex; align-items: center; gap: 24px; height: 150px; }
+.B .team .logo { width: 150px; height: 150px; }
+.B .team .name { font-size: 76px; font-weight: 900; white-space: nowrap; }
+.B .team .score { font-size: 400px; line-height: 1; margin-top: 10px; text-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.B .team .to { margin-top: 18px; }
+.B .team .to .to-l { color: rgba(255,255,255,.8); }
+.B .team .to-dots i { border-color: rgba(255,255,255,.6); }
+.B .team .to-dots i.on { background: #fff; border-color: #fff; }
+.B .team .poss { margin: 0 4px; }
+.B .center { position: absolute; top: 90px; bottom: 120px; left: 760px; width: 400px; background: #000; display: flex; flex-direction: column; justify-content: center; padding: 0 20px; }
+.B .center .qtable td { height: 116px; }
+.B .center .qtable .ql { font-size: 60px; width: 120px; }
+.B .center .qtable .qs { font-size: 86px; }
+.B .center .qtable tr.cur td { background: rgba(245,183,0,.1); }
+.B .center .qtable tr.total td { height: 130px; border-top-width: 4px; }
+.B .center .qtable tr.total .ql { font-size: 46px; }
+.B .center .qtable tr.total .qs { font-size: 96px; }
+.B .ddbar { background: #000; border-top: 5px solid var(--gold); }
+
+/* ==========================================================================
+   案C：カード（3枚のパネルで整理。どの会場でも崩れにくい）
+   ========================================================================== */
+.C { background: radial-gradient(ellipse at 50% 0%, #17223f 0%, var(--ink) 70%); }
+.C .tn { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); font-size: 50px; font-weight: 900; letter-spacing: .06em; white-space: nowrap; display: flex; align-items: center; gap: 28px; }
+.C .tn::before, .C .tn::after { content: ""; width: 16px; height: 16px; background: var(--gold); transform: rotate(45deg); }
+.C .card { position: absolute; top: 130px; height: 800px; border-radius: 22px; background: var(--plate); border: 3px solid var(--plate-line); overflow: hidden; }
+.C .team { width: 520px; display: flex; flex-direction: column; align-items: center; }
+.C .team.h { left: 50px; }
+.C .team.a { right: 50px; }
+.C .team .hd { width: 100%; height: 150px; display: flex; align-items: center; justify-content: center; gap: 20px; font-size: 74px; font-weight: 900; white-space: nowrap; }
+.C .team.h .hd { background: linear-gradient(180deg, var(--home), var(--home-dark)); }
+.C .team.a .hd { background: linear-gradient(180deg, var(--away), var(--away-dark)); }
+.C .team .logo { width: 360px; height: 360px; margin-top: 60px; }
+.C .team .to { margin-top: 70px; }
+.C .mid { left: 610px; width: 700px; padding: 26px 40px 0; }
+.C .mid .qtable td { height: 108px; border-bottom: 2px solid var(--plate-line); }
+.C .mid .qtable .ql { font-size: 62px; width: 220px; }
+.C .mid .qtable .qs { font-size: 92px; }
+.C .mid .qtable tr.cur td { background: rgba(245,183,0,.08); }
+.C .mid .qtable tr.hdr td { height: 66px; }
+.C .mid .qtable tr.hdr i { display: inline-block; width: 150px; height: 16px; border-radius: 8px; }
+.C .mid .qtable tr.total td { height: 190px; border-bottom: none; border-top: 4px solid #fff; }
+.C .mid .qtable tr.total .ql { font-size: 64px; }
+.C .mid .qtable tr.total .qs { font-size: 170px; }
+/* OT表示時は5行になるので少し詰める */
+.C:not(.no-ot) .mid .qtable td { height: 92px; }
+.C:not(.no-ot) .mid .qtable .qs { font-size: 84px; }
+.C:not(.no-ot) .mid .qtable tr.hdr td { height: 56px; }
+.C:not(.no-ot) .mid .qtable tr.total td { height: 180px; }
+
+/* 下部の説明 */
+.box { margin-top: 44px; background: var(--page-card); border: 1px solid var(--page-line); border-radius: 12px; padding: 20px 24px; }
+.box h2 { font-size: 19px; font-weight: 900; margin-bottom: 8px; }
+.box ul { margin-left: 20px; font-size: 14px; font-weight: 700; color: var(--page-sub); }
+.box table { width: 100%; border-collapse: collapse; font-size: 13px; font-weight: 700; }
+.box th, .box td { border-bottom: 1px solid var(--page-line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.box th { color: var(--page-accent); }
+.box a { color: var(--page-accent); word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>スタジアムビジョン得点板 デザイン案（第2版）</h1>
+    <p class="lead">前年（2025年11月29日 たけびしスタジアム京都）の得点盤の「Qを縦に並べ、左右に各チームの得点、下にTOTAL」という並びを土台にした3案です。すべて1920×1080（16:9）。時計・TOUCHDOWN等の演出は入れていません。※チーム名・ロゴは仮のものです。</p>
+
+    <div class="controls" id="controls">
+        <span class="title">プレビュー操作</span>
+        <label><input type="checkbox" id="c-down" checked> ダウンを表示</label>
+        <label><input type="checkbox" id="c-ball" checked> BALL ONを表示</label>
+        <label>見本
+            <select id="c-dd">
+                <option value="a" selected>3rd &amp; 7 ／ BALL ON 25</option>
+                <option value="b">1st &amp; GOAL ／ BALL ON 8</option>
+                <option value="c">4th &amp; INCHES ／ BALL ON 50</option>
+            </select>
+        </label>
+        <label>チーム名の見本
+            <select id="c-name">
+                <option value="std" selected>浪速大学／琵琶湖大学（4〜5文字）</option>
+                <option value="6">6文字</option>
+                <option value="8">8文字</option>
+                <option value="10">10文字</option>
+                <option value="12">12文字</option>
+            </select>
+        </label>
+        <label>攻撃権
+            <select id="c-poss">
+                <option value="home" selected>HOME</option>
+                <option value="away">AWAY</option>
+                <option value="none">なし</option>
+            </select>
+        </label>
+        <label>クォーター
+            <select id="c-q">
+                <option value="1">1Q</option><option value="2">2Q</option>
+                <option value="3" selected>3Q</option><option value="4">4Q</option>
+                <option value="5">OT</option>
+            </select>
+        </label>
+    </div>
+
+    <!-- ===================== 案A ===================== -->
+    <section class="proposal">
+        <h2>案A：クラシック <small>前年の並びをそのまま進化・おすすめ</small></h2>
+        <ul class="notes">
+            <li>前年と同じ位置関係（左右上にチーム名、両端にロゴ、中央にQの縦並び、下にTOTAL）。見る人も操作する人も迷わない。</li>
+            <li>チーム名の下にチームカラーの太線。TOTALは金色で一番大きく。今のQは金色の文字で示す。</li>
+            <li>Timeoutは数字ではなく丸3つ（塗り＝残り）。遠くからでも数えやすい。</li>
+        </ul>
+        <div class="stage"><div class="canvas A">
+            <div class="tn" data-b="tournament"></div>
+            <div class="names">
+                <div class="nm h"><span data-b="homeName"></span><span class="poss" data-poss="home"></span></div>
+                <div class="nm a"><span data-b="awayName"></span><span class="poss" data-poss="away"></span></div>
+            </div>
+            <div class="side h"><div class="logo" data-logo="home"></div><div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="home"></div></div></div>
+            <div class="center"><table class="qtable" data-qtable></table></div>
+            <div class="side a"><div class="logo" data-logo="away"></div><div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="away"></div></div></div>
+            <div class="ddbar"><span class="down opt-down" data-b="down"></span><span class="sep"></span><span class="ball opt-ball">BALL ON<b data-b="ball"></b></span></div>
+        </div></div>
+    </section>
+
+    <!-- ===================== 案B ===================== -->
+    <section class="proposal">
+        <h2>案B：チームカラー <small>応援席から自分の側がひと目でわかる</small></h2>
+        <ul class="notes">
+            <li>画面の左右をチームカラーで塗り分け、合計点を特大で表示。「今どっちが勝っているか」が一瞬でわかる。</li>
+            <li>中央の黒い柱にQ別得点を縦に並べる（前年と同じ並び）。今のQは帯で強調。</li>
+            <li>ロゴは大きく薄く背景に敷いて、チームの雰囲気を出す。</li>
+        </ul>
+        <div class="stage"><div class="canvas B">
+            <div class="half h"><div class="logo wm" data-logo="home"></div></div>
+            <div class="half a"><div class="logo wm" data-logo="away"></div></div>
+            <div class="tn" data-b="tournament"></div>
+            <div class="team h">
+                <div class="hd"><div class="logo" data-logo="home"></div><div class="name" data-b="homeName"></div><span class="poss" data-poss="home"></span></div>
+                <div class="score num" data-b="homeScore"></div>
+                <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="home"></div></div>
+            </div>
+            <div class="team a">
+                <div class="hd"><span class="poss" data-poss="away"></span><div class="name" data-b="awayName"></div><div class="logo" data-logo="away"></div></div>
+                <div class="score num" data-b="awayScore"></div>
+                <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="away"></div></div>
+            </div>
+            <div class="center"><table class="qtable" data-qtable></table></div>
+            <div class="ddbar"><span class="down opt-down" data-b="down"></span><span class="sep"></span><span class="ball opt-ball">BALL ON<b data-b="ball"></b></span></div>
+        </div></div>
+    </section>
+
+    <!-- ===================== 案C ===================== -->
+    <section class="proposal">
+        <h2>案C：カード <small>3枚のパネルで整理・すっきり</small></h2>
+        <ul class="notes">
+            <li>「左チーム」「得点表」「右チーム」の3枚のパネルに分けて整理。情報のまとまりがはっきりする。</li>
+            <li>チーム名はチームカラーの帯の中。ロゴを大きく見せられる。</li>
+            <li>中央パネルの上にチームカラーの線を置き、どちらの列がどのチームか迷わない。</li>
+        </ul>
+        <div class="stage"><div class="canvas C">
+            <div class="tn" data-b="tournament"></div>
+            <div class="card team h">
+                <div class="hd"><span data-b="homeName"></span><span class="poss" data-poss="home"></span></div>
+                <div class="logo" data-logo="home"></div>
+                <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="home"></div></div>
+            </div>
+            <div class="card mid"><table class="qtable" data-qtable data-hdr></table></div>
+            <div class="card team a">
+                <div class="hd"><span class="poss" data-poss="away"></span><span data-b="awayName"></span></div>
+                <div class="logo" data-logo="away"></div>
+                <div class="to"><span class="to-l">TIMEOUT</span><div class="to-dots" data-to="away"></div></div>
+            </div>
+            <div class="ddbar"><span class="down opt-down" data-b="down"></span><span class="sep"></span><span class="ball opt-ball">BALL ON<b data-b="ball"></b></span></div>
+        </div></div>
+    </section>
+
+    <div class="box">
+        <h2>前年の得点盤から引き継いだ点・変えた点</h2>
+        <ul>
+            <li><b>引き継いだ点：</b>Qを縦に並べて左右に各チームの得点、線の下にTOTAL。まだ終わっていないQは空欄。チーム名・ロゴ・Timeoutの位置関係。</li>
+            <li><b>変えた点：</b>チームカラーを入れて左右の区別をはっきりさせた／TOTALを金色で一番大きく／今のQを金色で示す／Timeoutを丸3つで表示／大会名を上に追加／最下段にダウン・BALL ON（それぞれ表示・非表示を選べる）。</li>
+            <li><b>入れていないもの：</b>時計、TOUCHDOWN等の演出（別の動画で対応）、敵陣・自陣の表記。</li>
+        </ul>
+    </div>
+
+    <div class="box">
+        <h2>リサーチ結果（他競技・他会場の事例から取り入れた点）</h2>
+        <ul>
+            <li><b>タイムアウト：</b>「丸3つ・塗り＝残り、白抜き＝使用済み」が定番。→ 全案を丸表示に。</li>
+            <li><b>攻撃権：</b>「どちらのボールか絶対に迷わせない」こと。→ チーム名の横に金色のボールマーク。</li>
+            <li><b>ダウン：</b>「3rd &amp; 7」の形、ゴール前は「&amp; GOAL」が一般的。ボール位置は「BALL ON」。</li>
+            <li><b>文字の大きさ：</b>最低「見る距離÷300」、楽に読めるのは「÷120」（例：60m先なら最低約20cm）。細い書体はLEDでつぶれるので太字のみ使用。</li>
+            <li><b>色の差：</b>屋外では明るさの差の比 7:1 以上が望ましい。→ 黒い背景に白・金の文字を基本に。チームカラーは帯や面に使う。</li>
+        </ul>
+        <p style="font-size:12px;color:var(--page-sub);margin-top:8px;">主な出典：
+            <a href="https://www.daktronics.com/en-us/products/sports/scoreboard-model-page?model=FB-2025">Daktronics FB-2025</a> ／
+            <a href="https://www.daktronics.com/en-us/support/kb/000030569">Daktronics 文字の見える距離</a> ／
+            <a href="https://www.ligrsystems.com/blog/american-football-scoreboard">LIGR アメフト得点表示</a> ／
+            <a href="https://seenlabs.com/blog/digital-menu-legibility-typography-contrast-standards-for-qsr-signage">SEEN Labs 文字と色の差</a></p>
+    </div>
+
+    <div class="box">
+        <h2>次の段階（管理画面）で操作できるようにする項目の案</h2>
+        <table>
+            <tr><th>項目</th><th>操作方法の案</th><th>既存アメフトシステムとの関係</th></tr>
+            <tr><td>大会名</td><td>文字入力</td><td>同じ項目あり（そのまま流用可）</td></tr>
+            <tr><td>チーム名・ロゴ・チームカラー</td><td>文字入力・画像選択・色選択</td><td>同じ項目あり</td></tr>
+            <tr><td>Q毎の得点／TOTAL</td><td>+6 / +3 / +2 / +1 ボタン（今のQに加算、TOTALは自動計算）</td><td>ランスコの項目を流用</td></tr>
+            <tr><td>タイムアウト残数</td><td>−／＋ボタン（各チーム0〜3）</td><td>同じ項目あり</td></tr>
+            <tr><td>クォーター</td><td>1Q〜4Q・OT 切替</td><td>同じ項目あり</td></tr>
+            <tr><td>攻撃権</td><td>HOME／AWAY／なし</td><td>同じ項目あり</td></tr>
+            <tr><td>ダウン＆距離</td><td>1st〜4th ボタン＋距離入力（GOAL/INCHES も選択可）、表示ON/OFF</td><td>同じ項目あり</td></tr>
+            <tr><td>BALL ON</td><td>数字入力（1〜50）、表示ON/OFF</td><td>新規</td></tr>
+        </table>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// 見本データ（デザイン確認用の仮データ。実在チームではありません）
+// ============================================================
+const sample = {
+    tournament: "関西学生アメリカンフットボール リーグ戦",
+    homeName: "浪速大学", awayName: "琵琶湖大学",
+    home: [7, 3, 7, 0, 3], away: [0, 14, 0, 3, 0],
+    homeTO: 2, awayTO: 3
+};
+// チーム名の長さ確認用（架空の名前）
+const nameSamples = {
+    std: ["浪速大学", "琵琶湖大学"],
+    "6": ["北摂学院大学", "湖南総合大学"],
+    "8": ["淀川国際工科大学", "湖東国際文化大学"],
+    "10": ["近畿健康スポーツ大学", "湖国国際情報文化大学"],
+    "12": ["近畿健康スポーツ科学大学", "湖国国際情報文化芸術大学"]
+};
+
+// 各案でチーム名に使える最大の横幅（1920×1080の画面上のピクセル）
+const nameMaxWidth = [
+    [".A .nm [data-b]", 780],
+    [".B .team .name", 460],
+    [".C .team .hd [data-b]", 390]
+];
+
+// 文字の高さはそのままで、はみ出す分だけ横幅を縮める
+function fitNames() {
+    nameMaxWidth.forEach(([sel, maxW]) => {
+        document.querySelectorAll(sel).forEach(el => {
+            el.classList.add("fitx");
+            el.style.transform = "";
+            el.style.marginRight = "";
+            const w = el.offsetWidth;
+            const r = Math.min(1, maxW / w);
+            if (r < 1) {
+                el.style.transform = `scaleX(${r})`;
+                el.style.marginRight = `${-(w * (1 - r))}px`;
+            }
+            el.dataset.ratio = Math.round(r * 100);
+        });
+    });
+}
+
+const ddSamples = {
+    a: { down: "3rd & 7", ball: "25" },
+    b: { down: "1st & GOAL", ball: "8" },
+    c: { down: "4th & INCHES", ball: "50" }
+};
+
+// 仮ロゴ（盾型にイニシャル）
+function logoSvg(color, dark, letter) {
+    return `<svg viewBox="0 0 100 110" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 3 L94 16 V52 C94 80 74 98 50 107 C26 98 6 80 6 52 V16 Z" fill="${dark}" stroke="#fff" stroke-width="5"/>
+        <path d="M50 12 L86 22 V52 C86 75 70 90 50 98 C30 90 14 75 14 52 V22 Z" fill="${color}"/>
+        <text x="50" y="72" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="54" fill="#fff">${letter}</text>
+    </svg>`;
+}
+
+// Q別得点表（縦並び）を組み立てる
+function buildQTable(table, q) {
+    const labels = ["1Q", "2Q", "3Q", "4Q", "OT"];
+    // まだ始まっていないQは空欄（前年の得点盤と同じ）
+    const cell = (arr, i) => (i + 1 <= q ? arr[i] : "");
+    const total = (arr) => arr.slice(0, q).reduce((s, v) => s + v, 0);
+    let html = "";
+    if (table.hasAttribute("data-hdr")) {
+        html += `<tr class="hdr"><td><i style="background:var(--home)"></i></td><td></td><td><i style="background:var(--away)"></i></td></tr>`;
+    }
+    labels.forEach((l, i) => {
+        const cls = [i + 1 === q ? "cur" : "", i === 4 ? "opt-ot" : ""].join(" ");
+        html += `<tr class="${cls}"><td class="qs">${cell(sample.home, i)}</td><td class="ql">${l}</td><td class="qs">${cell(sample.away, i)}</td></tr>`;
+    });
+    html += `<tr class="total"><td class="qs">${total(sample.home)}</td><td class="ql">TOTAL</td><td class="qs">${total(sample.away)}</td></tr>`;
+    table.innerHTML = html;
+}
+
+function render() {
+    const q = Number(document.getElementById("c-q").value);
+    const poss = document.getElementById("c-poss").value;
+    const dd = ddSamples[document.getElementById("c-dd").value];
+    const total = (arr) => arr.slice(0, q).reduce((s, v) => s + v, 0);
+
+    const names = nameSamples[document.getElementById("c-name").value];
+    const data = {
+        tournament: sample.tournament,
+        homeName: names[0], awayName: names[1],
+        homeScore: total(sample.home), awayScore: total(sample.away),
+        down: dd.down, ball: dd.ball
+    };
+    document.querySelectorAll("[data-b]").forEach(el => { el.textContent = data[el.dataset.b]; });
+    document.querySelectorAll("[data-qtable]").forEach(t => buildQTable(t, q));
+    document.querySelectorAll("[data-to]").forEach(el => {
+        const n = el.dataset.to === "home" ? sample.homeTO : sample.awayTO;
+        el.innerHTML = [0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("");
+    });
+    document.querySelectorAll("[data-poss]").forEach(el => el.classList.toggle("off", el.dataset.poss !== poss));
+    document.querySelectorAll(".canvas").forEach(c => {
+        c.classList.toggle("hide-down", !document.getElementById("c-down").checked);
+        c.classList.toggle("hide-ball", !document.getElementById("c-ball").checked);
+        c.classList.toggle("no-ot", q !== 5);
+    });
+    fitNames();
+}
+
+function fit() {
+    document.querySelectorAll(".stage").forEach(stage => {
+        stage.querySelector(".canvas").style.transform = `scale(${stage.clientWidth / 1920})`;
+    });
+}
+
+document.querySelectorAll('[data-logo="home"]').forEach(el => el.innerHTML = logoSvg("#8b1e2d", "#3a0a12", "N"));
+document.querySelectorAll('[data-logo="away"]').forEach(el => el.innerHTML = logoSvg("#1d4ed8", "#0b1c4d", "B"));
+document.getElementById("controls").addEventListener("input", render);
+window.addEventListener("resize", fit);
+render();
+fit();
+// フォント読み込み後に文字幅が変わるので、もう一度調整する
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>
