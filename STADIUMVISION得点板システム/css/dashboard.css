@@ -144,6 +144,9 @@ button, input, select { font: inherit; color: inherit; }
 .mc-ko { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 .mc-ko .num-input { width: 110px; }
 .mc-spacer { flex: 1; }
+.mc-show { min-width: 0; margin-left: 4px; }
+/* 「表示する」を外した対戦は薄く表示する */
+.match-card.off { opacity: .45; border-style: dashed; }
 .mc-teams { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
 .mc-vs { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 22px; color: var(--accent); padding-top: 30px; }
 .mc-team h3 { font-size: 13px; color: var(--sub); margin-bottom: 4px; }

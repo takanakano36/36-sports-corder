@@ -175,7 +175,9 @@ function renderBanner(s) {
     clearTimeout(bnTimer);
     const b = s.banner;
     const active = ONLY_BANNER || b.active;
-    if (!active || b.matches.length === 0) {
+    // 「表示する」にチェックの入った対戦だけを、上から順に切り替えて出す
+    const list = b.matches.filter(m => m.show);
+    if (!active || list.length === 0) {
         bn.classList.add("hidden");
         bn.classList.remove("play");
         bnShownKey = "";
@@ -183,8 +185,8 @@ function renderBanner(s) {
     }
     const period = b.interval * 1000;
     const elapsed = Math.max(0, Date.now() - b.startedAt);
-    const index = Math.floor(elapsed / period) % b.matches.length;
-    const m = b.matches[index];
+    const index = Math.floor(elapsed / period) % list.length;
+    const m = list[index];
 
     // 大会名（得点板と共通）・リーグロゴ
     const tn = document.getElementById("bn-tn");
@@ -222,7 +224,7 @@ function renderBanner(s) {
     if (b.venue) fitWidthCenter(venue, 760);
 
     bn.classList.remove("hidden");
-    const key = `${b.startedAt}:${index}`;
+    const key = `${b.startedAt}:${index}:${m.id}`;
     if (key !== bnShownKey) {
         // 出し始めたとき・次の対戦に切り替わったときは、アニメーションを最初から流す
         bnShownKey = key;

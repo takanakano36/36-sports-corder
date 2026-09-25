@@ -70,6 +70,7 @@ function cardHtml(m, i, n) {
     return `<div class="match-card" data-id="${m.id}">
         <div class="mc-head">
             <b class="mc-no">${CIRCLED[i]}</b>
+            <label class="mc-show toggle" title="チェックを外すと、削除せずにバナーの切り替えから外します"><input type="checkbox" data-mf="show"> 表示する</label>
             <label class="mc-ko">キックオフ <input type="time" data-mf="kickoff" class="num-input"></label>
             <span class="mc-spacer"></span>
             <button type="button" class="btn small" data-act="apply" title="この対戦のチームを得点板のチーム設定に入れます">得点板に入れる</button>
@@ -103,6 +104,8 @@ function renderMatchCards(b) {
     b.matches.forEach(m => {
         const card = $(`.match-card[data-id="${m.id}"]`);
         setValue(card.querySelector('[data-mf="kickoff"]'), m.kickoff);
+        card.querySelector('[data-mf="show"]').checked = m.show;
+        card.classList.toggle("off", !m.show);
         ["home", "away"].forEach(side => {
             const t = m[side];
             const box = card.querySelector(`.mc-team[data-side="${side}"]`);
@@ -134,13 +137,14 @@ function renderBannerAdmin() {
 
     // 表示中かどうか
     const toggle = $("#btn-banner-toggle");
+    const shown = b.matches.filter(m => m.show).length;
     toggle.textContent = b.active ? "得点板に戻る" : "対戦バナーを出す";
     toggle.classList.toggle("on", b.active);
     $("#bn-status").textContent = b.active
-        ? `いま対戦バナーを表示中です（${b.matches.length}件を${b.interval}秒ごとに切り替え）`
-        : "いまは得点板を表示中です";
+        ? `いま対戦バナーを表示中です（表示する${shown}件を${b.interval}秒ごとに切り替え）`
+        : `いまは得点板を表示中です（登録${b.matches.length}件のうち、表示する対戦は${shown}件）`;
     $("#bn-status").classList.toggle("on", b.active);
-    $("#bn-show").disabled = b.matches.length === 0;
+    $("#bn-show").disabled = shown === 0;
 
     // 試合の情報（全対戦で共通）
     setValue($("#bn-tournament"), state.tournament);
@@ -252,7 +256,7 @@ function bindBannerEvents() {
     // 対戦の追加（いまの得点板のチームで作る）
     $("#bn-add").addEventListener("click", () => updateMatches(ms => {
         if (ms.length >= 8) { showError("対戦は8件までです"); return false; }
-        ms.push({ id: newMatchId(), kickoff: "", home: teamFromScoreboard(state.home), away: teamFromScoreboard(state.away) });
+        ms.push({ id: newMatchId(), show: true, kickoff: "", home: teamFromScoreboard(state.home), away: teamFromScoreboard(state.away) });
     }));
 
     // 対戦カードの中の操作（カードは作り直されるので、外側の箱でまとめて受ける）
@@ -266,6 +270,7 @@ function bindBannerEvents() {
     box.addEventListener("change", e => {
         const el = e.target;
         if (el.dataset.mf === "kickoff") updateMatch(cardOf(el), m => { m.kickoff = el.value; });
+        else if (el.dataset.mf === "show") updateMatch(cardOf(el), m => { m.show = el.checked; });
         else if (el.dataset.tf === "logo") onTeamField(el, el.value, true);
         else if (el.dataset.tf === "name" || el.dataset.tf === "nick") onTeamField(el, el.value, true);
         else if (el.hasAttribute("data-tf-upload")) {

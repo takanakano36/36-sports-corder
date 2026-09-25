@@ -91,7 +91,7 @@ function isValidDate(v) {
 }
 
 const BANNER_KEYS = ['date', 'venue', 'leagueLogo', 'interval', 'footer', 'active', 'startedAt', 'matches'];
-const MATCH_KEYS = ['id', 'kickoff', 'home', 'away'];
+const MATCH_KEYS = ['id', 'show', 'kickoff', 'home', 'away'];
 const BANNER_TEAM_KEYS = ['name', 'nick', 'color', 'logo', 'outline', 'logoScale'];
 
 function validateBanner(b) {
@@ -111,6 +111,7 @@ function validateBanner(b) {
         if (!m || typeof m !== 'object' || Array.isArray(m) || !sameKeys(m, MATCH_KEYS)) return `${label}: 項目が正しくありません`;
         if (typeof m.id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(m.id) || ids.has(m.id)) return `${label}: 番号(id)が正しくありません`;
         ids.add(m.id);
+        if (typeof m.show !== 'boolean') return `${label}: 「表示する」の値が正しくありません`;
         if (typeof m.kickoff !== 'string' || (m.kickoff !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(m.kickoff))) return `${label}: キックオフ時間は 12:00 のように入力してください (${m.kickoff})`;
         for (const side of ['home', 'away']) {
             const t = m[side];
@@ -124,7 +125,7 @@ function validateBanner(b) {
             if (!isInt(t.logoScale, 50, 200)) return `${tl}: ロゴの大きさは50〜200%にしてください`;
         }
     }
-    if (b.active && b.matches.length === 0) return '対戦が登録されていないため、バナーを出せません';
+    if (b.active && !b.matches.some(m => m.show)) return '「表示する」にチェックの入った対戦が1件もないため、バナーを出せません（出している最中は、すべてのチェックを外すことはできません）';
     return null;
 }
 
@@ -220,6 +221,14 @@ function loadState() {
     if (!('banner' in s)) {
         s.banner = defaultBanner();
         console.log('[起動] 以前の形式の保存データのため、対戦バナーの設定（対戦は未登録）を追加しました');
+    }
+    if (s.banner && Array.isArray(s.banner.matches)) {
+        s.banner.matches.forEach((m, i) => {
+            if (m && typeof m === 'object' && !('show' in m)) {
+                m.show = true;
+                console.log(`[起動] 以前の形式の保存データのため、対戦${i + 1}に「表示する」（チェックあり）を追加しました`);
+            }
+        });
     }
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
@@ -370,7 +379,7 @@ function applyControl(action, val, team, q) {
             next.effectsOn = !next.effectsOn;
             break;
         case 'showBanner':           // 対戦バナーを出す（①から順に、決めた秒数ごとに切り替えて繰り返す）
-            if (next.banner.matches.length === 0) throw new Error('対戦が登録されていないため、バナーを出せません');
+            if (!next.banner.matches.some(m => m.show)) throw new Error('「表示する」にチェックの入った対戦が1件もないため、バナーを出せません');
             next.banner.active = true;
             next.banner.startedAt = Date.now();
             break;
