@@ -11,7 +11,12 @@
 <header class="topbar">
     <h1>スタジアムビジョン得点板 <small>管理画面</small></h1>
     <span class="conn" id="conn">接続中…</span>
+    <nav class="tabs" id="tabs">
+        <button type="button" data-tab="score">得点板</button>
+        <button type="button" data-tab="banner">対戦バナー</button>
+    </nav>
     <div class="top-actions">
+        <button type="button" id="btn-banner-toggle" class="btn banner-toggle">対戦バナーを出す</button>
         <div class="obs-box" title="OBSに得点板を入れるときに使います（最初の1回だけ）">
             <span class="obs-label">OBSに入れる</span>
             <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
@@ -25,7 +30,7 @@
 
 <div class="toast" id="toast"></div>
 
-<main class="layout">
+<main class="layout" id="view-score">
     <!-- ===== 左列：プレビューと得点表 ===== -->
     <section class="col">
         <div class="panel">
@@ -254,6 +259,49 @@
     </section>
 </main>
 
+<!-- ===================== 対戦バナー ===================== -->
+<main class="layout-banner hidden" id="view-banner">
+    <section class="col">
+        <div class="panel">
+            <h2>いま出ている画面</h2>
+            <div class="preview"><iframe src="scoreboard.html?preview=1" title="表示画面のプレビュー" tabindex="-1"></iframe></div>
+            <div class="bn-actions">
+                <button type="button" id="bn-show" class="btn big go">▶ バナーを出す（①から）</button>
+                <button type="button" id="bn-hide" class="btn big">得点板に戻る</button>
+            </div>
+            <p class="bn-status" id="bn-status"></p>
+        </div>
+
+        <div class="panel">
+            <h2>試合の情報 <small>全対戦で共通</small></h2>
+            <label class="field">大会名 <small class="hint">（得点板と共通。どちらで変えても両方に出ます）</small><input type="text" id="bn-tournament" maxlength="60" class="text-input"></label>
+            <label class="field">日付 <span class="dow" id="bn-dow-label"></span> <small class="hint">（曜日は自動）</small><input type="date" id="bn-date" class="text-input"></label>
+            <label class="field">会場<input type="text" id="bn-venue" maxlength="40" class="text-input" placeholder="例：たけびしスタジアム京都"></label>
+            <div class="field">リーグロゴ <small class="hint">（選ばなければ出しません）</small>
+                <div class="logo-row">
+                    <img class="logo-thumb dark" id="bn-league-thumb" alt="">
+                    <select class="logo-select" id="bn-league"></select>
+                    <label class="btn small file-btn">画像を追加<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" id="bn-league-upload" hidden></label>
+                </div>
+            </div>
+            <div class="field">切り替え
+                <div class="logo-row"><input type="number" min="5" max="600" id="bn-interval" class="num-input"><span class="lbl-sub">秒ごとに次の対戦へ</span></div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="bn-footer"> フッター（日付・会場・キックオフ）を出す</label>
+            <p class="note">ハーフタイムなどはフッターを外すと、ロゴと名前だけの版になります。</p>
+        </div>
+    </section>
+
+    <section class="col">
+        <div class="panel">
+            <h2>対戦 <small>上から順に ①②… と切り替わります（8件まで）</small></h2>
+            <div id="bn-matches"></div>
+            <button type="button" id="bn-add" class="btn">＋ 対戦を追加（いまの得点板のチームで作成）</button>
+        </div>
+    </section>
+</main>
+
 <script src="js/dashboard.js"></script>
+<script src="js/banner_admin.js"></script>
 </body>
 </html>

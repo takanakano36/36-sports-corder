@@ -25,6 +25,21 @@ function defaultOutline() {
     return { color: "#ffffff", width: 5 };
 }
 
+// 対戦バナーの初期値（対戦は未登録）
+const BANNER_MAX_MATCHES = 8;
+function defaultBanner() {
+    return {
+        date: "",          // 試合日（YYYY-MM-DD）。曜日は表示画面で日付から計算する
+        venue: "",         // 会場
+        leagueLogo: "",    // リーグロゴ（logos/ フォルダの画像。空なら出さない）
+        interval: 30,      // 対戦を切り替える秒数
+        footer: true,      // 日付・会場・キックオフの帯を出すか（ハーフタイムなどは出さない）
+        active: false,     // バナーを出しているか
+        startedAt: 0,      // バナーを出し始めた時刻（ミリ秒）。①②…の切り替えをすべての表示画面でそろえる
+        matches: []        // 対戦の一覧
+    };
+}
+
 // 初めて起動したときの状態（保存ファイルがまだ無いときだけ使う）
 function initialState() {
     return {
@@ -39,7 +54,8 @@ function initialState() {
         showDown: true,
         showBall: true,
         fgVideo: "",          // FG(+3)の演出動画（チーム共通）
-        effectsOn: true       // TD(+6)・FG(+3)を押したときに演出動画を流すか
+        effectsOn: true,      // TD(+6)・FG(+3)を押したときに演出動画を流すか
+        banner: defaultBanner()
     };
 }
 
@@ -47,7 +63,70 @@ function initialState() {
 // 状態のチェック（おかしな値は受け付けずにエラーを返す）
 // ==========================================================================
 const TEAM_KEYS = ['name', 'color', 'logo', 'outline', 'tdVideo', 'q', 'to'];
-const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall', 'fgVideo', 'effectsOn'];
+const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall', 'fgVideo', 'effectsOn', 'banner'];
+
+// ロゴの指定（空＝ロゴなし、または logos/ フォルダ内の画像）をチェックする
+function validateLogo(v, label) {
+    if (typeof v !== 'string') return `${label}: ロゴの指定が正しくありません`;
+    if (v === '') return null;
+    const m = /^logos\/([^\/\\]+)$/.exec(v);
+    if (!m || !LOGO_EXTS.includes(path.extname(m[1]).toLowerCase())) return `${label}: ロゴの指定が正しくありません (${v})`;
+    if (!fs.existsSync(path.join(LOGO_DIR, m[1]))) return `${label}: ロゴファイルが見つかりません (${v})`;
+    return null;
+}
+
+function validateOutline(o, label) {
+    if (!o || typeof o !== 'object' || Array.isArray(o) || !sameKeys(o, ['color', 'width'])) return `${label}: ロゴの縁取りの設定が正しくありません`;
+    if (typeof o.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o.color)) return `${label}: ロゴの縁取りの色が正しくありません (${o.color})`;
+    if (!isInt(o.width, 0, OUTLINE_MAX)) return `${label}: ロゴの縁取りの太さは0〜${OUTLINE_MAX}にしてください`;
+    return null;
+}
+
+// 実在する日付か（YYYY-MM-DD）
+function isValidDate(v) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+    const [y, m, d] = v.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
+
+const BANNER_KEYS = ['date', 'venue', 'leagueLogo', 'interval', 'footer', 'active', 'startedAt', 'matches'];
+const MATCH_KEYS = ['id', 'kickoff', 'home', 'away'];
+const BANNER_TEAM_KEYS = ['name', 'nick', 'color', 'logo', 'outline', 'logoScale'];
+
+function validateBanner(b) {
+    if (!b || typeof b !== 'object' || Array.isArray(b) || !sameKeys(b, BANNER_KEYS)) return '対戦バナーの設定の項目が正しくありません';
+    if (typeof b.date !== 'string' || (b.date !== '' && !isValidDate(b.date))) return `対戦バナー: 日付が正しくありません (${b.date})`;
+    if (typeof b.venue !== 'string' || b.venue.length > 40) return '対戦バナー: 会場は40文字以内にしてください';
+    const llErr = validateLogo(b.leagueLogo, '対戦バナーのリーグロゴ');
+    if (llErr) return llErr;
+    if (!isInt(b.interval, 5, 600)) return '対戦バナー: 切り替えの秒数は5〜600にしてください';
+    if (typeof b.footer !== 'boolean' || typeof b.active !== 'boolean') return '対戦バナー: 表示の設定が正しくありません';
+    if (!isInt(b.startedAt, 0, Number.MAX_SAFE_INTEGER)) return '対戦バナー: 開始時刻が正しくありません';
+    if (!Array.isArray(b.matches) || b.matches.length > BANNER_MAX_MATCHES) return `対戦バナー: 対戦は${BANNER_MAX_MATCHES}件までにしてください`;
+    const ids = new Set();
+    for (let i = 0; i < b.matches.length; i++) {
+        const m = b.matches[i];
+        const label = `対戦${i + 1}`;
+        if (!m || typeof m !== 'object' || Array.isArray(m) || !sameKeys(m, MATCH_KEYS)) return `${label}: 項目が正しくありません`;
+        if (typeof m.id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(m.id) || ids.has(m.id)) return `${label}: 番号(id)が正しくありません`;
+        ids.add(m.id);
+        if (typeof m.kickoff !== 'string' || (m.kickoff !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(m.kickoff))) return `${label}: キックオフ時間は 12:00 のように入力してください (${m.kickoff})`;
+        for (const side of ['home', 'away']) {
+            const t = m[side];
+            const tl = `${label}の${side === 'home' ? '左' : '右'}チーム`;
+            if (!t || typeof t !== 'object' || Array.isArray(t) || !sameKeys(t, BANNER_TEAM_KEYS)) return `${tl}: 項目が正しくありません`;
+            if (typeof t.name !== 'string' || t.name.length > 30) return `${tl}: 大学名は30文字以内にしてください`;
+            if (typeof t.nick !== 'string' || t.nick.length > 30) return `${tl}: ニックネームは30文字以内にしてください`;
+            if (typeof t.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(t.color)) return `${tl}: チームカラーが正しくありません (${t.color})`;
+            const e = validateLogo(t.logo, tl) || validateOutline(t.outline, tl);
+            if (e) return e;
+            if (!isInt(t.logoScale, 50, 200)) return `${tl}: ロゴの大きさは50〜200%にしてください`;
+        }
+    }
+    if (b.active && b.matches.length === 0) return '対戦が登録されていないため、バナーを出せません';
+    return null;
+}
 
 // 演出動画の指定（空＝未登録、または videos/ フォルダ内の動画）をチェックする
 function validateVideo(v, label) {
@@ -73,16 +152,8 @@ function validateTeam(t, label) {
     if (!sameKeys(t, TEAM_KEYS)) return `${label}: 項目が正しくありません (${Object.keys(t).join(',')})`;
     if (typeof t.name !== 'string' || t.name.length > 30) return `${label}: チーム名は30文字以内の文字列にしてください`;
     if (typeof t.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(t.color)) return `${label}: チームカラーが正しくありません (${t.color})`;
-    if (typeof t.logo !== 'string') return `${label}: ロゴの指定が正しくありません`;
-    if (t.logo !== '') {
-        const m = /^logos\/([^\/\\]+)$/.exec(t.logo);
-        if (!m || !LOGO_EXTS.includes(path.extname(m[1]).toLowerCase())) return `${label}: ロゴの指定が正しくありません (${t.logo})`;
-        if (!fs.existsSync(path.join(LOGO_DIR, m[1]))) return `${label}: ロゴファイルが見つかりません (${t.logo})`;
-    }
-    const o = t.outline;
-    if (!o || typeof o !== 'object' || Array.isArray(o) || !sameKeys(o, ['color', 'width'])) return `${label}: ロゴの縁取りの設定が正しくありません`;
-    if (typeof o.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o.color)) return `${label}: ロゴの縁取りの色が正しくありません (${o.color})`;
-    if (!isInt(o.width, 0, OUTLINE_MAX)) return `${label}: ロゴの縁取りの太さは0〜${OUTLINE_MAX}にしてください`;
+    const lErr = validateLogo(t.logo, label) || validateOutline(t.outline, label);
+    if (lErr) return lErr;
     const vErr = validateVideo(t.tdVideo, `${label}: TD演出動画`);
     if (vErr) return vErr;
     if (!Array.isArray(t.q) || t.q.length !== 5 || !t.q.every(v => isInt(v, 0, 199))) return `${label}: Qごとの得点が正しくありません`;
@@ -105,7 +176,7 @@ function validateState(s) {
     const fgErr = validateVideo(s.fgVideo, 'FG演出動画');
     if (fgErr) return fgErr;
     if (typeof s.effectsOn !== 'boolean') return '演出動画のオン・オフの値が正しくありません';
-    return null;
+    return validateBanner(s.banner);
 }
 
 // ==========================================================================
@@ -145,6 +216,10 @@ function loadState() {
     if (!('effectsOn' in s)) {
         s.effectsOn = true;
         console.log('[起動] 以前の形式の保存データのため、演出動画の設定（オン）を追加しました');
+    }
+    if (!('banner' in s)) {
+        s.banner = defaultBanner();
+        console.log('[起動] 以前の形式の保存データのため、対戦バナーの設定（対戦は未登録）を追加しました');
     }
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
@@ -293,6 +368,17 @@ function applyControl(action, val, team, q) {
             break;
         case 'toggleEffects':        // TD・FGで演出動画を流すかのオン・オフ
             next.effectsOn = !next.effectsOn;
+            break;
+        case 'showBanner':           // 対戦バナーを出す（①から順に、決めた秒数ごとに切り替えて繰り返す）
+            if (next.banner.matches.length === 0) throw new Error('対戦が登録されていないため、バナーを出せません');
+            next.banner.active = true;
+            next.banner.startedAt = Date.now();
+            break;
+        case 'hideBanner':           // 得点板に戻る
+            next.banner.active = false;
+            break;
+        case 'toggleBannerFooter':   // バナーのフッター（日付・会場・キックオフ）のあり／なし
+            next.banner.footer = !next.banner.footer;
             break;
         case 'setPeriod':            // val=1〜5 (5=OT)
             next.period = num();

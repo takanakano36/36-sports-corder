@@ -227,6 +227,8 @@ function render() {
     $("#show-down").checked = s.showDown;
     $("#show-ball").checked = s.showBall;
     setValue($("#tournament"), s.tournament);
+    // 対戦バナーの画面（js/banner_admin.js）
+    renderBannerAdmin();
 }
 
 function renderCandidates(box, logo) {
@@ -445,7 +447,8 @@ async function uploadVideo(inp) {
     showInfo(`動画を登録しました（${body.path.replace(/^videos\//, "")}）`);
 }
 
-async function uploadLogo(inp) {
+// ロゴの追加（onPath：追加したロゴをどこに使うか。省略時はそのチームの得点板のロゴ）
+async function uploadLogo(inp, onPath = p => patch({ [sideOf(inp)]: { logo: p } })) {
     const file = inp.files[0];
     inp.value = "";
     if (!file) return;
@@ -466,7 +469,7 @@ async function uploadLogo(inp) {
         return;
     }
     await loadLogos();
-    patch({ [sideOf(inp)]: { logo: body.path } });
+    onPath(body.path);
 }
 
 // --------------------------------------------------------------------------

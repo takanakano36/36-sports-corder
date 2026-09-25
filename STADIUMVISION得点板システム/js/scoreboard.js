@@ -126,7 +126,109 @@ function render() {
     document.getElementById("dd-sep").classList.toggle("hidden", !(s.showDown && s.showBall));
     document.getElementById("ddbar").classList.toggle("hidden", !s.showDown && !s.showBall);
 
+    renderBanner(s);
     board.classList.remove("waiting");
+}
+
+// --------------------------------------------------------------------------
+// 対戦バナー：登録した対戦を①②①②…の順に、決めた秒数ごとに切り替えて出す
+// 切り替えは「出し始めた時刻」から計算するので、HDMI・OBSなど複数の表示画面でそろう
+// --------------------------------------------------------------------------
+const bn = document.getElementById("bn");
+const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+let bnTimer = null;
+let bnShownKey = "";   // いま出している対戦（変わったときだけアニメーションをやり直す）
+
+// 文字の高さはそのままで、はみ出す分だけ横幅を縮める
+function fitWidthCenter(el, maxW) {
+    el.style.transform = "";
+    const w = el.offsetWidth;
+    if (w > maxW) el.style.transform = `scaleX(${maxW / w})`;
+}
+
+function setBannerTeam(side, t) {
+    const prefix = side === "home" ? "bh" : "ba";
+    bn.style.setProperty(`--${prefix}-light`, mixHex(t.color, "#ffffff", 0.18));
+    bn.style.setProperty(`--${prefix}`, t.color);
+    bn.style.setProperty(`--${prefix}-dark`, mixHex(t.color, "#000000", 0.45));
+    const logo = document.getElementById(`bn-logo-${side}`);
+    setLogo([logo, document.getElementById(`bn-wm-${side}`)], t.logo);
+    setOutline(logo, t.outline);
+    // ロゴの大きさ：幅と高さを変え、増えた分は余白を詰めて、名前などの位置は動かさない
+    // （古いブラウザでも効くよう、新しい指定の scale は使わない）
+    const size = 380 * t.logoScale / 100;
+    const gap = (380 - size) / 2;
+    logo.style.width = `${size}px`;
+    logo.style.height = `${size}px`;
+    logo.style.margin = `${gap}px ${gap}px`;
+    const univ = document.getElementById(`bn-univ-${side}`);
+    univ.textContent = t.name;
+    fitWidthCenter(univ, 760);
+    const nick = document.getElementById(`bn-nick-${side}`);
+    nick.textContent = t.nick;
+}
+
+function renderBanner(s) {
+    clearTimeout(bnTimer);
+    const b = s.banner;
+    if (!b.active || b.matches.length === 0) {
+        bn.classList.add("hidden");
+        bn.classList.remove("play");
+        bnShownKey = "";
+        return;
+    }
+    const period = b.interval * 1000;
+    const elapsed = Math.max(0, Date.now() - b.startedAt);
+    const index = Math.floor(elapsed / period) % b.matches.length;
+    const m = b.matches[index];
+
+    // 大会名（得点板と共通）・リーグロゴ
+    const tn = document.getElementById("bn-tn");
+    tn.innerHTML = "";
+    const tnText = document.createElement("span");
+    tnText.textContent = s.tournament;
+    tn.appendChild(tnText);
+    tn.classList.toggle("hidden", !s.tournament);
+    bn.classList.toggle("no-tn", !s.tournament);
+    if (s.tournament) fitWidthCenter(tnText, 1800);
+    const league = document.getElementById("bn-league");
+    league.classList.toggle("hidden", !b.leagueLogo);
+    setLogo([document.getElementById("bn-league-img")], b.leagueLogo);
+
+    setBannerTeam("home", m.home);
+    setBannerTeam("away", m.away);
+
+    // フッター：日付（曜日は日付から計算）・会場・キックオフ。入力の無い項目は出さない
+    bn.classList.toggle("no-footer", !b.footer);
+    let dateText = "", dowText = "";
+    if (b.date) {
+        const [y, mo, d] = b.date.split("-").map(Number);
+        dateText = `${y}.${mo}.${d}`;
+        dowText = DOW[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()];
+    }
+    document.getElementById("bn-date").textContent = dateText;
+    document.getElementById("bn-dow").textContent = dowText;
+    document.getElementById("bn-cell-date").classList.toggle("hidden", !b.date);
+    const venue = document.getElementById("bn-venue");
+    venue.textContent = b.venue;
+    document.getElementById("bn-cell-venue").classList.toggle("hidden", !b.venue);
+    document.getElementById("bn-ko").textContent = m.kickoff;
+    document.getElementById("bn-cell-ko").classList.toggle("hidden", !m.kickoff);
+    document.getElementById("bn-info").classList.toggle("empty", !b.date && !b.venue && !m.kickoff);
+    if (b.venue) fitWidthCenter(venue, 760);
+
+    bn.classList.remove("hidden");
+    const key = `${b.startedAt}:${index}`;
+    if (key !== bnShownKey) {
+        // 出し始めたとき・次の対戦に切り替わったときは、アニメーションを最初から流す
+        bnShownKey = key;
+        bn.classList.remove("play");
+        void bn.offsetWidth;
+        bn.classList.add("play");
+    }
+    // 次の対戦へ切り替える時刻に、もう一度描き直す
+    const wait = period - (elapsed % period);
+    bnTimer = setTimeout(() => renderBanner(state), wait + 20);
 }
 
 // --------------------------------------------------------------------------

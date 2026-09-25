@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>対戦バナー デザイン案</title>
+<link rel="stylesheet" href="../css/fonts.css">
+<style>
+/* ==========================================================================
+   ページ全体（説明用の枠）
+   ========================================================================== */
+:root {
+    --page-bg: #f4f4f5; --page-card: #ffffff; --page-text: #18181b; --page-sub: #52525b; --page-line: #e4e4e7; --page-accent: #b45309;
+    --gold: #f5b700;
+    --font-num: 'Oswald', sans-serif;
+    --font-jp: 'Noto Sans JP', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --page-bg: #0b0b0e; --page-card: #17171b; --page-text: #f4f4f5; --page-sub: #a1a1aa; --page-line: #2a2a31; --page-accent: #f59e0b; }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--page-bg); color: var(--page-text); font-family: var(--font-jp); line-height: 1.7; }
+.page { max-width: 1280px; margin: 0 auto; padding: 32px 16px 80px; }
+.page h1 { font-size: 28px; font-weight: 900; }
+.page .lead { color: var(--page-sub); margin-top: 6px; font-weight: 700; font-size: 14px; }
+.controls { position: sticky; top: 0; z-index: 10; margin: 24px 0 8px; background: var(--page-card); border: 1px solid var(--page-line); border-radius: 12px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; font-weight: 700; }
+.controls label { display: inline-flex; align-items: center; gap: 6px; }
+.controls input { font: inherit; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--page-line); background: var(--page-bg); color: var(--page-text); width: 90px; }
+.controls input.wide { width: 220px; }
+.controls button { font: inherit; padding: 5px 14px; border-radius: 8px; border: 0; background: var(--page-accent); color: #fff; cursor: pointer; }
+.controls .title { color: var(--page-accent); }
+section.match { margin-top: 36px; }
+section.match h2 { font-size: 20px; font-weight: 900; margin-bottom: 10px; }
+.note { margin-top: 36px; background: var(--page-card); border: 1px solid var(--page-line); border-radius: 12px; padding: 18px 22px; font-size: 14px; font-weight: 700; color: var(--page-sub); }
+.note h2 { font-size: 17px; color: var(--page-text); margin-bottom: 6px; }
+.note ul { margin-left: 20px; }
+
+/* 縮小表示の枠（中身は1920×1080） */
+.stage { width: 100%; aspect-ratio: 16 / 9; position: relative; overflow: hidden; border-radius: 10px; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.stage .banner { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+/* ==========================================================================
+   対戦バナー本体（1920×1080）
+   チームカラーは --hc / --ac（と明暗の -light / -dark）で指定
+   ========================================================================== */
+.banner { width: 1920px; height: 1080px; overflow: hidden; background: #04060c; color: #fff; font-family: var(--font-jp); }
+
+/* 左右のチームカラー面（斜めに切って、中央に黒い帯を作る） */
+.bn-half { position: absolute; top: 0; bottom: 0; width: 1010px; overflow: hidden; }
+.bn-half.h { left: 0; background: linear-gradient(160deg, var(--hc-light) 0%, var(--hc) 45%, var(--hc-dark) 100%); clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); }
+.bn-half.a { right: 0; background: linear-gradient(200deg, var(--ac-light) 0%, var(--ac) 45%, var(--ac-dark) 100%); clip-path: polygon(12% 0, 100% 0, 100% 100%, 0 100%); }
+/* 背景の透かしロゴ（中の模様を残したまま白黒にして重ねる：得点板と同じ） */
+.bn-half .wm { position: absolute; width: 900px; height: 900px; top: 120px; object-fit: contain; filter: grayscale(1) contrast(1.15); mix-blend-mode: overlay; opacity: .5; }
+.bn-half.h .wm { left: -260px; }
+.bn-half.a .wm { right: -260px; }
+
+/* 上部中央：リーグロゴ */
+.bn-league { position: absolute; top: 0; left: 50%; width: 560px; margin-left: -280px; height: 190px; background: #000; clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%); display: flex; align-items: center; justify-content: center; z-index: 3; }
+.bn-league img { height: 138px; width: auto; }
+
+/* チーム（ロゴ・大学名・ニックネーム） */
+.bn-team { position: absolute; top: 205px; width: 820px; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+.bn-team.h { left: 40px; }
+.bn-team.a { right: 40px; }
+.bn-team .logo { width: 400px; height: 400px; object-fit: contain; scale: var(--logo-scale, 1);
+    filter: drop-shadow(6px 0 0 #fff) drop-shadow(-6px 0 0 #fff) drop-shadow(0 6px 0 #fff) drop-shadow(0 -6px 0 #fff) drop-shadow(0 14px 24px rgba(0,0,0,.5)); }
+.bn-team .univ { margin-top: 26px; font-size: 104px; font-weight: 900; line-height: 1; white-space: nowrap; text-shadow: 0 6px 18px rgba(0,0,0,.4); transform-origin: center; }
+.bn-team .nick { margin-top: 18px; font-family: var(--font-num); font-weight: 700; font-size: 64px; letter-spacing: .22em; line-height: 1; padding-left: .22em; color: #fff; opacity: .92; }
+.bn-team .nick::before, .bn-team .nick::after { content: ""; display: inline-block; width: 60px; height: 5px; background: var(--gold); vertical-align: middle; margin: 0 26px 12px; }
+
+/* 中央：VS */
+.bn-vs { position: absolute; left: 50%; top: 410px; transform: translateX(-50%); z-index: 3; font-family: var(--font-num); font-weight: 700; font-style: italic; font-size: 220px; line-height: 1; color: var(--gold); text-shadow: 0 0 40px rgba(245,183,0,.45), 0 10px 30px rgba(0,0,0,.6); letter-spacing: -.02em; }
+
+/* 最下段：日付・会場・キックオフ */
+.bn-info { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; background: #000; border-top: 6px solid var(--gold); display: flex; align-items: center; justify-content: center; z-index: 4; }
+.bn-info .cell { display: flex; flex-direction: column; align-items: center; padding: 0 64px; }
+.bn-info .cell + .cell { border-left: 4px solid #24304d; }
+.bn-info .lbl { font-family: var(--font-num); font-weight: 600; font-size: 30px; letter-spacing: .3em; color: var(--gold); line-height: 1; margin-bottom: 14px; }
+.bn-info .val { font-size: 60px; font-weight: 900; line-height: 1; white-space: nowrap; }
+.bn-info .val.num { font-family: var(--font-num); font-weight: 700; font-size: 72px; letter-spacing: .02em; }
+.bn-info .val small { font-size: 40px; margin-left: 10px; color: #aab4cc; }
+
+/* フッターなし版（ハーフタイムなど）：帯を消し、ロゴと名前を少し下げて画面の中央にそろえる */
+.banner.no-footer .bn-info { display: none; }
+.banner.no-footer .bn-team { top: 290px; }
+.banner.no-footer .bn-vs { top: 495px; }
+
+/* ==========================================================================
+   アニメーション（約2秒で完成形になり、そのまま止まる）
+   ========================================================================== */
+.banner.play .bn-half.h { animation: slideL .7s cubic-bezier(.16,1,.3,1) both; }
+.banner.play .bn-half.a { animation: slideR .7s cubic-bezier(.16,1,.3,1) both; }
+.banner.play .bn-league { animation: dropIn .6s .35s cubic-bezier(.16,1,.3,1) both; }
+.banner.play .bn-team .logo { animation: popIn .6s .55s cubic-bezier(.34,1.56,.64,1) both; }
+.banner.play .bn-team .univ { animation: fadeUp .5s .85s ease-out both; }
+.banner.play .bn-team .nick { animation: fadeUp .5s 1.0s ease-out both; }
+.banner.play .bn-vs { animation: vsIn .5s 1.15s cubic-bezier(.34,1.56,.64,1) both; }
+.banner.play .bn-info { animation: barUp .6s 1.35s cubic-bezier(.16,1,.3,1) both; }
+.banner.play .bn-half .wm { animation: wmDrift 10s 0.7s ease-in-out infinite alternate; }
+
+@keyframes slideL { from { transform: translateX(-105%); } to { transform: none; } }
+@keyframes slideR { from { transform: translateX(105%); } to { transform: none; } }
+@keyframes dropIn { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes popIn  { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes vsIn   { from { transform: translateX(-50%) scale(2.4); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+@keyframes barUp  { from { transform: translateY(100%); } to { transform: none; } }
+/* 完成後も少しだけ動かし続ける（背景の透かしロゴがゆっくり動く） */
+@keyframes wmDrift { from { transform: translateY(0) scale(1); } to { transform: translateY(-30px) scale(1.04); } }
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>対戦バナー デザイン案</h1>
+    <p class="lead">得点板（案B）のデザインを引き継いだ、試合前にビジョンへ出す対戦バナーです。1920×1080。ページを開くと約2秒のアニメーションで完成形になります（「もう一度再生」で何度でも確認できます）。</p>
+
+    <div class="controls" id="controls">
+        <span class="title">プレビュー操作</span>
+        <button type="button" id="replay">▶ もう一度再生</button>
+        <label><input type="checkbox" id="in-footer" checked style="width:auto"> フッター（日付・会場・キックオフ）を表示</label>
+        <label>日付 <input type="text" id="in-date" value="2026.9.26" class="wide" style="width:120px"></label>
+        <label>曜日 <input type="text" id="in-dow" value="SAT" style="width:60px"></label>
+        <label>会場 <input type="text" id="in-venue" value="たけびしスタジアム京都" class="wide"></label>
+        <label>① キックオフ <input type="text" id="in-ko-0" value="11:00"></label>
+        <label>② キックオフ <input type="text" id="in-ko-1" value="14:00"></label>
+    </div>
+
+    <section class="match"><h2>① 立命館大学 PANTHERS vs 京都大学 GANGSTERS</h2><div class="stage" data-match="0"></div></section>
+    <section class="match"><h2>② 神戸大学 RAVENS vs 同志社大学 WILD ROVER</h2><div class="stage" data-match="1"></div></section>
+
+    <div class="note">
+        <h2>メモ</h2>
+        <ul>
+            <li>キックオフ時間（11:00・14:00）は<b>仮の値</b>です。上の欄で書き換えるとすぐ反映されます。</li>
+            <li>「フッター」のチェックを外すと、日付・会場・キックオフの帯がない版になります（ハーフタイムなど）。</li>
+            <li>神戸大学のロゴは横長のため、130%の大きさで表示しています（チームごとに変えられます）。</li>
+            <li>日付の曜日（2026年9月26日＝土曜日）は計算で確認済みです。</li>
+            <li>チームカラー・ロゴ・縁取り・背景の透かしは、得点板と同じ作り方です。</li>
+            <li>アニメーションの順番：左右のチームカラー面 → リーグロゴ → チームロゴ → 大学名 → ニックネーム → VS → 日付・会場・キックオフの帯（約2秒）。完成後は背景の透かしロゴだけがゆっくり動き続けます。</li>
+        </ul>
+    </div>
+</div>
+
+<template id="tpl">
+    <div class="banner">
+        <div class="bn-half h"><img class="wm" data-logo="home" alt=""></div>
+        <div class="bn-half a"><img class="wm" data-logo="away" alt=""></div>
+        <div class="bn-league"><img src="logos/kcafl.png" alt="KCAFL"></div>
+        <div class="bn-team h"><img class="logo" data-logo="home" alt=""><div class="univ" data-t="homeName"></div><div class="nick" data-t="homeNick"></div></div>
+        <div class="bn-team a"><img class="logo" data-logo="away" alt=""><div class="univ" data-t="awayName"></div><div class="nick" data-t="awayNick"></div></div>
+        <div class="bn-vs">VS</div>
+        <div class="bn-info">
+            <div class="cell"><span class="val num"><span data-t="date"></span><small data-t="dow"></small></span></div>
+            <div class="cell"><span class="val" data-t="venue"></span></div>
+            <div class="cell"><span class="lbl">KICK OFF</span><span class="val num" data-t="ko"></span></div>
+        </div>
+    </div>
+</template>
+
+<script>
+// チームの情報（色はロゴ画像の画素から取った値。得点板と同じ）
+const matches = [
+    { home: { name: "立命館大学", nick: "PANTHERS",   color: "#7b1936", logo: "logos/ritsumeikan.png" },
+      away: { name: "京都大学",   nick: "GANGSTERS",  color: "#0d2e16", logo: "logos/kyoto.png" } },
+    { home: { name: "神戸大学",   nick: "RAVENS",     color: "#b21d25", logo: "logos/kobe.png", logoScale: 1.3 },
+      away: { name: "同志社大学", nick: "WILD ROVER", color: "#541b86", logo: "logos/doshisha.png" } }
+];
+
+function mixHex(hex, withHex, ratio) {
+    const a = hex.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
+    const b = withHex.match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16));
+    return "#" + a.map((v, i) => Math.round(v * (1 - ratio) + b[i] * ratio).toString(16).padStart(2, "0")).join("");
+}
+
+// 大学名が長いときは、文字の高さはそのままで横幅だけ縮める（得点板と同じ考え方）
+function fitWidth(el, maxW) {
+    el.style.transform = "";
+    const w = el.scrollWidth;
+    if (w > maxW) el.style.transform = `scaleX(${maxW / w})`;
+}
+
+function render() {
+    const common = {
+        date: document.getElementById("in-date").value,
+        dow: document.getElementById("in-dow").value,
+        venue: document.getElementById("in-venue").value
+    };
+    document.querySelectorAll(".stage").forEach(stage => {
+        const i = Number(stage.dataset.match);
+        const m = matches[i];
+        const b = stage.querySelector(".banner");
+        const data = { ...common, ko: document.getElementById(`in-ko-${i}`).value,
+            homeName: m.home.name, homeNick: m.home.nick, awayName: m.away.name, awayNick: m.away.nick };
+        b.querySelectorAll("[data-t]").forEach(el => { el.textContent = data[el.dataset.t]; });
+        b.classList.toggle("no-footer", !document.getElementById("in-footer").checked);
+        b.querySelectorAll(".univ").forEach(el => fitWidth(el, 760));
+        fitWidth(b.querySelector(".bn-info [data-t='venue']"), 760);
+    });
+}
+
+function replay() {
+    document.querySelectorAll(".banner").forEach(b => {
+        b.classList.remove("play");
+        void b.offsetWidth;   // アニメーションを最初からやり直す
+        b.classList.add("play");
+    });
+}
+
+function fit() {
+    document.querySelectorAll(".stage").forEach(stage => {
+        stage.querySelector(".banner").style.transform = `scale(${stage.clientWidth / 1920})`;
+    });
+}
+
+document.querySelectorAll(".stage").forEach(stage => {
+    const m = matches[Number(stage.dataset.match)];
+    stage.appendChild(document.getElementById("tpl").content.cloneNode(true));
+    const b = stage.querySelector(".banner");
+    [["hc", m.home.color], ["ac", m.away.color]].forEach(([p, c]) => {
+        b.style.setProperty(`--${p}-light`, mixHex(c, "#ffffff", 0.18));
+        b.style.setProperty(`--${p}`, c);
+        b.style.setProperty(`--${p}-dark`, mixHex(c, "#000000", 0.45));
+    });
+    b.querySelectorAll("[data-logo]").forEach(img => { img.src = m[img.dataset.logo].logo; });
+    // ロゴの大きさ（横長のロゴなどを大きく見せる。背景の透かしには使わない）
+    b.querySelectorAll(".bn-team .logo").forEach(img => { img.style.setProperty("--logo-scale", m[img.dataset.logo].logoScale || 1); });
+});
+
+document.getElementById("controls").addEventListener("input", render);
+document.getElementById("replay").addEventListener("click", replay);
+window.addEventListener("resize", fit);
+fit();
+document.fonts.ready.then(() => { render(); replay(); });
+render();
+</script>
+</body>
+</html>

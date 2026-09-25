@@ -42,6 +42,22 @@
             <span class="ball" id="ball">BALL ON<b id="ballon"></b></span>
         </div>
 
+        <!-- 対戦バナー（試合前・ハーフタイムなど）。出している間は得点板の上に全画面で重ねる -->
+        <div class="bn-root hidden" id="bn">
+            <div class="bn-half h"><img class="wm" id="bn-wm-home" alt=""></div>
+            <div class="bn-half a"><img class="wm" id="bn-wm-away" alt=""></div>
+            <div class="bn-tn" id="bn-tn"></div>
+            <div class="bn-league" id="bn-league"><img id="bn-league-img" alt=""></div>
+            <div class="bn-team h"><img class="logo" id="bn-logo-home" alt=""><div class="univ" id="bn-univ-home"></div><div class="nick" id="bn-nick-home"></div></div>
+            <div class="bn-team a"><img class="logo" id="bn-logo-away" alt=""><div class="univ" id="bn-univ-away"></div><div class="nick" id="bn-nick-away"></div></div>
+            <div class="bn-vs">VS</div>
+            <div class="bn-info" id="bn-info">
+                <div class="cell" id="bn-cell-date"><span class="val num"><span id="bn-date"></span><small id="bn-dow"></small></span></div>
+                <div class="cell" id="bn-cell-venue"><span class="val" id="bn-venue"></span></div>
+                <div class="cell" id="bn-cell-ko"><span class="lbl">KICK OFF</span><span class="val num" id="bn-ko"></span></div>
+            </div>
+        </div>
+
         <!-- 演出動画（TD・FG）。流れている間は得点板の上に全画面で重ねる -->
         <div class="fx hidden" id="fx"><video id="fx-video" playsinline preload="auto"></video></div>
     </div>

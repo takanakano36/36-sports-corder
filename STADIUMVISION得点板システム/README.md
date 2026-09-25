@@ -84,6 +84,7 @@ OBSはシーンにソースを保存するので、この作業は**最初の1�
 | ダウン | 1st〜4th、残り距離（数字・GOAL・INCHES）、「1st & 10 にする」 |
 | BALL ON | 数字入力、−5／−1／＋1／＋5 |
 | 表示の切り替え | ダウン、BALL ON をそれぞれ表示・非表示（両方消すと下の帯ごと消えます） |
+| 対戦バナー | 上部のタブ「対戦バナー」で、試合の情報（大会名・日付・会場・リーグロゴ）と対戦（キックオフ・左右のチーム・ニックネーム・ロゴの大きさなど）を登録。「対戦バナーを出す」で ①②①②… と決めた秒数ごとに切り替えて表示、「得点板に戻る」で得点板へ。フッター（日付・会場・キックオフ）なし版も選べる。「得点板に入れる」で、その対戦のチームを得点板に反映 |
 | 大会名・チーム名 | 文字を入力（長いチーム名は、文字の高さはそのままで横幅だけ自動で縮みます） |
 | ロゴ | 一覧から選択、または「画像を追加」（PNG・JPEG・SVG・WEBP、5MBまで） |
 | チームカラー | カラーチャート、色番号（例：#7b1936）、ロゴから取った色の候補 |
@@ -122,6 +123,9 @@ http://localhost:3006/api/control?action=操作名&team=チーム&val=値
 | playFG | `action=playFG` | 得点は変えずに、FG演出動画だけ流す |
 | stopEffect | `action=stopEffect` | 流れている演出動画を止めて得点板に戻す |
 | toggleEffects | `action=toggleEffects` | TD・FGで演出動画を流すかのオン・オフ |
+| showBanner | `action=showBanner` | 対戦バナーを出す（①から） |
+| hideBanner | `action=hideBanner` | 得点板に戻る |
+| toggleBannerFooter | `action=toggleBannerFooter` | 対戦バナーのフッターのあり／なし |
 
 ※ `addScore` で `val=6`（TD）・`val=3`（FG）を送ったときも、演出がオンなら演出動画が流れます。
 
