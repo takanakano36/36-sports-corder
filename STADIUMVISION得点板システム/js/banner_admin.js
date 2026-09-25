@@ -202,6 +202,27 @@ function bindBannerEvents() {
     try { saved = localStorage.getItem("sv-tab") || "score"; } catch (e) { saved = "score"; }
     showTab(saved === "banner" ? "banner" : "score");
 
+    // OBSに対戦バナー専用を入れる（ドラッグ＆ドロップ／アドレスのコピー）
+    const bnObsUrl = `${location.origin}/scoreboard.html?only=banner&layer-width=1920&layer-height=1080`;
+    const drag = $("#bn-obs-drag");
+    drag.href = bnObsUrl;
+    drag.addEventListener("click", e => {
+        e.preventDefault();
+        showInfo("このボタンを、クリックではなくOBSの画面へドラッグ＆ドロップしてください。");
+    });
+    drag.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("text/uri-list", bnObsUrl);
+        e.dataTransfer.setData("text/plain", bnObsUrl);
+    });
+    $("#bn-copy-url").addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(bnObsUrl);
+            showInfo("バナー専用のアドレスをコピーしました。OBSのブラウザソースのURL欄に貼り付けてください（幅1920・高さ1080）。");
+        } catch (e) {
+            showError(`コピーできませんでした。次のアドレスを手で入力してください：${bnObsUrl}`);
+        }
+    });
+
     // 出す／戻る
     $("#btn-banner-toggle").addEventListener("click", () => {
         if (!requireState()) return;

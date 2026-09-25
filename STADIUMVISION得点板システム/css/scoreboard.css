@@ -152,6 +152,10 @@ html, body { width: 100%; height: 100%; background: #000; overflow: hidden; curs
 @keyframes bnBarUp  { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes bnWmDrift { from { transform: translateY(0) scale(1); } to { transform: translateY(-30px) scale(1.04); } }
 
+/* 対戦バナー専用の表示画面（?only=banner）：得点板は出さない（対戦が未登録なら黒い画面） */
+.board.only-banner > :not(.bn-root) { display: none !important; }
+.board.only-banner { background: #000; }
+
 /* 演出動画（TD・FG）：得点板の上に全画面で重ね、ふわっと出し入れする */
 .fx { position: absolute; inset: 0; z-index: 50; background: #000; opacity: 0; transition: opacity .25s ease; }
 .fx.show { opacity: 1; }

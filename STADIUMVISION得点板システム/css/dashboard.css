@@ -135,6 +135,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .bn-status { margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--sub); }
 .bn-status.on { color: var(--accent); }
+.bn-obs { margin: 10px 0 0; justify-content: flex-start; flex-wrap: wrap; }
 .dow { color: var(--accent); }
 .logo-thumb.dark { background: #0b0e14; }
 .match-card { border: 1px solid var(--line); border-radius: 12px; background: #11151d; padding: 12px; margin-bottom: 12px; }

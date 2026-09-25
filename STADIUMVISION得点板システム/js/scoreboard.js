@@ -19,6 +19,9 @@ const board = document.getElementById("board");
 let state = null;
 // 管理画面のプレビュー（?preview=1）では、演出動画を音なしで流す
 const IS_PREVIEW = new URLSearchParams(location.search).has("preview");
+// ?only=banner：対戦バナー専用（OBSでシーンを分けたいとき用）。「バナーを出す」を押さなくても常にバナーを出し、演出動画は流さない
+const ONLY_BANNER = new URLSearchParams(location.search).get("only") === "banner";
+if (ONLY_BANNER) board.classList.add("only-banner");
 
 // --------------------------------------------------------------------------
 // ウィンドウの大きさに合わせて 1920×1080 の画面を拡大・縮小（上下左右は黒で余白）
@@ -171,7 +174,8 @@ function setBannerTeam(side, t) {
 function renderBanner(s) {
     clearTimeout(bnTimer);
     const b = s.banner;
-    if (!b.active || b.matches.length === 0) {
+    const active = ONLY_BANNER || b.active;
+    if (!active || b.matches.length === 0) {
         bn.classList.add("hidden");
         bn.classList.remove("play");
         bnShownKey = "";
@@ -265,6 +269,7 @@ function notice(message) {
 }
 
 function playEffect(effect) {
+    if (ONLY_BANNER) return; // バナー専用の表示画面では演出動画は流さない（得点板の表示画面に出る）
     clearTimeout(fxHideTimer);
     fxVideo.src = effect.video;
     fxVideo.muted = IS_PREVIEW;
