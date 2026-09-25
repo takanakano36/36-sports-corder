@@ -20,9 +20,10 @@ foreach ($it in $items) {
     $lnkPath = Join-Path $desktop ($it.Name + '.lnk')
 
     # 同じ名前の別物のショートカットがある場合は、上書きせずに止める
+    # （得点板の起動ファイルを指すものは、フォルダを移した後の作り直しとみなして上書きする）
     if (Test-Path $lnkPath) {
         $existing = $shell.CreateShortcut($lnkPath).TargetPath
-        if ($existing -and -not $existing.StartsWith($root)) {
+        if ($existing -and (Split-Path -Leaf $existing) -ne $it.Target) {
             throw "デスクトップに同じ名前の別のショートカットがあります（$lnkPath → $existing）。名前を変えるか削除してから、もう一度実行してください。"
         }
     }

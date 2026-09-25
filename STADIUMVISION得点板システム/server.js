@@ -100,12 +100,28 @@ function loadState() {
     return s;
 }
 
-function saveState() {
+// 指定ミリ秒だけ待つ（保存のやり直しの間隔用）
+function sleepSync(ms) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function saveState(s) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     // 書き込み途中で止まってもファイルが壊れないよう、一時ファイルに書いてから置き換える
     const tmp = STATE_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
-    fs.renameSync(tmp, STATE_FILE);
+    fs.writeFileSync(tmp, JSON.stringify(s, null, 2), 'utf-8');
+    // OneDrive などの同期ソフトがファイルを一瞬つかんでいると置き換えに失敗するため、少し待ってやり直す
+    const RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.renameSync(tmp, STATE_FILE);
+            if (attempt > 1) console.log(`[保存] ${attempt}回目で保存できました`);
+            return;
+        } catch (e) {
+            if (!RETRY_CODES.includes(e.code) || attempt >= 10) throw e;
+            sleepSync(50);
+        }
+    }
 }
 
 let state = loadState();
@@ -137,11 +153,17 @@ function mergePatch(base, patch) {
     return out;
 }
 
+// 保存できたときだけ反映する（表示と保存データを常に一致させる）
 function commit(next) {
     const err = validateState(next);
     if (err) return err;
+    try {
+        saveState(next);
+    } catch (e) {
+        console.error(`[保存失敗] ${e.code || ''} ${e.message}`);
+        return `保存できなかったため反映していません（${e.code || e.message}）。もう一度操作してください`;
+    }
     state = next;
-    saveState();
     broadcastState();
     return null;
 }
