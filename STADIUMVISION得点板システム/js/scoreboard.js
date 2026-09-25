@@ -58,6 +58,16 @@ function fitName(el) {
     }
 }
 
+// ロゴの形に沿って縁取りを付ける（上下左右に同じ色の影をずらして重ねる）＋黒い影で少し浮かせる
+function setOutline(img, outline) {
+    const w = outline.width;
+    const c = outline.color;
+    const ring = w > 0
+        ? `drop-shadow(${w}px 0 0 ${c}) drop-shadow(-${w}px 0 0 ${c}) drop-shadow(0 ${w}px 0 ${c}) drop-shadow(0 -${w}px 0 ${c}) `
+        : "";
+    img.style.filter = `${ring}drop-shadow(0 8px 14px rgba(0,0,0,.45))`;
+}
+
 function setLogo(imgs, src) {
     imgs.forEach(img => {
         if (src) {
@@ -82,6 +92,7 @@ function render() {
         const t = s[side];
         setTeamColor(side === "home" ? "hc" : "ac", t.color);
         setLogo([document.getElementById(`logo-${side}`), document.getElementById(`wm-${side}`)], t.logo);
+        setOutline(document.getElementById(`logo-${side}`), t.outline);
         const nameEl = document.getElementById(`name-${side}`);
         nameEl.textContent = t.name;
         fitName(nameEl);

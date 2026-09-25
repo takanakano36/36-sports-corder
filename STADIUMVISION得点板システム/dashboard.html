@@ -169,6 +169,21 @@
                     <span class="cand-label">ロゴの色：</span><span class="cands" data-cands></span>
                 </div>
             </div>
+            <div class="field">ロゴの縁取り <small class="hint">（白いロゴは黒やチームカラーに）</small>
+                <div class="outline-row">
+                    <input type="color" data-field="outlineColor" title="縁取りの色を自由に選ぶ">
+                    <button type="button" class="btn small" data-oc="#ffffff">白</button>
+                    <button type="button" class="btn small" data-oc="#000000">黒</button>
+                    <button type="button" class="btn small" data-oc="#f5b700">金</button>
+                    <button type="button" class="btn small" data-oc="team">チームカラー</button>
+                </div>
+                <div class="outline-row">
+                    <span class="lbl-sub">太さ</span>
+                    <input type="range" min="0" max="12" step="1" data-field="outlineWidth">
+                    <b class="ow" data-ow></b>
+                    <button type="button" class="btn small" data-ow-set="0">縁取りなし</button>
+                </div>
+            </div>
         </div>
 
         <div class="panel team-setting" data-side="away">
@@ -186,6 +201,21 @@
                     <input type="color" data-field="color">
                     <input type="text" data-field="colorText" maxlength="7" class="text-input hex">
                     <span class="cand-label">ロゴの色：</span><span class="cands" data-cands></span>
+                </div>
+            </div>
+            <div class="field">ロゴの縁取り <small class="hint">（白いロゴは黒やチームカラーに）</small>
+                <div class="outline-row">
+                    <input type="color" data-field="outlineColor" title="縁取りの色を自由に選ぶ">
+                    <button type="button" class="btn small" data-oc="#ffffff">白</button>
+                    <button type="button" class="btn small" data-oc="#000000">黒</button>
+                    <button type="button" class="btn small" data-oc="#f5b700">金</button>
+                    <button type="button" class="btn small" data-oc="team">チームカラー</button>
+                </div>
+                <div class="outline-row">
+                    <span class="lbl-sub">太さ</span>
+                    <input type="range" min="0" max="12" step="1" data-field="outlineWidth">
+                    <b class="ow" data-ow></b>
+                    <button type="button" class="btn small" data-ow-set="0">縁取りなし</button>
                 </div>
             </div>
         </div>

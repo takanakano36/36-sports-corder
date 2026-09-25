@@ -16,12 +16,18 @@ const LOGO_DIR = path.join(__dirname, 'logos');
 const LOGO_EXTS = ['.png', '.jpg', '.jpeg', '.svg', '.webp'];
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
+// ロゴの縁取り（色と太さ）の初期値：白・5
+const OUTLINE_MAX = 12;
+function defaultOutline() {
+    return { color: "#ffffff", width: 5 };
+}
+
 // 初めて起動したときの状態（保存ファイルがまだ無いときだけ使う）
 function initialState() {
     return {
         tournament: "",
-        home: { name: "", color: "#3f3f46", logo: "", q: [0, 0, 0, 0, 0], to: 3 },
-        away: { name: "", color: "#3f3f46", logo: "", q: [0, 0, 0, 0, 0], to: 3 },
+        home: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), q: [0, 0, 0, 0, 0], to: 3 },
+        away: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), q: [0, 0, 0, 0, 0], to: 3 },
         period: 1,            // 1〜4 = 1Q〜4Q, 5 = OT
         possession: "none",   // home / away / none
         down: 1,              // 1〜4
@@ -35,7 +41,7 @@ function initialState() {
 // ==========================================================================
 // 状態のチェック（おかしな値は受け付けずにエラーを返す）
 // ==========================================================================
-const TEAM_KEYS = ['name', 'color', 'logo', 'q', 'to'];
+const TEAM_KEYS = ['name', 'color', 'logo', 'outline', 'q', 'to'];
 const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall'];
 
 function isInt(v, min, max) {
@@ -58,6 +64,10 @@ function validateTeam(t, label) {
         if (!m || !LOGO_EXTS.includes(path.extname(m[1]).toLowerCase())) return `${label}: ロゴの指定が正しくありません (${t.logo})`;
         if (!fs.existsSync(path.join(LOGO_DIR, m[1]))) return `${label}: ロゴファイルが見つかりません (${t.logo})`;
     }
+    const o = t.outline;
+    if (!o || typeof o !== 'object' || Array.isArray(o) || !sameKeys(o, ['color', 'width'])) return `${label}: ロゴの縁取りの設定が正しくありません`;
+    if (typeof o.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o.color)) return `${label}: ロゴの縁取りの色が正しくありません (${o.color})`;
+    if (!isInt(o.width, 0, OUTLINE_MAX)) return `${label}: ロゴの縁取りの太さは0〜${OUTLINE_MAX}にしてください`;
     if (!Array.isArray(t.q) || t.q.length !== 5 || !t.q.every(v => isInt(v, 0, 199))) return `${label}: Qごとの得点が正しくありません`;
     if (!isInt(t.to, 0, 3)) return `${label}: タイムアウト残数は0〜3にしてください`;
     return null;
@@ -94,6 +104,13 @@ function loadState() {
     } catch (e) {
         throw new Error(`保存データ(${STATE_FILE})を読み込めません: ${e.message}`);
     }
+    // 縁取りの設定ができる前の保存データには、今までと同じ見た目（白・5）の設定を書き足す
+    ['home', 'away'].forEach(side => {
+        if (s[side] && typeof s[side] === 'object' && !('outline' in s[side])) {
+            s[side].outline = defaultOutline();
+            console.log(`[起動] 以前の形式の保存データのため、${side === 'home' ? '左' : '右'}チームにロゴの縁取り設定（白・5）を追加しました`);
+        }
+    });
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
     console.log('[起動] 保存データから前回の状態を復元しました');

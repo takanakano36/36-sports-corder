@@ -184,6 +184,15 @@ function render() {
         if (t.logo) thumb.src = t.logo; else thumb.removeAttribute("src");
         setValue(box.querySelector('[data-field="color"]'), t.color);
         setValue(box.querySelector('[data-field="colorText"]'), t.color);
+        // ロゴの縁取り
+        setValue(box.querySelector('[data-field="outlineColor"]'), t.outline.color);
+        setValue(box.querySelector('[data-field="outlineWidth"]'), t.outline.width);
+        box.querySelector("[data-ow]").textContent = t.outline.width;
+        box.querySelectorAll("[data-oc]").forEach(b => {
+            const c = b.dataset.oc === "team" ? t.color : b.dataset.oc;
+            b.classList.toggle("on", t.outline.width > 0 && c.toLowerCase() === t.outline.color.toLowerCase());
+        });
+        box.querySelector("[data-ow-set]").classList.toggle("on", t.outline.width === 0);
         renderCandidates(box, t.logo);
     });
 
@@ -328,6 +337,24 @@ function bindEvents() {
             showError(`コピーできませんでした。次のアドレスを手で入力してください：${OBS_URL}`);
         }
     });
+
+    // ロゴの縁取り（色：ボタン／カラーチャート、太さ：つまみ）
+    $$(".team-setting [data-oc]").forEach(b => b.addEventListener("click", () => {
+        if (!state) return showError("まだサーバーから状態を受け取っていません。");
+        const side = sideOf(b);
+        const color = b.dataset.oc === "team" ? state[side].color : b.dataset.oc;
+        // 縁取りなし(太さ0)のときに色を選んだら、見えるように太さも初期値の5に戻す
+        const outline = state[side].outline.width === 0 ? { color, width: 5 } : { color };
+        patch({ [side]: { outline } });
+    }));
+    $$('.team-setting [data-field="outlineColor"]').forEach(inp => inp.addEventListener("input",
+        debounce(() => patch({ [sideOf(inp)]: { outline: { color: inp.value } } }), 80)));
+    $$('.team-setting [data-field="outlineWidth"]').forEach(inp => {
+        inp.addEventListener("input", () => { inp.closest(".field").querySelector("[data-ow]").textContent = inp.value; });
+        inp.addEventListener("input", debounce(() => patch({ [sideOf(inp)]: { outline: { width: Number(inp.value) } } }), 80));
+    });
+    $$(".team-setting [data-ow-set]").forEach(b => b.addEventListener("click", () =>
+        patch({ [sideOf(b)]: { outline: { width: Number(b.dataset.owSet) } } })));
 
     // 上部のボタン
     $("#btn-open-output").addEventListener("click", () => {
