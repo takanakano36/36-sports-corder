@@ -4,5 +4,9 @@ logos/*
 !logos/.gitkeep
 design/logos/
 
+# 演出動画（容量が大きく、各チームの素材のため）もフォルダだけ残して中身は除外する
+videos/*
+!videos/.gitkeep
+
 # 試合中の状態の保存データ
 data/

@@ -85,4 +85,8 @@ html, body { width: 100%; height: 100%; background: #000; overflow: hidden; curs
 .ddbar .ball { font-family: var(--font-num); font-size: 56px; font-weight: 600; color: #aab4cc; letter-spacing: .06em; line-height: 1; }
 .ddbar .ball b { font-size: 80px; color: var(--gold); margin-left: 18px; font-weight: 700; }
 .ddbar .sep { width: 4px; height: 70px; background: #24304d; }
+/* 演出動画（TD・FG）：得点板の上に全画面で重ね、ふわっと出し入れする */
+.fx { position: absolute; inset: 0; z-index: 50; background: #000; opacity: 0; transition: opacity .25s ease; }
+.fx.show { opacity: 1; }
+.fx video { width: 100%; height: 100%; object-fit: contain; display: block; }
 .hidden { display: none !important; }

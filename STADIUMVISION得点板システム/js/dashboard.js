@@ -21,6 +21,7 @@ const SIDES = ["home", "away"];
 const SIDE_LABEL = { home: "左チーム", away: "右チーム" };
 let state = null;
 let logoList = [];
+let videoList = [];
 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
@@ -59,6 +60,7 @@ async function control(action, params = {}) {
         const res = await fetch(`/api/control?${q}`);
         const body = await res.json();
         if (!res.ok) showError(`反映できませんでした：${body.error}`);
+        else if (body.effect) showInfo(`演出動画を流しています：${body.effect.label}`);
     } catch (e) {
         showError("サーバーにつながりません。「サーバー起動.bat」の黒い画面が開いているか確認してください。");
     }
@@ -91,6 +93,16 @@ async function loadLogos() {
     $$(".logo-select").forEach(sel => {
         sel.innerHTML = `<option value="">（ロゴなし）</option>` +
             logoList.map(p => `<option value="${p}">${p.replace(/^logos\//, "")}</option>`).join("");
+    });
+}
+
+async function loadVideos() {
+    const res = await fetch("/api/videos");
+    if (!res.ok) throw new Error("演出動画の一覧を取得できません");
+    videoList = await res.json();
+    $$(".video-select").forEach(sel => {
+        sel.innerHTML = `<option value="">（動画なし）</option>` +
+            videoList.map(p => `<option value="${p}">${p.replace(/^videos\//, "")}</option>`).join("");
     });
 }
 
@@ -194,7 +206,17 @@ function render() {
         });
         box.querySelector("[data-ow-set]").classList.toggle("on", t.outline.width === 0);
         renderCandidates(box, t.logo);
+        // TD演出動画
+        if (t.tdVideo && !videoList.includes(t.tdVideo)) showError(`動画一覧に無い動画が指定されています (${t.tdVideo})`);
+        box.querySelector('[data-video="td"]').value = t.tdVideo;
     });
+
+    // 演出動画（共通の設定）
+    $("#effects-on").checked = s.effectsOn;
+    if (s.fgVideo && !videoList.includes(s.fgVideo)) showError(`動画一覧に無い動画が指定されています (${s.fgVideo})`);
+    $('[data-video="fg"]').value = s.fgVideo;
+    $$("[data-play-td]").forEach(b => { b.disabled = !s[b.dataset.playTd].tdVideo; });
+    $("#btn-play-fg").disabled = !s.fgVideo;
 
     $$("#period button").forEach(b => b.classList.toggle("on", Number(b.dataset.period) === s.period));
     $$("#possession button").forEach(b => b.classList.toggle("on", b.dataset.poss === s.possession));
@@ -231,6 +253,8 @@ function connect() {
         state = JSON.parse(ev.data);
         render();
     });
+    // 表示画面からのお知らせ（演出動画が再生できなかった等）
+    es.addEventListener("NOTICE", ev => showError(`表示画面：${JSON.parse(ev.data).message}`));
 }
 
 // --------------------------------------------------------------------------
@@ -356,6 +380,17 @@ function bindEvents() {
     $$(".team-setting [data-ow-set]").forEach(b => b.addEventListener("click", () =>
         patch({ [sideOf(b)]: { outline: { width: Number(b.dataset.owSet) } } })));
 
+    // 演出動画
+    $("#effects-on").addEventListener("change", e => patch({ effectsOn: e.target.checked }));
+    $$("[data-play-td]").forEach(b => b.addEventListener("click", () => control("playTD", { team: b.dataset.playTd })));
+    $("#btn-play-fg").addEventListener("click", () => control("playFG"));
+    $("#btn-stop-fx").addEventListener("click", () => control("stopEffect"));
+    $$(".video-select").forEach(sel => sel.addEventListener("change", () => {
+        if (sel.dataset.video === "fg") patch({ fgVideo: sel.value });
+        else patch({ [sideOf(sel)]: { tdVideo: sel.value } });
+    }));
+    $$("[data-video-upload]").forEach(inp => inp.addEventListener("change", () => uploadVideo(inp)));
+
     // 上部のボタン
     $("#btn-open-output").addEventListener("click", () => {
         window.open("scoreboard.html", "stadiumvision_output", "width=1280,height=720");
@@ -380,6 +415,34 @@ function bindEvents() {
             ballOn: 25
         });
     });
+}
+
+// 演出動画の追加（エクスプローラーで選んだ動画を videos/ フォルダにコピーして登録）
+async function uploadVideo(inp) {
+    const file = inp.files[0];
+    inp.value = "";
+    if (!file) return;
+    showInfo(`動画を追加しています…（${file.name}）`);
+    let res, body;
+    try {
+        res = await fetch(`/api/videos?filename=${encodeURIComponent(file.name)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file
+        });
+        body = await res.json();
+    } catch (e) {
+        showError("サーバーにつながりません。「サーバー起動.bat」の黒い画面が開いているか確認してください。");
+        return;
+    }
+    if (!res.ok) {
+        showError(`動画を追加できませんでした：${body.error}`);
+        return;
+    }
+    await loadVideos();
+    if (inp.dataset.videoUpload === "fg") patch({ fgVideo: body.path });
+    else patch({ [sideOf(inp)]: { tdVideo: body.path } });
+    showInfo(`動画を登録しました（${body.path.replace(/^videos\//, "")}）`);
 }
 
 async function uploadLogo(inp) {
@@ -411,6 +474,6 @@ async function uploadLogo(inp) {
 // --------------------------------------------------------------------------
 buildQEdit();
 bindEvents();
-loadLogos()
+Promise.all([loadLogos(), loadVideos()])
     .then(connect)
     .catch(e => showError(`${e.message}。「サーバー起動.bat」でサーバーを起動してから開いてください。`));

@@ -17,6 +17,8 @@ const PERIOD_LABELS = ["1Q", "2Q", "3Q", "4Q", "OT"];
 
 const board = document.getElementById("board");
 let state = null;
+// 管理画面のプレビュー（?preview=1）では、演出動画を音なしで流す
+const IS_PREVIEW = new URLSearchParams(location.search).has("preview");
 
 // --------------------------------------------------------------------------
 // ウィンドウの大きさに合わせて 1920×1080 の画面を拡大・縮小（上下左右は黒で余白）
@@ -136,8 +138,77 @@ function connect() {
         state = JSON.parse(ev.data);
         render();
     });
+    es.addEventListener("PLAY_EFFECT", ev => playEffect(JSON.parse(ev.data)));
+    es.addEventListener("STOP_EFFECT", () => endEffect());
     es.onerror = () => console.warn("サーバーとの接続が切れました。自動で再接続します。");
 }
+
+// --------------------------------------------------------------------------
+// 演出動画（TD・FG）：全画面で流し、終わったら得点板に戻る
+// --------------------------------------------------------------------------
+const fx = document.getElementById("fx");
+const fxVideo = document.getElementById("fx-video");
+let fxHideTimer = null;
+
+// うまく流せなかったことを管理画面に知らせる（ビジョンには何も出さない）
+// ※管理画面のプレビューは本番の出力ではないため、知らせない（管理画面を裏に回したときの誤った注意を防ぐ）
+function notice(message) {
+    console.error(message);
+    if (IS_PREVIEW) return;
+    fetch("/api/notice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+    }).catch(() => {});
+}
+
+function playEffect(effect) {
+    clearTimeout(fxHideTimer);
+    fxVideo.src = effect.video;
+    fxVideo.muted = IS_PREVIEW;
+    fxVideo.currentTime = 0;
+    fx.classList.remove("hidden");
+    // 表示の準備を確定させてから出す（ふわっと出す動きのため）。描画のタイミングを待たないので、どんな状態でも確実に出る
+    void fx.offsetWidth;
+    fx.classList.add("show");
+    fxVideo.play().catch(e => {
+        if (fxVideo.muted) {
+            notice(`演出動画を再生できませんでした（${effect.label}：${e.message}）`);
+            endEffect();
+            return;
+        }
+        // 音付きの自動再生がブラウザに止められた場合は、音なしで流す。
+        // 動画に音が入っていたとき（＝本当に音が消えたとき）だけ管理画面に知らせる
+        fxVideo.muted = true;
+        fxVideo.play()
+            .then(() => setTimeout(() => {
+                const decoded = fxVideo.webkitAudioDecodedByteCount;
+                if (IS_PREVIEW || decoded === 0) return; // 音の入っていない動画なので、音なしでも同じ
+                notice(decoded === undefined
+                    ? `音付きで再生できなかったため、音なしで流しました（${effect.label}）`
+                    : `この動画には音が入っていますが、音付きで再生できなかったため音なしで流しました（${effect.label}）`);
+            }, 1000))
+            .catch(e2 => { notice(`演出動画を再生できませんでした（${effect.label}：${e2.message}）`); endEffect(); });
+    });
+}
+
+function endEffect() {
+    fx.classList.remove("show");
+    clearTimeout(fxHideTimer);
+    fxHideTimer = setTimeout(() => {
+        fxVideo.pause();
+        fxVideo.removeAttribute("src");
+        fxVideo.load();
+        fx.classList.add("hidden");
+    }, 260);
+}
+
+fxVideo.addEventListener("ended", endEffect);
+fxVideo.addEventListener("error", () => {
+    if (!fxVideo.getAttribute("src")) return;
+    notice(`演出動画を読み込めませんでした（${fxVideo.getAttribute("src")}）`);
+    endEffect();
+});
 
 // --------------------------------------------------------------------------
 // 表示中は画面をスリープさせない（試合中にビジョンが真っ暗になるのを防ぐ）

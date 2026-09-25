@@ -15,6 +15,9 @@ const STATE_FILE = path.join(DATA_DIR, 'state.json');
 const LOGO_DIR = path.join(__dirname, 'logos');
 const LOGO_EXTS = ['.png', '.jpg', '.jpeg', '.svg', '.webp'];
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const VIDEO_DIR = path.join(__dirname, 'videos');
+const VIDEO_EXTS = ['.mp4', '.webm', '.m4v'];
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 
 // ロゴの縁取り（色と太さ）の初期値：白・5
 const OUTLINE_MAX = 12;
@@ -26,23 +29,35 @@ function defaultOutline() {
 function initialState() {
     return {
         tournament: "",
-        home: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), q: [0, 0, 0, 0, 0], to: 3 },
-        away: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), q: [0, 0, 0, 0, 0], to: 3 },
+        home: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), tdVideo: "", q: [0, 0, 0, 0, 0], to: 3 },
+        away: { name: "", color: "#3f3f46", logo: "", outline: defaultOutline(), tdVideo: "", q: [0, 0, 0, 0, 0], to: 3 },
         period: 1,            // 1〜4 = 1Q〜4Q, 5 = OT
         possession: "none",   // home / away / none
         down: 1,              // 1〜4
         togo: "10",           // 数字(1〜99) / GOAL / INCHES
         ballOn: 25,           // 1〜50
         showDown: true,
-        showBall: true
+        showBall: true,
+        fgVideo: "",          // FG(+3)の演出動画（チーム共通）
+        effectsOn: true       // TD(+6)・FG(+3)を押したときに演出動画を流すか
     };
 }
 
 // ==========================================================================
 // 状態のチェック（おかしな値は受け付けずにエラーを返す）
 // ==========================================================================
-const TEAM_KEYS = ['name', 'color', 'logo', 'outline', 'q', 'to'];
-const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall'];
+const TEAM_KEYS = ['name', 'color', 'logo', 'outline', 'tdVideo', 'q', 'to'];
+const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall', 'fgVideo', 'effectsOn'];
+
+// 演出動画の指定（空＝未登録、または videos/ フォルダ内の動画）をチェックする
+function validateVideo(v, label) {
+    if (typeof v !== 'string') return `${label}の指定が正しくありません`;
+    if (v === '') return null;
+    const m = /^videos\/([^\/\\]+)$/.exec(v);
+    if (!m || !VIDEO_EXTS.includes(path.extname(m[1]).toLowerCase())) return `${label}の指定が正しくありません (${v})`;
+    if (!fs.existsSync(path.join(VIDEO_DIR, m[1]))) return `${label}のファイルが見つかりません (${v})`;
+    return null;
+}
 
 function isInt(v, min, max) {
     return Number.isInteger(v) && v >= min && v <= max;
@@ -68,6 +83,8 @@ function validateTeam(t, label) {
     if (!o || typeof o !== 'object' || Array.isArray(o) || !sameKeys(o, ['color', 'width'])) return `${label}: ロゴの縁取りの設定が正しくありません`;
     if (typeof o.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(o.color)) return `${label}: ロゴの縁取りの色が正しくありません (${o.color})`;
     if (!isInt(o.width, 0, OUTLINE_MAX)) return `${label}: ロゴの縁取りの太さは0〜${OUTLINE_MAX}にしてください`;
+    const vErr = validateVideo(t.tdVideo, `${label}: TD演出動画`);
+    if (vErr) return vErr;
     if (!Array.isArray(t.q) || t.q.length !== 5 || !t.q.every(v => isInt(v, 0, 199))) return `${label}: Qごとの得点が正しくありません`;
     if (!isInt(t.to, 0, 3)) return `${label}: タイムアウト残数は0〜3にしてください`;
     return null;
@@ -85,6 +102,9 @@ function validateState(s) {
     if (typeof s.togo !== 'string' || !(/^(GOAL|INCHES)$/.test(s.togo) || (/^\d{1,2}$/.test(s.togo) && Number(s.togo) >= 1))) return '残り距離は1〜99、GOAL、INCHESのいずれかにしてください';
     if (!isInt(s.ballOn, 1, 50)) return 'BALL ONは1〜50にしてください';
     if (typeof s.showDown !== 'boolean' || typeof s.showBall !== 'boolean') return '表示切替の値が正しくありません';
+    const fgErr = validateVideo(s.fgVideo, 'FG演出動画');
+    if (fgErr) return fgErr;
+    if (typeof s.effectsOn !== 'boolean') return '演出動画のオン・オフの値が正しくありません';
     return null;
 }
 
@@ -104,13 +124,28 @@ function loadState() {
     } catch (e) {
         throw new Error(`保存データ(${STATE_FILE})を読み込めません: ${e.message}`);
     }
-    // 縁取りの設定ができる前の保存データには、今までと同じ見た目（白・5）の設定を書き足す
+    // 機能を追加する前の保存データには、新しい項目を書き足す（何を足したかは記録に残す）
     ['home', 'away'].forEach(side => {
-        if (s[side] && typeof s[side] === 'object' && !('outline' in s[side])) {
-            s[side].outline = defaultOutline();
-            console.log(`[起動] 以前の形式の保存データのため、${side === 'home' ? '左' : '右'}チームにロゴの縁取り設定（白・5）を追加しました`);
+        const t = s[side];
+        if (!t || typeof t !== 'object') return;
+        const label = side === 'home' ? '左' : '右';
+        if (!('outline' in t)) {
+            t.outline = defaultOutline();
+            console.log(`[起動] 以前の形式の保存データのため、${label}チームにロゴの縁取り設定（白・5）を追加しました`);
+        }
+        if (!('tdVideo' in t)) {
+            t.tdVideo = '';
+            console.log(`[起動] 以前の形式の保存データのため、${label}チームにTD演出動画の欄（未登録）を追加しました`);
         }
     });
+    if (!('fgVideo' in s)) {
+        s.fgVideo = '';
+        console.log('[起動] 以前の形式の保存データのため、FG演出動画の欄（未登録）を追加しました');
+    }
+    if (!('effectsOn' in s)) {
+        s.effectsOn = true;
+        console.log('[起動] 以前の形式の保存データのため、演出動画の設定（オン）を追加しました');
+    }
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
     console.log('[起動] 保存データから前回の状態を復元しました');
@@ -127,12 +162,16 @@ function saveState(s) {
     // 書き込み途中で止まってもファイルが壊れないよう、一時ファイルに書いてから置き換える
     const tmp = STATE_FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(s, null, 2), 'utf-8');
-    // OneDrive などの同期ソフトがファイルを一瞬つかんでいると置き換えに失敗するため、少し待ってやり直す
+    renameWithRetry(tmp, STATE_FILE);
+}
+
+// OneDrive などの同期ソフトがファイルを一瞬つかんでいると置き換えに失敗するため、少し待ってやり直す
+function renameWithRetry(from, to) {
     const RETRY_CODES = ['EPERM', 'EBUSY', 'EACCES'];
     for (let attempt = 1; ; attempt++) {
         try {
-            fs.renameSync(tmp, STATE_FILE);
-            if (attempt > 1) console.log(`[保存] ${attempt}回目で保存できました`);
+            fs.renameSync(from, to);
+            if (attempt > 1) console.log(`[保存] ${attempt}回目で保存できました (${path.basename(to)})`);
             return;
         } catch (e) {
             if (!RETRY_CODES.includes(e.code) || attempt >= 10) throw e;
@@ -149,8 +188,13 @@ let state = loadState();
 let clients = [];
 
 function broadcastState() {
-    const data = JSON.stringify(state);
-    clients.forEach(client => client.write(`event: UPDATE_STATE\ndata: ${data}\n\n`));
+    broadcastEvent('UPDATE_STATE', state);
+}
+
+// 状態とは別の合図（演出動画の再生・停止、お知らせ）を送る。状態に残さないので、画面を開き直しても再生されない
+function broadcastEvent(name, data) {
+    const text = JSON.stringify(data);
+    clients.forEach(client => client.write(`event: ${name}\ndata: ${text}\n\n`));
 }
 
 // 送られてきた「変えた項目だけ」を今の状態に重ねる（送られていない項目はそのまま）
@@ -209,6 +253,9 @@ function readBody(req, limit, cb) {
 // ==========================================================================
 function applyControl(action, val, team, q) {
     const next = JSON.parse(JSON.stringify(state));
+    let effect = null;   // 流す演出動画
+    let stop = false;    // 演出動画を止める
+    const teamLabel = t => t.name || (team === 'home' ? '左チーム' : '右チーム');
     const teamObj = () => {
         if (team !== 'home' && team !== 'away') throw new Error('team は home か away を指定してください');
         return next[team];
@@ -222,11 +269,31 @@ function applyControl(action, val, team, q) {
         case 'addScore': {           // 今のQに得点を加える (team=home|away, val=6/3/2/1/-1 など)
             const t = teamObj();
             const i = next.period - 1;
-            const v = t.q[i] + num();
+            const add = num();
+            const v = t.q[i] + add;
             if (v < 0) throw new Error('得点が0未満になります');
             t.q[i] = v;
+            // TD(+6)・FG(+3)は、演出がオンで動画が登録されていれば演出動画を流す
+            if (next.effectsOn && add === 6 && t.tdVideo) effect = { video: t.tdVideo, label: `${teamLabel(t)} TD` };
+            if (next.effectsOn && add === 3 && next.fgVideo) effect = { video: next.fgVideo, label: 'FG' };
             break;
         }
+        case 'playTD': {             // 得点は変えずに、TD演出動画だけ流す (team=home|away)
+            const t = teamObj();
+            if (!t.tdVideo) throw new Error(`${teamLabel(t)}のTD演出動画が登録されていません`);
+            effect = { video: t.tdVideo, label: `${teamLabel(t)} TD` };
+            break;
+        }
+        case 'playFG':               // 得点は変えずに、FG演出動画だけ流す
+            if (!next.fgVideo) throw new Error('FG演出動画が登録されていません');
+            effect = { video: next.fgVideo, label: 'FG' };
+            break;
+        case 'stopEffect':           // 流れている演出動画を止めて得点板に戻す
+            stop = true;
+            break;
+        case 'toggleEffects':        // TD・FGで演出動画を流すかのオン・オフ
+            next.effectsOn = !next.effectsOn;
+            break;
         case 'setPeriod':            // val=1〜5 (5=OT)
             next.period = num();
             break;
@@ -270,7 +337,7 @@ function applyControl(action, val, team, q) {
         default:
             throw new Error(`不明な操作です (${action})`);
     }
-    return next;
+    return { next, effect, stop };
 }
 
 // ==========================================================================
@@ -358,23 +425,95 @@ const server = http.createServer((req, res) => {
         return sendJson(res, 405, { error: 'GET か POST で呼び出してください' });
     }
 
+    // 3.5 演出動画の一覧取得・追加（追加はファイルの中身をそのまま送る）
+    if (pathname === '/api/videos') {
+        if (req.method === 'GET') {
+            const files = fs.readdirSync(VIDEO_DIR)
+                .filter(f => VIDEO_EXTS.includes(path.extname(f).toLowerCase()))
+                .sort((a, b) => a.localeCompare(b, 'ja'))
+                .map(f => `videos/${f}`);
+            return sendJson(res, 200, files);
+        }
+        if (req.method === 'POST') {
+            const original = String(reqUrl.searchParams.get('filename') || '');
+            const ext = path.extname(original).toLowerCase();
+            if (!VIDEO_EXTS.includes(ext)) return sendJson(res, 400, { error: 'MP4・WEBM・M4V の動画を選んでください' });
+            const base = path.basename(original, path.extname(original)).replace(/[\\\/:*?"<>|\s]+/g, '_').slice(0, 60);
+            if (!base) return sendJson(res, 400, { error: 'ファイル名が正しくありません' });
+            if (Number(req.headers['content-length'] || 0) > MAX_VIDEO_BYTES) return sendJson(res, 413, { error: '動画は500MB以内にしてください' });
+            // 受け取り途中のファイルは一時的な名前で保存し、全部届いてから正式な名前にする
+            const tmp = path.join(VIDEO_DIR, `.upload_${Date.now()}.part`);
+            const ws = fs.createWriteStream(tmp);
+            let size = 0;
+            let failed = false;
+            const fail = (code, msg) => {
+                if (failed) return;
+                failed = true;
+                ws.destroy();
+                fs.rm(tmp, { force: true }, () => {});
+                console.error(`[動画追加失敗] ${msg}`);
+                sendJson(res, code, { error: msg });
+            };
+            req.on('data', chunk => {
+                size += chunk.length;
+                if (size > MAX_VIDEO_BYTES) { fail(413, '動画は500MB以内にしてください'); req.destroy(); }
+            });
+            req.on('aborted', () => fail(400, '動画の受け取りが途中で止まりました'));
+            ws.on('error', e => fail(500, `動画を保存できませんでした (${e.code || e.message})`));
+            ws.on('finish', () => {
+                if (failed) return;
+                if (size === 0) return fail(400, '動画ファイルが空です');
+                // 同じ名前のファイルがあっても上書きせず、番号を付けて保存する
+                let name = base + ext;
+                for (let n = 2; fs.existsSync(path.join(VIDEO_DIR, name)); n++) name = `${base}_${n}${ext}`;
+                try {
+                    renameWithRetry(tmp, path.join(VIDEO_DIR, name));
+                } catch (e) {
+                    return fail(500, `動画を保存できませんでした (${e.code || e.message})`);
+                }
+                console.log(`[動画追加] videos/${name} (${(size / 1024 / 1024).toFixed(1)}MB)`);
+                sendJson(res, 200, { path: `videos/${name}` });
+            });
+            req.pipe(ws);
+            return;
+        }
+        return sendJson(res, 405, { error: 'GET か POST で呼び出してください' });
+    }
+
+    // 3.6 表示画面からのお知らせ（動画が再生できなかった等）を管理画面へ伝える
+    if (pathname === '/api/notice' && req.method === 'POST') {
+        return readBody(req, 4096, (err, body) => {
+            let message;
+            try { message = String(JSON.parse(body).message || '').slice(0, 300); } catch (e) { message = ''; }
+            if (!message) return sendJson(res, 400, { error: 'お知らせの内容がありません' });
+            console.error(`[表示画面からのお知らせ] ${message}`);
+            broadcastEvent('NOTICE', { message });
+            sendJson(res, 200, { status: 'ok' });
+        });
+    }
+
     // 4. Stream Deck 等からの操作
     if (pathname === '/api/control') {
         const { action, val, team, q } = Object.fromEntries(reqUrl.searchParams);
-        let next;
+        let result;
         try {
-            next = applyControl(action, val, team, q);
+            result = applyControl(action, val, team, q);
         } catch (e) {
             console.error(`[操作拒否] ${action}: ${e.message}`);
             return sendJson(res, 400, { error: e.message });
         }
-        const vErr = commit(next);
+        const vErr = commit(result.next);
         if (vErr) {
             console.error(`[操作拒否] ${action}: ${vErr}`);
             return sendJson(res, 400, { error: vErr });
         }
+        if (result.effect) {
+            broadcastEvent('PLAY_EFFECT', result.effect);
+            console.log(`[演出] ${result.effect.label} (${result.effect.video})`);
+        }
+        if (result.stop) broadcastEvent('STOP_EFFECT', {});
         console.log(`[操作] ${action} team=${team || '-'} val=${val === undefined ? '-' : val}`);
-        return sendJson(res, 200, { status: 'ok', state });
+        return sendJson(res, 200, { status: 'ok', state, effect: result.effect });
     }
 
     // 5. 画面ファイルの配信
@@ -394,13 +533,40 @@ const server = http.createServer((req, res) => {
     const types = {
         '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
         '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp',
-        '.ttf': 'font/ttf'
+        '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm'
     };
     const contentType = types[path.extname(filePath).toLowerCase()];
     if (!contentType) {
         res.writeHead(404);
         return res.end('Not Found');
     }
+    // 動画は大きいので少しずつ送る。再生の途中から読み込めるよう「範囲指定（Range）」にも対応する
+    if (contentType.startsWith('video/')) {
+        return fs.stat(filePath, (error, st) => {
+            if (error) {
+                res.writeHead(error.code === 'ENOENT' ? 404 : 500);
+                return res.end(error.code === 'ENOENT' ? 'Not Found' : 'Server Error');
+            }
+            const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+            if (m && (m[1] !== '' || m[2] !== '')) {
+                let start = m[1] === '' ? st.size - Number(m[2]) : Number(m[1]);
+                let end = m[1] !== '' && m[2] !== '' ? Number(m[2]) : st.size - 1;
+                end = Math.min(end, st.size - 1);
+                if (start < 0 || start > end) {
+                    res.writeHead(416, { 'Content-Range': `bytes */${st.size}` });
+                    return res.end();
+                }
+                res.writeHead(206, {
+                    'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache',
+                    'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1
+                });
+                return fs.createReadStream(filePath, { start, end }).pipe(res);
+            }
+            res.writeHead(200, { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache', 'Content-Length': st.size });
+            fs.createReadStream(filePath).pipe(res);
+        });
+    }
+
     fs.readFile(filePath, (error, content) => {
         if (error) {
             res.writeHead(error.code === 'ENOENT' ? 404 : 500);

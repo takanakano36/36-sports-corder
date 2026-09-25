@@ -30,7 +30,7 @@
     <section class="col">
         <div class="panel">
             <h2>いま出ている画面</h2>
-            <div class="preview"><iframe src="scoreboard.html" title="表示画面のプレビュー" tabindex="-1"></iframe></div>
+            <div class="preview"><iframe src="scoreboard.html?preview=1" title="表示画面のプレビュー" tabindex="-1"></iframe></div>
         </div>
 
         <div class="panel">
@@ -81,6 +81,26 @@
                         <button type="button" data-add="1">+1</button>
                         <button type="button" data-add="-1" class="minus">−1</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>演出動画 <small>TD（+6）・FG（+3）を押すと流れ、終わると得点板に戻ります</small></h2>
+            <div class="dd-row">
+                <label class="toggle"><input type="checkbox" id="effects-on"> TD・FGで演出動画を流す</label>
+            </div>
+            <div class="dd-row">
+                <span class="lbl">動画だけ流す</span>
+                <button type="button" class="btn small" data-play-td="home"><span data-label="home"></span> TD</button>
+                <button type="button" class="btn small" data-play-td="away"><span data-label="away"></span> TD</button>
+                <button type="button" class="btn small" id="btn-play-fg">FG</button>
+                <button type="button" class="btn small danger" id="btn-stop-fx">■ 止める</button>
+            </div>
+            <div class="field">FG演出動画（両チーム共通）
+                <div class="logo-row">
+                    <select class="video-select" data-video="fg"></select>
+                    <label class="btn small file-btn">動画を追加<input type="file" accept="video/mp4,video/webm,.m4v" data-video-upload="fg" hidden></label>
                 </div>
             </div>
         </div>
@@ -184,6 +204,12 @@
                     <button type="button" class="btn small" data-ow-set="0">縁取りなし</button>
                 </div>
             </div>
+            <div class="field">TD演出動画
+                <div class="logo-row">
+                    <select class="video-select" data-video="td"></select>
+                    <label class="btn small file-btn">動画を追加<input type="file" accept="video/mp4,video/webm,.m4v" data-video-upload="td" hidden></label>
+                </div>
+            </div>
         </div>
 
         <div class="panel team-setting" data-side="away">
@@ -216,6 +242,12 @@
                     <input type="range" min="0" max="12" step="1" data-field="outlineWidth">
                     <b class="ow" data-ow></b>
                     <button type="button" class="btn small" data-ow-set="0">縁取りなし</button>
+                </div>
+            </div>
+            <div class="field">TD演出動画
+                <div class="logo-row">
+                    <select class="video-select" data-video="td"></select>
+                    <label class="btn small file-btn">動画を追加<input type="file" accept="video/mp4,video/webm,.m4v" data-video-upload="td" hidden></label>
                 </div>
             </div>
         </div>

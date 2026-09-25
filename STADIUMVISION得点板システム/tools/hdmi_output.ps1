@@ -106,7 +106,13 @@ $edgeArgs = @(
     '--edge-kiosk-type=fullscreen',
     "--window-position=$x,$y",
     '--no-first-run',
-    '--no-default-browser-check'
+    '--no-default-browser-check',
+    # 演出動画に音が入っている場合も、操作なしで音付きのまま自動再生できるようにする
+    '--autoplay-policy=no-user-gesture-required',
+    # 他のウィンドウに隠れたと判定されても、動画の再生や画面の更新を止めない
+    '--disable-background-media-suspend',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding'
 )
 
 if ($DryRun) {
