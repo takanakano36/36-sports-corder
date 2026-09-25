@@ -78,6 +78,9 @@ section.match h2 { font-size: 20px; font-weight: 900; margin-bottom: 10px; }
 .bn-info .lbl { font-family: var(--font-num); font-weight: 600; font-size: 30px; letter-spacing: .3em; color: var(--gold); line-height: 1; margin-bottom: 14px; }
 .bn-info .val { font-size: 60px; font-weight: 900; line-height: 1; white-space: nowrap; }
 .bn-info .val.num { font-family: var(--font-num); font-weight: 700; font-size: 72px; letter-spacing: .02em; }
+/* キックオフは「KICK OFF 12:00」と1段で横に並べる */
+.bn-info .cell.ko { flex-direction: row; align-items: center; }
+.bn-info .cell.ko .lbl { margin: 0 24px 0 0; font-size: 34px; }
 .bn-info .val small { font-size: 40px; margin-left: 10px; color: #aab4cc; }
 
 /* フッターなし版（ハーフタイムなど）：帯を消し、ロゴと名前を少し下げて画面の中央にそろえる */
@@ -152,7 +155,7 @@ section.match h2 { font-size: 20px; font-weight: 900; margin-bottom: 10px; }
         <div class="bn-info">
             <div class="cell"><span class="val num"><span data-t="date"></span><small data-t="dow"></small></span></div>
             <div class="cell"><span class="val" data-t="venue"></span></div>
-            <div class="cell"><span class="lbl">KICK OFF</span><span class="val num" data-t="ko"></span></div>
+            <div class="cell ko"><span class="lbl">KICK OFF</span><span class="val num" data-t="ko"></span></div>
         </div>
     </div>
 </template>
