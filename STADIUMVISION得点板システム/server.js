@@ -236,6 +236,35 @@ function loadState() {
     return s;
 }
 
+// フォルダの中に、中身がまったく同じファイルがあれば、その名前を返す（無ければ null）
+// 大きさが同じファイルだけを、少しずつ読みながら1バイトずつ比べる（大きな動画でもメモリを使いすぎない）
+function findSameFile(dir, exts, filePath) {
+    const size = fs.statSync(filePath).size;
+    const CHUNK = 1024 * 1024;
+    const sameContent = other => {
+        const fa = fs.openSync(filePath, 'r');
+        const fb = fs.openSync(other, 'r');
+        try {
+            const a = Buffer.alloc(CHUNK), b = Buffer.alloc(CHUNK);
+            for (let pos = 0; pos < size; pos += CHUNK) {
+                const na = fs.readSync(fa, a, 0, CHUNK, pos);
+                const nb = fs.readSync(fb, b, 0, CHUNK, pos);
+                if (na !== nb || !a.subarray(0, na).equals(b.subarray(0, nb))) return false;
+            }
+            return true;
+        } finally {
+            fs.closeSync(fa);
+            fs.closeSync(fb);
+        }
+    };
+    for (const f of fs.readdirSync(dir)) {
+        const full = path.join(dir, f);
+        if (full === filePath || !exts.includes(path.extname(f).toLowerCase())) continue;
+        if (fs.statSync(full).size === size && sameContent(full)) return f;
+    }
+    return null;
+}
+
 // 指定ミリ秒だけ待つ（保存のやり直しの間隔用）
 function sleepSync(ms) {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -509,10 +538,30 @@ const server = http.createServer((req, res) => {
                 const base = path.basename(String(data.filename || ''), path.extname(String(data.filename || '')))
                     .replace(/[\\\/:*?"<>|\s]+/g, '_').slice(0, 60);
                 if (!base) return sendJson(res, 400, { error: 'ファイル名が正しくありません' });
-                // 同じ名前のファイルがあっても上書きせず、番号を付けて保存する
+                // いったん一時的な名前で保存し、中身がまったく同じロゴが既にあれば、それを使う（同じロゴを増やさない）
+                const tmp = path.join(LOGO_DIR, `.upload_${Date.now()}.part`);
+                fs.writeFileSync(tmp, Buffer.from(m[2], 'base64'));
+                let same;
+                try {
+                    same = findSameFile(LOGO_DIR, LOGO_EXTS, tmp);
+                } catch (e) {
+                    fs.rmSync(tmp, { force: true });
+                    return sendJson(res, 500, { error: `ロゴを確認できませんでした (${e.code || e.message})` });
+                }
+                if (same) {
+                    fs.rmSync(tmp, { force: true });
+                    console.log(`[ロゴ追加] 中身が同じロゴが登録済みのため、それを使います: logos/${same}`);
+                    return sendJson(res, 200, { path: `logos/${same}`, reused: true });
+                }
+                // 中身が違うロゴで名前だけ同じ場合は、上書きせず（使っている設定が変わらないよう）番号を付けて保存する
                 let name = base + ext;
                 for (let n = 2; fs.existsSync(path.join(LOGO_DIR, name)); n++) name = `${base}_${n}${ext}`;
-                fs.writeFileSync(path.join(LOGO_DIR, name), Buffer.from(m[2], 'base64'));
+                try {
+                    renameWithRetry(tmp, path.join(LOGO_DIR, name));
+                } catch (e) {
+                    fs.rmSync(tmp, { force: true });
+                    return sendJson(res, 500, { error: `ロゴを保存できませんでした (${e.code || e.message})` });
+                }
                 console.log(`[ロゴ追加] logos/${name}`);
                 sendJson(res, 200, { path: `logos/${name}` });
             });
@@ -558,7 +607,19 @@ const server = http.createServer((req, res) => {
             ws.on('finish', () => {
                 if (failed) return;
                 if (size === 0) return fail(400, '動画ファイルが空です');
-                // 同じ名前のファイルがあっても上書きせず、番号を付けて保存する
+                // 中身がまったく同じ動画が既にあれば、それを使う（同じ動画を増やさない）
+                let same;
+                try {
+                    same = findSameFile(VIDEO_DIR, VIDEO_EXTS, tmp);
+                } catch (e) {
+                    return fail(500, `動画を確認できませんでした (${e.code || e.message})`);
+                }
+                if (same) {
+                    fs.rmSync(tmp, { force: true });
+                    console.log(`[動画追加] 中身が同じ動画が登録済みのため、それを使います: videos/${same}`);
+                    return sendJson(res, 200, { path: `videos/${same}`, reused: true });
+                }
+                // 中身が違う動画で名前だけ同じ場合は、上書きせず番号を付けて保存する
                 let name = base + ext;
                 for (let n = 2; fs.existsSync(path.join(VIDEO_DIR, name)); n++) name = `${base}_${n}${ext}`;
                 try {

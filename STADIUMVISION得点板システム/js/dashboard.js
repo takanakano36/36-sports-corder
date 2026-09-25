@@ -444,7 +444,9 @@ async function uploadVideo(inp) {
     await loadVideos();
     if (inp.dataset.videoUpload === "fg") patch({ fgVideo: body.path });
     else patch({ [sideOf(inp)]: { tdVideo: body.path } });
-    showInfo(`動画を登録しました（${body.path.replace(/^videos\//, "")}）`);
+    showInfo(body.reused
+        ? `同じ動画が登録済みのため、新しく保存せずにそれを使います（${body.path.replace(/^videos\//, "")}）`
+        : `動画を登録しました（${body.path.replace(/^videos\//, "")}）`);
 }
 
 // ロゴの追加（onPath：追加したロゴをどこに使うか。省略時はそのチームの得点板のロゴ）
@@ -470,6 +472,7 @@ async function uploadLogo(inp, onPath = p => patch({ [sideOf(inp)]: { logo: p } 
     }
     await loadLogos();
     onPath(body.path);
+    if (body.reused) showInfo(`同じロゴが登録済みのため、新しく保存せずにそれを使います（${body.path.replace(/^logos\//, "")}）`);
 }
 
 // --------------------------------------------------------------------------
