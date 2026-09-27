@@ -467,8 +467,28 @@ function applyControl(action, val, team, q) {
 // ==========================================================================
 // HTTPサーバー
 // ==========================================================================
+// 1つのアクセスで思わぬエラーが起きても、サーバー全体は止めない（試合中に得点板が止まらないように）
+// エラーの内容は黒い画面に記録し、そのアクセスには「サーバー内部のエラー」と返す
 const server = http.createServer((req, res) => {
-    const reqUrl = new URL(req.url, `http://localhost:${PORT}`);
+    try {
+        handleRequest(req, res);
+    } catch (e) {
+        console.error(`[エラー] ${req.method} ${req.url} の処理中にエラーが起きました（サーバーは動き続けます）
+${e.stack}`);
+        if (!res.headersSent) sendJson(res, 500, { error: 'サーバー内部でエラーが起きました' });
+        else res.end();
+    }
+});
+
+function handleRequest(req, res) {
+    // アドレスの読み取り（「//」で始まるなどの変わったアドレスでも止まらないよう、必ず自分のサーバーの住所の後ろに付けて読む）
+    let reqUrl;
+    try {
+        reqUrl = new URL(`http://localhost:${PORT}${req.url.startsWith('/') ? '' : '/'}${req.url}`);
+    } catch (e) {
+        console.error(`[拒否] 読み取れないアドレスです: ${req.url}`);
+        return sendJson(res, 400, { error: '正しくないアドレスです' });
+    }
     const pathname = reqUrl.pathname;
 
     // 1. SSE（表示画面・管理画面が接続して、状態の変化を受け取る）
@@ -731,7 +751,7 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-cache' });
         res.end(content);
     });
-});
+}
 
 // ==========================================================================
 // 起動（「--open」付きで起動したときは、準備ができた後に管理画面をブラウザで開く）
