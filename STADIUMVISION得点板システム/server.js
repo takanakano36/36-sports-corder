@@ -759,11 +759,15 @@ function handleRequest(req, res) {
 const OPEN_DASHBOARD = process.argv.includes('--open');
 const DASHBOARD_URL = `http://localhost:${PORT}/`;
 
-// いつも使っているブラウザで管理画面を開く（Windowsの start コマンド）
+// いつも使っているブラウザで管理画面を開く（Windowsは start、Macは open コマンド）
 function openDashboard() {
-    require('child_process').exec(`start "" "${DASHBOARD_URL}"`, err => {
+    const onDone = err => {
         if (err) console.error(`[エラー] 管理画面を自動で開けませんでした。ブラウザで ${DASHBOARD_URL} を開いてください (${err.message})`);
-    });
+    };
+    const cp = require('child_process');
+    if (process.platform === 'win32') cp.exec(`start "" "${DASHBOARD_URL}"`, onDone);
+    else if (process.platform === 'darwin') cp.execFile('open', [DASHBOARD_URL], onDone);
+    else cp.execFile('xdg-open', [DASHBOARD_URL], onDone);
     console.log('   → 管理画面をブラウザで開きました');
 }
 

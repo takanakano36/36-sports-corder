@@ -325,7 +325,7 @@ fxVideo.addEventListener("error", () => {
 // --------------------------------------------------------------------------
 async function keepScreenOn() {
     if (!("wakeLock" in navigator)) {
-        console.warn("このブラウザは画面のスリープ防止に対応していません。Windowsの電源設定で画面をオフにしない設定にしてください。");
+        console.warn("このブラウザは画面のスリープ防止に対応していません。PCの電源設定で画面をオフにしない設定にしてください。");
         return;
     }
     try {

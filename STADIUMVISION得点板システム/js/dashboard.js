@@ -62,7 +62,7 @@ async function control(action, params = {}) {
         if (!res.ok) showError(`反映できませんでした：${body.error}`);
         else if (body.effect) showInfo(`演出動画を流しています：${body.effect.label}`);
     } catch (e) {
-        showError("サーバーにつながりません。「サーバー起動.bat」の黒い画面が開いているか確認してください。");
+        showError("サーバーにつながりません。サーバーの画面（「得点板 管理画面」で開いた画面）が開いたままか確認してください。");
     }
 }
 
@@ -79,7 +79,7 @@ async function patch(changes) {
             render(); // 入力欄を今の正しい値に戻す
         }
     } catch (e) {
-        showError("サーバーにつながりません。「サーバー起動.bat」の黒い画面が開いているか確認してください。");
+        showError("サーバーにつながりません。サーバーの画面（「得点板 管理画面」で開いた画面）が開いたままか確認してください。");
     }
 }
 
@@ -434,7 +434,7 @@ async function uploadVideo(inp) {
         });
         body = await res.json();
     } catch (e) {
-        showError("サーバーにつながりません。「サーバー起動.bat」の黒い画面が開いているか確認してください。");
+        showError("サーバーにつながりません。サーバーの画面（「得点板 管理画面」で開いた画面）が開いたままか確認してください。");
         return;
     }
     if (!res.ok) {
@@ -482,4 +482,4 @@ buildQEdit();
 bindEvents();
 Promise.all([loadLogos(), loadVideos()])
     .then(connect)
-    .catch(e => showError(`${e.message}。「サーバー起動.bat」でサーバーを起動してから開いてください。`));
+    .catch(e => showError(`${e.message}。デスクトップの「得点板 管理画面」でサーバーを起動してから開いてください。`));
