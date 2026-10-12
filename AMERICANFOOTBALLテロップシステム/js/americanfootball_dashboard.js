@@ -360,7 +360,9 @@ function updateDashboardUI() {
     updateTODotsDashboard();
     updatePossessionButtons();
     updateDownButtons();
-    document.getElementById("input-togo").value = state.togo;
+    // 入力中(フォーカス中)は、時計の更新などで入力途中の値が上書きされて消えないようにする
+    const inToGo = document.getElementById("input-togo");
+    if (inToGo && document.activeElement !== inToGo) inToGo.value = state.togo;
 
     // スイッチ類
     document.getElementById("switch-flag-btn").className = "switch-btn" + (state.flagActive ? " active" : "");
@@ -1581,7 +1583,8 @@ function toggleTimer() {
 
 function addToGo(diff) {
     let current = parseInt(state.togo, 10);
-    if (isNaN(current)) current = 10;
+    // Goal / Inches など数字でない場合は、勝手に10ヤードへ置き換えず、そのままにする
+    if (isNaN(current) || !/^\d+$/.test(String(state.togo).trim())) return;
     current = Math.max(1, Math.min(99, current + diff));
     state.togo = String(current);
     const el = document.getElementById("input-togo");

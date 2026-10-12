@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;700;900&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/americanfootball_dashboard.css">
+    <link rel="stylesheet" href="css/americanfootball_dashboard.css?v=2">
     <!-- Excel/CSV読込用ライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -259,7 +259,7 @@
                     <!-- 残りヤード (to go) -->
                     <div class="control-group togo-container">
                         <label class="group-label">残りヤード (To Go)</label>
-                        <input type="text" id="input-togo" class="form-input" value="10" placeholder="ヤード数またはGoal, Inches" onchange="onToGoChange(this.value)">
+                        <input type="text" id="input-togo" class="form-input" value="10" placeholder="ヤード数またはGoal, Inches" oninput="onToGoChange(this.value)">
                         <div class="togo-presets">
                             <button class="btn btn-secondary" onclick="setToGoPreset('10')" style="padding: 4px;">10 yds</button>
                             <button class="btn btn-secondary" onclick="setToGoPreset('5')" style="padding: 4px;">5 yds</button>
@@ -536,6 +536,6 @@
     </div>
 
     <!-- javascript -->
-    <script src="js/americanfootball_dashboard.js"></script>
+    <script src="js/americanfootball_dashboard.js?v=2"></script>
 </body>
 </html>
