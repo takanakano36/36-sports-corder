@@ -85,7 +85,7 @@ body {
 /* レイアウトグリッド */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* 中身の大きさで列が広がり続けないよう上限を固定 */
     gap: 20px;
     padding: 20px;
     max-width: 1600px;
@@ -94,7 +94,7 @@ body {
 
 @media (max-width: 1024px) {
     .dashboard-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -829,6 +829,8 @@ body {
     overflow: hidden;
     border: 1px solid #334155;
     position: relative;
+    max-width: 100%;
+    contain: layout paint; /* 中身(1920px固定のiframe)の大きさが外側の寸法に影響しないようにする */
 }
 
 #preview-iframe {
@@ -839,4 +841,15 @@ body {
     top: 0;
     left: 0;
     transform-origin: top left;
+}
+
+/* カメラ確認用キャンバス: 描画サイズ(内部解像度)が変わっても枠の寸法が変わらないよう枠いっぱいに固定 */
+#camera-crop-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: contain;
 }
