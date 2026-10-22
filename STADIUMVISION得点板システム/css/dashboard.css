@@ -18,7 +18,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', s
 button, input, select { font: inherit; color: inherit; }
 
 /* 上部バー */
-.topbar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 18px; background: #0a0c11; border-bottom: 1px solid var(--line); }
+.topbar { position: relative; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 18px; background: #0a0c11; border-bottom: 1px solid var(--line); }
 .topbar h1, .topbar .btn, .obs-label { white-space: nowrap; }
 .topbar h1 { font-size: 18px; font-weight: 900; }
 .topbar h1 small { font-size: 12px; color: var(--sub); margin-left: 6px; }
@@ -32,8 +32,36 @@ button, input, select { font: inherit; color: inherit; }
 .btn.small { padding: 4px 10px; font-size: 13px; }
 .btn.danger { background: #3a1414; border-color: #7f1d1d; }
 
+/* 音楽バー（ヘッダーの下。下にスクロールしても画面の一番上に残る） */
+.musicbar { position: sticky; top: 0; z-index: 25; display: flex; flex-direction: column; gap: 8px; padding: 8px 18px 10px; background: #0d1018; border-bottom: 2px solid #1f3a2a; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+.mb-ctrl { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.mb-title { flex: none; font-weight: 900; color: var(--accent); white-space: nowrap; margin-right: 2px; }
+.mb-songs { display: flex; flex-wrap: wrap; gap: 6px; }
+.mb-songs button { max-width: 240px; display: inline-flex; align-items: center; gap: 6px; background: #1b2130; border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.mb-songs button span { overflow: hidden; text-overflow: ellipsis; }
+.mb-songs button::before { content: "▶"; font-size: 10px; color: var(--sub); }
+.mb-songs button:hover { background: #2c3445; }
+.mb-songs button.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.mb-songs button.on::before { content: "♪"; color: #fff; font-size: 13px; }
+.mb-empty { font-size: 12px; color: var(--sub); }
+.mb-now { position: relative; flex: 1; min-width: 220px; max-width: 420px; padding: 6px 10px 8px; border-radius: 8px; background: #0b0e14; border: 1px solid var(--line); display: flex; align-items: baseline; gap: 8px; overflow: hidden; }
+.mb-now.on { border-color: var(--ok); }
+.mb-now-name { flex: 1; min-width: 0; font-weight: 700; font-size: 13px; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mb-now.on .mb-now-name { color: #fff; }
+.mb-time { flex: none; font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--sub); }
+.mb-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #1f2633; }
+.mb-prog b { display: block; height: 100%; width: 0; background: var(--ok); }
+.mb-stop { background: #3a1414; border-color: #7f1d1d; }
+.mb-stop:not(:disabled):hover { background: #5b1d1d; }
+.mb-select { background: #0b0e14; border: 1px solid var(--line); border-radius: 6px; padding: 6px; font-size: 12px; }
+.mb-sink { max-width: 230px; }
+.mb-loop, .mb-vol { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mb-loop input { width: 16px; height: 16px; accent-color: var(--accent); }
+.mb-vol input { width: 120px; accent-color: var(--accent); }
+.mb-vol span { font-family: 'Oswald', sans-serif; font-size: 14px; min-width: 26px; text-align: right; }
+
 /* エラー表示 */
-.toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 30; background: var(--danger); color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; max-width: 90vw; }
+.toast { position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 30; background: var(--danger); color: #fff; font-weight: 700; padding: 10px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; max-width: 90vw; }
 .toast.show { display: block; }
 .toast.info { background: var(--ok); }
 

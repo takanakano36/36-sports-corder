@@ -23,6 +23,11 @@ const PENALTY_DIR = path.join(__dirname, 'penalties');
 const PENALTY_EXTS = ['.png', '.jpg', '.jpeg', '.webp'];
 // 反則画像のファイル名「01_5yd_フォルススタート.png」＝ 番号_罰退ヤード_反則名
 const PENALTY_NAME_RE = /^(\d+)_(\d+)yd_(.+)$/;
+// 音楽（管理画面のPCで鳴らす）。このフォルダに入れた曲が、管理画面の音楽バーのボタンになる
+const MUSIC_DIR = path.join(__dirname, 'music');
+const MUSIC_EXTS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'];
+// 曲のファイル名の頭の「01_」は並び順の番号（ボタンには番号を除いた曲名を出す）
+const MUSIC_NAME_RE = /^(\d+)_(.+)$/;
 
 // ロゴの縁取り（色と太さ）の初期値：白・5
 const OUTLINE_MAX = 12;
@@ -165,6 +170,20 @@ function listPenalties() {
             return m
                 ? { path: `penalties/${f}`, no: Number(m[1]), yards: Number(m[2]), name: m[3] }
                 : { path: `penalties/${f}`, no: null, yards: null, name: stem };
+        })
+        .sort((a, b) => (a.no === null) - (b.no === null) || (a.no - b.no) || a.name.localeCompare(b.name, 'ja'));
+}
+
+// 曲の一覧（番号付きは番号順、番号なしはその後に名前順）
+function listMusic() {
+    return fs.readdirSync(MUSIC_DIR)
+        .filter(f => MUSIC_EXTS.includes(path.extname(f).toLowerCase()))
+        .map(f => {
+            const stem = path.basename(f, path.extname(f));
+            const m = MUSIC_NAME_RE.exec(stem);
+            return m
+                ? { path: `music/${f}`, no: Number(m[1]), name: m[2] }
+                : { path: `music/${f}`, no: null, name: stem };
         })
         .sort((a, b) => (a.no === null) - (b.no === null) || (a.no - b.no) || a.name.localeCompare(b.name, 'ja'));
 }
@@ -705,6 +724,12 @@ function handleRequest(req, res) {
         return sendJson(res, 405, { error: 'GET か POST で呼び出してください' });
     }
 
+    // 3.54 曲の一覧（music/ フォルダの中身。曲を足したときは管理画面の音楽バーの「⟳」で反映）
+    if (pathname === '/api/music') {
+        if (req.method !== 'GET') return sendJson(res, 405, { error: 'GET で呼び出してください' });
+        return sendJson(res, 200, listMusic());
+    }
+
     // 3.55 反則画像の一覧（penalties/ フォルダの中身。画像を足したときは管理画面の「一覧を読み直す」で反映）
     if (pathname === '/api/penalties') {
         if (req.method !== 'GET') return sendJson(res, 405, { error: 'GET で呼び出してください' });
@@ -764,15 +789,16 @@ function handleRequest(req, res) {
     const types = {
         '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
         '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp',
-        '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm'
+        '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.flac': 'audio/flac'
     };
     const contentType = types[path.extname(filePath).toLowerCase()];
     if (!contentType) {
         res.writeHead(404);
         return res.end('Not Found');
     }
-    // 動画は大きいので少しずつ送る。再生の途中から読み込めるよう「範囲指定（Range）」にも対応する
-    if (contentType.startsWith('video/')) {
+    // 動画・曲は大きいので少しずつ送る。再生の途中から読み込めるよう「範囲指定（Range）」にも対応する
+    if (contentType.startsWith('video/') || contentType.startsWith('audio/')) {
         return fs.stat(filePath, (error, st) => {
             if (error) {
                 res.writeHead(error.code === 'ENOENT' ? 404 : 500);
@@ -848,6 +874,13 @@ server.on('error', err => {
         console.error(`[エラー] ${PORT}番が使えないため、起動できません (${e.message})`);
         process.exit(1);
     });
+});
+
+// 反則・音楽のフォルダが無ければ作る（以前の版から更新したときなど。作ったことは記録に残す）
+[[PENALTY_DIR, '反則の画像'], [MUSIC_DIR, '音楽']].forEach(([dir, label]) => {
+    if (fs.existsSync(dir)) return;
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`[起動] ${label}のフォルダが無かったため作りました: ${dir}`);
 });
 
 server.listen(PORT, () => {

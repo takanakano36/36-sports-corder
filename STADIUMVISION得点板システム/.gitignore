@@ -14,3 +14,7 @@ data/
 # 反則の画像（連盟の名前・ロゴ入りの素材）もフォルダだけ残して中身は除外する
 penalties/*
 !penalties/.gitkeep
+
+# 音楽（各自の音源・著作物のため）もフォルダだけ残して中身は除外する
+music/*
+!music/.gitkeep

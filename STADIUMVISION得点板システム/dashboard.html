@@ -28,6 +28,31 @@
     </div>
 </header>
 
+<!-- 音楽バー：このPCで曲を鳴らす（どのタブを開いていても、下にスクロールしても、画面の一番上に残る） -->
+<div class="musicbar" id="musicbar">
+    <div class="mb-ctrl">
+        <span class="mb-title">♪ 音楽</span>
+        <div class="mb-now" id="mb-now">
+            <span class="mb-now-name" id="mb-now-name">停止中</span>
+            <span class="mb-time" id="mb-time"></span>
+            <i class="mb-prog"><b id="mb-prog"></b></i>
+        </div>
+        <button type="button" class="btn mb-stop" id="mb-stop">■ STOP</button>
+        <select id="mb-fade" class="mb-select" title="STOPを押してから止まるまでの秒数">
+            <option value="0">フェードなし</option>
+            <option value="1">フェード 1秒</option>
+            <option value="2">フェード 2秒</option>
+            <option value="3">フェード 3秒</option>
+            <option value="5">フェード 5秒</option>
+        </select>
+        <label class="mb-loop"><input type="checkbox" id="mb-loop"> くり返し</label>
+        <label class="mb-vol">音量<input type="range" id="mb-vol" min="0" max="100" step="1"><span id="mb-vol-num"></span></label>
+        <select id="mb-sink" class="mb-select mb-sink" title="音楽を鳴らす出力先（イヤホンジャックなど）"></select>
+        <button type="button" class="btn small" id="mb-reload" title="曲を足したり差し替えたりしたときに押します">⟳ 曲を読み直す</button>
+    </div>
+    <div class="mb-songs" id="mb-songs"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <main class="layout" id="view-score">
@@ -321,6 +346,7 @@
 </main>
 
 <script src="js/penalty_admin.js"></script>
+<script src="js/music_admin.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/banner_admin.js"></script>
 </body>

@@ -484,6 +484,8 @@ async function uploadLogo(inp, onPath = p => patch({ [sideOf(inp)]: { logo: p } 
 buildQEdit();
 bindEvents();
 bindPenaltyEvents();
+// 音楽バー（js/music_admin.js）。曲の一覧が読めなくても得点板の操作はできるよう、別に始める
+initMusic();
 Promise.all([loadLogos(), loadVideos(), loadPenalties()])
     .then(connect)
     .catch(e => showError(`${e.message}。デスクトップの「得点板 管理画面」でサーバーを起動してから開いてください。`));
