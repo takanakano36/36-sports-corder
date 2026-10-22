@@ -18,6 +18,11 @@ const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const VIDEO_DIR = path.join(__dirname, 'videos');
 const VIDEO_EXTS = ['.mp4', '.webm', '.m4v'];
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+// 反則の画像（1920×1080）。このフォルダに入れた画像が、管理画面の反則ボタンになる
+const PENALTY_DIR = path.join(__dirname, 'penalties');
+const PENALTY_EXTS = ['.png', '.jpg', '.jpeg', '.webp'];
+// 反則画像のファイル名「01_5yd_フォルススタート.png」＝ 番号_罰退ヤード_反則名
+const PENALTY_NAME_RE = /^(\d+)_(\d+)yd_(.+)$/;
 
 // ロゴの縁取り（色と太さ）の初期値：白・5
 const OUTLINE_MAX = 12;
@@ -55,7 +60,8 @@ function initialState() {
         showBall: true,
         fgVideo: "",          // FG(+3)の演出動画（チーム共通）
         effectsOn: true,      // TD(+6)・FG(+3)を押したときに演出動画を流すか
-        banner: defaultBanner()
+        banner: defaultBanner(),
+        penalty: ""           // いまビジョンに出している反則の画像（penalties/ フォルダの画像。空なら出さない）
     };
 }
 
@@ -63,7 +69,7 @@ function initialState() {
 // 状態のチェック（おかしな値は受け付けずにエラーを返す）
 // ==========================================================================
 const TEAM_KEYS = ['name', 'color', 'logo', 'outline', 'tdVideo', 'q', 'to'];
-const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall', 'fgVideo', 'effectsOn', 'banner'];
+const STATE_KEYS = ['tournament', 'home', 'away', 'period', 'possession', 'down', 'togo', 'ballOn', 'showDown', 'showBall', 'fgVideo', 'effectsOn', 'banner', 'penalty'];
 
 // ロゴの指定（空＝ロゴなし、または logos/ フォルダ内の画像）をチェックする
 function validateLogo(v, label) {
@@ -139,6 +145,30 @@ function validateVideo(v, label) {
     return null;
 }
 
+// 反則画像の指定（空＝出さない、または penalties/ フォルダ内の画像）をチェックする
+function validatePenalty(v) {
+    if (typeof v !== 'string') return '反則の画像の指定が正しくありません';
+    if (v === '') return null;
+    const m = /^penalties\/([^\/\\]+)$/.exec(v);
+    if (!m || !PENALTY_EXTS.includes(path.extname(m[1]).toLowerCase())) return `反則の画像の指定が正しくありません (${v})`;
+    if (!fs.existsSync(path.join(PENALTY_DIR, m[1]))) return `反則の画像が見つかりません (${v})`;
+    return null;
+}
+
+// 反則画像の一覧（ファイル名の番号順）。名前の決まりに合わない画像も、ファイル名をそのまま名前にして並べる
+function listPenalties() {
+    return fs.readdirSync(PENALTY_DIR)
+        .filter(f => PENALTY_EXTS.includes(path.extname(f).toLowerCase()))
+        .map(f => {
+            const stem = path.basename(f, path.extname(f));
+            const m = PENALTY_NAME_RE.exec(stem);
+            return m
+                ? { path: `penalties/${f}`, no: Number(m[1]), yards: Number(m[2]), name: m[3] }
+                : { path: `penalties/${f}`, no: null, yards: null, name: stem };
+        })
+        .sort((a, b) => (a.no === null) - (b.no === null) || (a.no - b.no) || a.name.localeCompare(b.name, 'ja'));
+}
+
 function isInt(v, min, max) {
     return Number.isInteger(v) && v >= min && v <= max;
 }
@@ -177,7 +207,7 @@ function validateState(s) {
     const fgErr = validateVideo(s.fgVideo, 'FG演出動画');
     if (fgErr) return fgErr;
     if (typeof s.effectsOn !== 'boolean') return '演出動画のオン・オフの値が正しくありません';
-    return validateBanner(s.banner);
+    return validateBanner(s.banner) || validatePenalty(s.penalty);
 }
 
 // ==========================================================================
@@ -229,6 +259,14 @@ function loadState() {
                 console.log(`[起動] 以前の形式の保存データのため、対戦${i + 1}に「表示する」（チェックあり）を追加しました`);
             }
         });
+    }
+    if (!('penalty' in s)) {
+        s.penalty = '';
+        console.log('[起動] 以前の形式の保存データのため、反則表示の欄（出さない）を追加しました');
+    } else if (s.penalty !== '') {
+        // 反則の表示はその場かぎりのもの。起動し直したときに、急にビジョンへ出ないよう消してから始める
+        console.log(`[起動] 前回の終了時に出ていた反則表示（${s.penalty}）を消して始めます`);
+        s.penalty = '';
     }
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
@@ -417,6 +455,17 @@ function applyControl(action, val, team, q) {
             break;
         case 'toggleBannerFooter':   // バナーのフッター（日付・会場・キックオフ）のあり／なし
             next.banner.footer = !next.banner.footer;
+            break;
+        case 'showPenalty': {        // 反則の画像をビジョンに出す (val=ファイル名の先頭の番号。例: 6 → 06_10yd_ホールディング.png)
+            if (!/^\d+$/.test(val || '')) throw new Error(`val に反則の番号を指定してください (${val})`);
+            const hit = listPenalties().filter(p => p.no === Number(val));
+            if (hit.length === 0) throw new Error(`番号 ${val} の反則の画像がありません`);
+            if (hit.length > 1) throw new Error(`番号 ${val} の反則の画像が複数あります（${hit.map(p => p.path).join('、')}）。番号が重ならないようにしてください`);
+            next.penalty = hit[0].path;
+            break;
+        }
+        case 'hidePenalty':          // 反則の表示を消す
+            next.penalty = '';
             break;
         case 'setPeriod':            // val=1〜5 (5=OT)
             next.period = num();
@@ -654,6 +703,12 @@ function handleRequest(req, res) {
             return;
         }
         return sendJson(res, 405, { error: 'GET か POST で呼び出してください' });
+    }
+
+    // 3.55 反則画像の一覧（penalties/ フォルダの中身。画像を足したときは管理画面の「一覧を読み直す」で反映）
+    if (pathname === '/api/penalties') {
+        if (req.method !== 'GET') return sendJson(res, 405, { error: 'GET で呼び出してください' });
+        return sendJson(res, 200, listPenalties());
     }
 
     // 3.6 表示画面からのお知らせ（動画が再生できなかった等）を管理画面へ伝える

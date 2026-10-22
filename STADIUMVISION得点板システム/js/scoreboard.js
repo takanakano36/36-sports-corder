@@ -245,10 +245,47 @@ function connect() {
     es.addEventListener("UPDATE_STATE", ev => {
         state = JSON.parse(ev.data);
         render();
+        renderPenalty(state.penalty);
     });
     es.addEventListener("PLAY_EFFECT", ev => playEffect(JSON.parse(ev.data)));
     es.addEventListener("STOP_EFFECT", () => endEffect());
     es.onerror = () => console.warn("サーバーとの接続が切れました。自動で再接続します。");
+}
+
+// --------------------------------------------------------------------------
+// 反則の画像：管理画面のボタンで全画面に出す。画像を読み込み終えてから出すので、途中まで描かれた絵は映らない
+// （対戦バナー専用の表示画面には出さない。得点板の表示画面に出る）
+// --------------------------------------------------------------------------
+const pen = document.getElementById("pen");
+const penImg = document.getElementById("pen-img");
+let penShowing = "";   // いま出している（出そうとしている）画像
+let penHideTimer = null;
+
+function renderPenalty(src) {
+    if (ONLY_BANNER || src === penShowing) return;
+    penShowing = src;
+    clearTimeout(penHideTimer);
+    if (!src) {
+        pen.classList.remove("show");
+        penHideTimer = setTimeout(() => { pen.classList.add("hidden"); penImg.removeAttribute("src"); }, 320);
+        return;
+    }
+    const img = new Image();
+    img.onload = () => {
+        if (penShowing !== src) return;   // 読み込み中に別の反則が押された・消された
+        penImg.src = src;
+        pen.classList.remove("hidden");
+        void pen.offsetWidth;             // 表示の準備を確定させてから出す（ふわっと出す動きのため）
+        pen.classList.add("show");
+    };
+    img.onerror = () => {
+        if (penShowing !== src) return;
+        // 前の反則が出たままにならないよう、消して得点板に戻してから知らせる
+        pen.classList.remove("show");
+        penHideTimer = setTimeout(() => { pen.classList.add("hidden"); penImg.removeAttribute("src"); }, 320);
+        notice(`反則の画像を読み込めませんでした（${src}）。ビジョンは得点板に戻しました`);
+    };
+    img.src = src;
 }
 
 // --------------------------------------------------------------------------

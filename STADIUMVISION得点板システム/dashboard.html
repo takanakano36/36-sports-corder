@@ -49,6 +49,19 @@
             </table>
             <p class="note">数字を書き換えてEnterキー（または別の場所をクリック）で反映します。</p>
         </div>
+
+        <div class="panel pen-panel">
+            <h2>反則 <small>押すとビジョンに全画面で出ます。もう一度押すか「消す」で得点板に戻ります</small></h2>
+            <div class="pen-now">
+                <span class="pen-now-label" id="pen-now">表示していません</span>
+                <button type="button" class="btn danger" id="btn-pen-hide">■ 消す</button>
+            </div>
+            <div id="pen-groups"></div>
+            <div class="pen-foot">
+                <button type="button" class="btn small" id="btn-pen-reload">一覧を読み直す</button>
+                <span class="hint">反則の画像を足したり差し替えたりしたときに押します</span>
+            </div>
+        </div>
     </section>
 
     <!-- ===== 中央列：試合中の操作 ===== -->
@@ -307,6 +320,7 @@
     </section>
 </main>
 
+<script src="js/penalty_admin.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/banner_admin.js"></script>
 </body>

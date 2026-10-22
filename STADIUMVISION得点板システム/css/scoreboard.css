@@ -160,6 +160,11 @@ html, body { width: 100%; height: 100%; background: #000; overflow: hidden; curs
 .board.only-banner { background: #000; }
 
 /* 演出動画（TD・FG）：得点板の上に全画面で重ね、ふわっと出し入れする */
+/* 反則の画像（対戦バナーより上、演出動画より下） */
+.pen { position: absolute; inset: 0; z-index: 45; background: #000; opacity: 0; transition: opacity .3s ease; }
+.pen.show { opacity: 1; }
+.pen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.board.only-banner .pen { display: none; }
 .fx { position: absolute; inset: 0; z-index: 50; background: #000; opacity: 0; transition: opacity .25s ease; }
 .fx.show { opacity: 1; }
 .fx video { width: 100%; height: 100%; object-fit: contain; display: block; }

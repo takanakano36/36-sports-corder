@@ -229,6 +229,8 @@ function render() {
     setValue($("#tournament"), s.tournament);
     // 対戦バナーの画面（js/banner_admin.js）
     renderBannerAdmin();
+    // 反則（js/penalty_admin.js）
+    renderPenaltyAdmin();
 }
 
 function renderCandidates(box, logo) {
@@ -406,7 +408,7 @@ function bindEvents() {
         });
     });
     $("#btn-reset").addEventListener("click", () => {
-        if (!confirm("得点・クォーター・タイムアウト・攻撃権・ダウンを試合開始前の状態に戻します。\n（大会名・チーム名・ロゴ・色はそのまま）\nよろしいですか？")) return;
+        if (!confirm("得点・クォーター・タイムアウト・攻撃権・ダウンを試合開始前の状態に戻します（反則の表示も消します）。\n（大会名・チーム名・ロゴ・色はそのまま）\nよろしいですか？")) return;
         patch({
             home: { q: [0, 0, 0, 0, 0], to: 3 },
             away: { q: [0, 0, 0, 0, 0], to: 3 },
@@ -414,7 +416,8 @@ function bindEvents() {
             possession: "none",
             down: 1,
             togo: "10",
-            ballOn: 25
+            ballOn: 25,
+            penalty: ""
         });
     });
 }
@@ -480,6 +483,7 @@ async function uploadLogo(inp, onPath = p => patch({ [sideOf(inp)]: { logo: p } 
 // --------------------------------------------------------------------------
 buildQEdit();
 bindEvents();
-Promise.all([loadLogos(), loadVideos()])
+bindPenaltyEvents();
+Promise.all([loadLogos(), loadVideos(), loadPenalties()])
     .then(connect)
     .catch(e => showError(`${e.message}。デスクトップの「得点板 管理画面」でサーバーを起動してから開いてください。`));
