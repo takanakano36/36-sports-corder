@@ -1028,7 +1028,14 @@ function buildOneshotFromRows(rows) {
 function applyOneshotRows({ parsedHome, parsedAway }) {
     if (parsedHome.length > 0) oneshotPlayers.HOME = parsedHome;
     if (parsedAway.length > 0) oneshotPlayers.AWAY = parsedAway;
-    renderOneshotListTable();
+    // 片側だけ読み込んだときは、その側のタブへ自動で切り替える(別のタブのままだと「読み込まれていない」ように見えるため)
+    if (parsedHome.length > 0 && parsedAway.length === 0) {
+        switchOneshotTab('HOME');
+    } else if (parsedAway.length > 0 && parsedHome.length === 0) {
+        switchOneshotTab('AWAY');
+    } else {
+        renderOneshotListTable();
+    }
     alert(`紹介選手データをロードしました。\n(HOME: ${parsedHome.length}件 / AWAY: ${parsedAway.length}件)`);
 }
 
@@ -1055,6 +1062,12 @@ function renderOneshotListTable() {
     if (!table || !tbody || !placeholder) return;
 
     const listData = oneshotPlayers[currentOneshotTab] || [];
+
+    // タブに読み込み済みの人数を表示する
+    const tabHome = document.getElementById("btn-oneshot-tab-home");
+    const tabAway = document.getElementById("btn-oneshot-tab-away");
+    if (tabHome) tabHome.textContent = `HOME 紹介リスト (${(oneshotPlayers.HOME || []).length}人)`;
+    if (tabAway) tabAway.textContent = `AWAY 紹介リスト (${(oneshotPlayers.AWAY || []).length}人)`;
 
     if (listData.length === 0) {
         table.style.display = "none";
