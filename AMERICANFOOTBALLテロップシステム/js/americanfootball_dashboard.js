@@ -227,6 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initCameraCapture();
     initRosterCSVDropZone();
     initOneshotCSVDropZone();
+    initGlobalDropGuard();
     initStreamDeckHID();
     renderStreamDeckPreview();
     const previewEl = document.getElementById('streamdeck-keypad-preview');
@@ -903,52 +904,90 @@ function isUTF8Bytes(bytes) {
 }
 
 function handleOneshotCSVFile(input) {
-    processOneshotFile(input.files[0]);
+    processOneshotFiles(Array.from(input.files || []));
+    input.value = ''; // 同じファイルをもう一度選んでも読み込めるようにする
 }
 
-async function processOneshotFile(file) {
-    if (!file) return;
+// 1ファイル分の行データ(CSV/Excel共通)を読み出す
+function readOneshotFileRows(file) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const looksLikeExcel = await isExcelFile(file, ext);
+            if (looksLikeExcel) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        resolve(XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' }));
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = () => reject(new Error('ファイルを読み込めませんでした'));
+                reader.readAsArrayBuffer(file);
+            } else {
+                readCSVFileAuto(file, (text) => {
+                    const lines = text.split(/\r?\n/);
+                    resolve(lines.map(l => l.trim()).filter(l => l).map(l => l.split(',').map(c => c.trim())));
+                });
+            }
+        } catch (err) { reject(err); }
+    });
+}
 
-    const ext = file.name.split('.').pop().toLowerCase();
-    const looksLikeExcel = await isExcelFile(file, ext);
-
-    if (looksLikeExcel) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
-            applyOneshotRows(buildOneshotFromRows(rows));
-        };
-        reader.readAsArrayBuffer(file);
-    } else {
-        readCSVFileAuto(file, (text) => {
-            const lines = text.split(/\r?\n/);
-            const rows = lines.map(l => l.trim()).filter(l => l).map(l => l.split(',').map(c => c.trim()));
-            applyOneshotRows(buildOneshotFromRows(rows));
-        });
+// 複数ファイルをまとめて読み込み、HOME/AWAYそれぞれを1回で反映する
+async function processOneshotFiles(files) {
+    const list = (files || []).filter(Boolean);
+    if (list.length === 0) return;
+    const parsedHome = [];
+    const parsedAway = [];
+    const failed = [];
+    for (const file of list) {
+        try {
+            const rows = await readOneshotFileRows(file);
+            const r = buildOneshotFromRows(rows);
+            // 同じ側が複数ファイルにある場合は、後から読んだファイルを優先する
+            if (r.parsedHome.length > 0) { parsedHome.length = 0; parsedHome.push(...r.parsedHome); }
+            if (r.parsedAway.length > 0) { parsedAway.length = 0; parsedAway.push(...r.parsedAway); }
+        } catch (err) {
+            failed.push(`${file.name}(${err.message})`);
+        }
+    }
+    if (failed.length > 0) {
+        alert(`次のファイルは読み込めませんでした:\n${failed.join('\n')}`);
+    }
+    if (parsedHome.length > 0 || parsedAway.length > 0) {
+        applyOneshotRows({ parsedHome, parsedAway });
+    } else if (failed.length === 0) {
+        alert('選手データが見つかりませんでした。CSVの列順(チーム,サイド,背番号,ポジション,氏名,学年,備考)をご確認ください。');
     }
 }
 
-function initOneshotCSVDropZone() {
-    const dropZone = document.getElementById('oneshot-csv-drop-zone');
-    if (!dropZone) return;
+async function processOneshotFile(file) {
+    await processOneshotFiles([file]);
+}
 
+function initOneshotCSVDropZone() {
+    const inner = document.getElementById('oneshot-csv-drop-zone');
+    if (!inner) return;
+    // ボタン付近だけでなく、選手紹介パネル全体をドロップ先にする
+    const dropZone = inner.closest('.panel-section') || inner;
+
+    const highlight = (on) => {
+        dropZone.style.outline = on ? '2px dashed #3b82f6' : '';
+        dropZone.style.backgroundColor = on ? 'rgba(59, 130, 246, 0.08)' : '';
+    };
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = '#3b82f6';
-        dropZone.style.backgroundColor = 'rgba(59, 130, 246, 0.08)';
+        highlight(true);
     });
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.style.borderColor = 'transparent';
-        dropZone.style.backgroundColor = 'transparent';
+    dropZone.addEventListener('dragleave', (e) => {
+        if (!dropZone.contains(e.relatedTarget)) highlight(false);
     });
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = 'transparent';
-        dropZone.style.backgroundColor = 'transparent';
-        const file = e.dataTransfer.files[0];
-        if (file) processOneshotFile(file);
+        highlight(false);
+        processOneshotFiles(Array.from(e.dataTransfer.files || []));
     });
 }
 
@@ -1178,6 +1217,19 @@ async function isExcelFile(file, ext) {
     } catch (e) {
         return false;
     }
+}
+
+// 枠の外にファイルを落としたとき、ブラウザがそのファイルを開いて操作画面が消えるのを防ぐ
+function initGlobalDropGuard() {
+    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    window.addEventListener('dragover', (e) => {
+        if (hasFiles(e)) e.preventDefault();
+    });
+    window.addEventListener('drop', (e) => {
+        if (!hasFiles(e) || e.defaultPrevented) return;
+        e.preventDefault();
+        alert('ファイルは、「選手紹介」または「選手データ」の枠の中にドロップしてください。');
+    });
 }
 
 function initRosterCSVDropZone() {

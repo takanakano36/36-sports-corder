@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;700;900&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/americanfootball_dashboard.css?v=2">
+    <link rel="stylesheet" href="css/americanfootball_dashboard.css?v=3">
     <!-- Excel/CSV読込用ライブラリ -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -323,11 +323,11 @@
                 <div class="control-group" style="margin-bottom: 12px;">
                     <label class="group-label">紹介選手データ登録 (CSV / Excel)</label>
                     <div id="oneshot-csv-drop-zone" style="display: flex; gap: 8px; margin-bottom: 4px; border: 1px dashed transparent; border-radius: 6px; padding: 4px; transition: border-color 0.2s, background-color 0.2s;">
-                        <input type="file" id="oneshot-csv-file-input" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleOneshotCSVFile(this)">
+                        <input type="file" id="oneshot-csv-file-input" accept=".csv, .xlsx, .xls" multiple style="display: none;" onchange="handleOneshotCSVFile(this)">
                         <button class="btn btn-primary" onclick="document.getElementById('oneshot-csv-file-input').click()" style="flex: 1; font-size:12px; padding:6px;">紹介CSVロード</button>
                         <button class="btn btn-secondary" onclick="loadOneshotDemoList()" style="flex: 1; font-size:12px; padding:6px;">紹介デモデータ</button>
                     </div>
-                    <div style="font-size:10px; color:#64748b; margin-bottom:6px; text-align:center;">またはボタン付近の枠内にファイルをドラッグ&ドロップ</div>
+                    <div style="font-size:10px; color:#64748b; margin-bottom:6px; text-align:center;">または、このパネルのどこにでもファイルをドラッグ&ドロップ(HOMEとAWAYの2ファイルを同時に落としてもOK)</div>
                     
                     <!-- HOME / AWAY 切替タブ (サッカー/野球共通仕様) -->
                     <div style="display: flex; gap: 4px; margin-bottom: 8px;">
@@ -536,6 +536,6 @@
     </div>
 
     <!-- javascript -->
-    <script src="js/americanfootball_dashboard.js?v=2"></script>
+    <script src="js/americanfootball_dashboard.js?v=3"></script>
 </body>
 </html>
