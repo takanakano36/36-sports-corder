@@ -314,7 +314,9 @@ function addInningScore(team, val) {
 
 server.listen(PORT, () => {
     console.log(`======================================================================`);
-    console.log(` ⚾ Baseball Sports Coder Local Server is running on:`);
+    console.log(`  野球用サーバーを起動しました。`);
+    console.log(`  下のアドレスをブラウザで開いてください。`);
+    console.log(`  この黒い画面は、配信が終わるまで閉じないでください。`);
     console.log(`    http://localhost:${PORT}/`);
     console.log(`======================================================================`);
 });

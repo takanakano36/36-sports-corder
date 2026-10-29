@@ -1,8 +1,7 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
-echo ======================================================
-echo  野球用サーバーを起動しています...
-echo  この黒い画面は、配信が終わるまで閉じずにそのままにしてください。
-echo ======================================================
 node server.js
+echo.
+echo Server stopped. If Node.js is not installed, install it first: https://nodejs.org/
 pause

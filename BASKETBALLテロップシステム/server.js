@@ -292,7 +292,9 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`=========================================`);
-  console.log(`🏀 BASKETBALL Coder Server is running!`);
+  console.log(`  バスケットボール用サーバーを起動しました。`);
+  console.log(`  下のアドレスをブラウザで開いてください。`);
+  console.log(`  この黒い画面は、配信が終わるまで閉じないでください。`);
   console.log(`URL: http://localhost:${PORT}`);
   console.log(`=========================================`);
 });

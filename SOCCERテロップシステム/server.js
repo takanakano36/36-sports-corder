@@ -265,7 +265,9 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
     console.log(`======================================================================`);
-    console.log(` ⚽ Soccer Sports Coder Local Server is running on:`);
+    console.log(`  サッカー用サーバーを起動しました。`);
+    console.log(`  下のアドレスをブラウザで開いてください。`);
+    console.log(`  この黒い画面は、配信が終わるまで閉じないでください。`);
     console.log(`    http://localhost:${PORT}/`);
     console.log(`======================================================================`);
 });
