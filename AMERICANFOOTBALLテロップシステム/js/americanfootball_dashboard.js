@@ -1433,6 +1433,9 @@ function openDualFillAndKey() {
     }
 }
 
+const btnOpenOverlay = document.getElementById('btn-open-overlay');
+if (btnOpenOverlay) btnOpenOverlay.addEventListener('click', openOverlayWindow);
+
 const btnOpenDual = document.getElementById('btn-open-dual');
 if (btnOpenDual) btnOpenDual.addEventListener('click', openDualFillAndKey);
 

@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>アメフト中継用スポーツコーダー - オーバーレイ画面</title>
-    <link rel="stylesheet" href="css/americanfootball_overlay.css?v=13">
+    <link rel="stylesheet" href="css/americanfootball_overlay.css?v=14">
 </head>
 <body>
     <!-- クロマキー背景色 (デフォルト: グリーンバック) -->
     <div id="chromakey-bg" class="chromakey-bg green"></div>
+
+    <!-- Key(切り抜き)画面用: 透明度を白黒に変換するフィルター (不透明=白 / 透明=黒) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <filter id="key-matte" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 0 1"/>
+        </filter>
+    </svg>
 
     <!-- ==========================================================================
        1. 小得点板 (画面左上配置)

@@ -1190,13 +1190,15 @@ body.key-mode {
 body.key-mode .chromakey-bg {
     background-color: #000000 !important;
 }
-body.key-mode #scoreboard-container,
-body.key-mode #scoreboard-small,
+/* 透明度をそのまま白黒に変換する(不透明=白、透明=黒、半透明=灰)。要素の色や影も、見た目どおりの濃さで切り抜きになる */
+body.key-mode #overlay-small-scoreboard,
+body.key-mode #overlay-large-scoreboard,
+body.key-mode #overlay-runningscore,
 body.key-mode #overlay-vs,
-body.key-mode #player-telop-container,
 body.key-mode #overlay-lineup,
-body.key-mode #image-telop-wrapper {
-    filter: brightness(0) invert(1) contrast(100);
+body.key-mode #telop-wrapper,
+body.key-mode #overlay-image-telop {
+    filter: url(#key-matte);
 }
 body.key-mode .fullscreen-btn {
     display: none !important;
