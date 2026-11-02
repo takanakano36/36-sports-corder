@@ -48,6 +48,10 @@
         <label class="mb-loop"><input type="checkbox" id="mb-loop"> くり返し</label>
         <label class="mb-vol">音量<input type="range" id="mb-vol" min="0" max="100" step="1"><span id="mb-vol-num"></span></label>
         <select id="mb-sink" class="mb-select mb-sink" title="音楽を鳴らす出力先（イヤホンジャックなど）"></select>
+        <button type="button" class="btn small mb-folder" id="mb-folder" title="クリックすると、曲が入っているフォルダを選べます"><span id="mb-folder-name"></span></button>
+        <button type="button" class="btn small hidden" id="mb-folder-resume"></button>
+        <button type="button" class="btn small hidden" id="mb-folder-default" title="得点板のフォルダの中の music フォルダの曲に戻します">既定のフォルダに戻す</button>
+        <input type="file" id="mb-folder-input" webkitdirectory multiple hidden>
         <button type="button" class="btn small" id="mb-reload" title="曲を足したり差し替えたりしたときに押します">⟳ 曲を読み直す</button>
     </div>
     <div class="mb-songs" id="mb-songs"></div>

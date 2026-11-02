@@ -55,6 +55,7 @@ button, input, select { font: inherit; color: inherit; }
 .mb-stop:not(:disabled):hover { background: #5b1d1d; }
 .mb-select { background: #0b0e14; border: 1px solid var(--line); border-radius: 6px; padding: 6px; font-size: 12px; }
 .mb-sink { max-width: 230px; }
+.mb-folder { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mb-loop, .mb-vol { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .mb-loop input { width: 16px; height: 16px; accent-color: var(--accent); }
 .mb-vol input { width: 120px; accent-color: var(--accent); }
