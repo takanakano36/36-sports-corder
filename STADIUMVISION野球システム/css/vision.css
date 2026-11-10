@@ -76,6 +76,10 @@ body.monitor { cursor: default; }
     padding: 4cqh;
 }
 
+/* OBS用（?camera=obs）：背景を透明にし、カメラの枠だけ透明にする */
+html.cam-hole, body.cam-hole, body.cam-hole #viewport, body.cam-hole #stage { background: transparent; }
+.slot.hole { background: transparent; }
+
 #black {
     position: absolute;
     inset: 0;

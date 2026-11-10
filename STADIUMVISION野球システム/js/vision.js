@@ -21,6 +21,11 @@ const params = new URLSearchParams(location.search);
 const VIEW = ['left', 'right'].includes(params.get('view')) ? params.get('view') : 'all';
 const MONITOR = params.get('monitor') || '';       // '' / pvw / pgm
 const NO_CAM = params.get('nocam') === '1';
+// ?camera=obs … OBS用。カメラの枠は透明にしてカメラを開かない
+// （OBSで、このブラウザソースの下に「映像キャプチャデバイス」を敷くと、その枠から見える）
+const CAM_HOLE = params.get('camera') === 'obs' && !MONITOR;
+// （OBSの中のブラウザは古いことがあるため、新しいCSSの書き方を使わずに html・body の両方に印を付ける）
+if (CAM_HOLE) { document.documentElement.classList.add('cam-hole'); document.body.classList.add('cam-hole'); }
 if (MONITOR) document.body.classList.add('monitor');
 if (params.get('guide') === '1') document.body.classList.add('show-guide');
 
@@ -282,6 +287,7 @@ function buildSlotContent(slotEl, src) {
             break;
         }
         case 'camera': {
+            if (CAM_HOLE) { slotEl.classList.add('hole'); break; }
             if (NO_CAM) { msg(slotEl, '📹 ' + esc(src.cam || 'cam1') + '<br><small>(モニター表示OFF)</small>'); break; }
             const v = document.createElement('video');
             v.className = 'media';
@@ -399,7 +405,22 @@ function buildLayer(scene) {
         applyCrop(el, scene.slots[name]);
         layer.appendChild(el);
     });
+    applyHoles(layer, scene);
     return layer;
+}
+
+// OBS用：16:9の枠がカメラのとき、下にある背景(32:9)もその形にくり抜く（OBSのカメラが見えるように）
+function applyHoles(layer, scene) {
+    if (!CAM_HOLE) return;
+    const bg = layer.querySelector('.slot-bg');
+    if (!bg) return;
+    const single = scene.slots.single;
+    if (scene.layout === 'single' && single && single.type === 'camera') {
+        const g = slotGeometry(scene, 'single');
+        bg.style.clipPath = `path(evenodd, 'M0 0 H${STAGE_W} V${STAGE_H} H0 Z M${g.left} 0 H${g.left + g.width} V${STAGE_H} H${g.left} Z')`;
+    } else {
+        bg.style.clipPath = '';
+    }
 }
 
 // 同じ素材のまま位置・トリミングだけ変わった場合は、フェードせずその場で更新
@@ -410,6 +431,7 @@ function updateLayerInPlace(layer, scene) {
         el.style.left = g.left + 'px';
         applyCrop(el, scene.slots[name]);
     });
+    applyHoles(layer, scene);
 }
 
 function disposeLayer(layer) {

@@ -14,7 +14,8 @@ const MEDIA_TYPES = ["slide", "url", "camera"];   // トリミングできる素
 const TEAMS = ["HOME", "AWAY"];
 const PREF_KEY = "stadiumvision-baseball.prefs";
 // OBSに入れる表示画面のアドレス（layer-width / layer-height は、OBSにドラッグしたときのブラウザソースの大きさ）
-const OBS_URL = `${location.origin}/vision.html?layer-width=3840&layer-height=1080`;
+// camera=obs：カメラの枠を透明にする（キャプチャーボードはOBSの「映像キャプチャデバイス」で下に敷く）
+const OBS_URL = `${location.origin}/vision.html?camera=obs&layer-width=3840&layer-height=1080`;
 const PVW_KEY = "stadiumvision-baseball.preview";
 
 let state = null;
