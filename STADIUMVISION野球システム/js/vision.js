@@ -8,7 +8,8 @@
 
 // ファイルをダブルクリックで開いた場合（file://）はサーバーと通信できないため、
 // サーバー経由の正しいアドレスに切り替える
-if (location.protocol === "file:") {
+// OBSの「ローカルファイル」で開いた場合（http://absolute/...）も同じ
+if (location.protocol === "file:" || location.hostname === "absolute") {
     location.replace("http://localhost:3007/vision.html");
 }
 
@@ -292,7 +293,9 @@ function buildSlotContent(slotEl, src) {
                 .then(stream => { v.srcObject = stream; v.play().catch(() => {}); })
                 .catch(err => {
                     v.remove();
-                    notice(`カメラ(${src.cam})を開けませんでした：${err.name} ${err.message}。他の画面やソフトがキャプチャーボードを使っていないか確かめてください`);
+                    notice(window.obsstudio
+                        ? `OBSの中ではカメラ(${src.cam})を開けませんでした（${err.name}）。OBSを「--enable-media-stream」を付けて起動するか、キャプチャーボードはOBSの「映像キャプチャデバイス」で入れてください`
+                        : `カメラ(${src.cam})を開けませんでした：${err.name} ${err.message}。管理画面のプレビューや他のソフトがキャプチャーボードを使っていないか確かめてください`);
                     if (MONITOR) msg(slotEl, 'カメラを開けません (' + esc(src.cam) + ')<br><small>' + esc(err.message) + '</small>');
                 });
             break;

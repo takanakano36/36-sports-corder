@@ -12,6 +12,11 @@
     <h1>スタジアムビジョン野球 <small>32:9（FHD×2）管理画面</small></h1>
     <span class="conn" id="conn">接続中…</span>
     <div class="top-actions">
+        <div class="obs-box" title="OBSに表示画面を入れるときに使います（最初の1回だけ）。OBSのキャンバスは 3840×1080 にします">
+            <span class="obs-label">OBSに入れる</span>
+            <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
+            <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
+        </div>
         <div class="obs-box" title="確認用に表示画面をこのPCで開きます。本番のHDMI出力はデスクトップの「野球ビジョン HDMI出力」を使います">
             <span class="obs-label">表示画面を開く</span>
             <button type="button" class="btn small" data-open="all">全体</button>
@@ -299,8 +304,10 @@
                 <button type="button" class="btn small" id="btn-devices">カメラの一覧を出す（最初の1回は許可が必要）</button>
                 <label class="field">カメラ1 <select id="cam1-select" class="text-input" data-cam="cam1"></select></label>
                 <label class="field">カメラ2 <select id="cam2-select" class="text-input" data-cam="cam2"></select></label>
-                <label class="toggle"><input type="checkbox" id="opt-monitor-cam" checked> 管理画面のプレビューにもカメラを映す</label>
-                <p class="note">キャプチャーボードによっては、同時に複数の画面で開けない機種があります。そのときは上のチェックを外してください。</p>
+                <label class="toggle"><input type="checkbox" id="opt-monitor-cam"> 管理画面のプレビューにもカメラを映す</label>
+                <p class="note">I-O DATA などのUSBキャプチャーボードは、別々のブラウザ（管理画面とビジョン出力）から同時に開けないことがあります。
+                    そのため、初めはプレビューにカメラを映さない設定にしています（プレビューには「📹 カメラ1」とだけ出ます）。
+                    同時に開けることを確かめてから、チェックを入れてください。</p>
             </div>
             <div class="panel">
                 <h2>チーム</h2>

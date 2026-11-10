@@ -13,6 +13,8 @@ const CROP_KEYS = ["fit", "posX", "posY", "zoom"];
 const MEDIA_TYPES = ["slide", "url", "camera"];   // トリミングできる素材
 const TEAMS = ["HOME", "AWAY"];
 const PREF_KEY = "stadiumvision-baseball.prefs";
+// OBSに入れる表示画面のアドレス（layer-width / layer-height は、OBSにドラッグしたときのブラウザソースの大きさ）
+const OBS_URL = `${location.origin}/vision.html?layer-width=3840&layer-height=1080`;
 const PVW_KEY = "stadiumvision-baseball.preview";
 
 let state = null;
@@ -611,6 +613,11 @@ function sendPlayer(card, subLabel) {
     let src;
     if ($("#opt-player-slide").checked && slide && card !== "hr") {
         src = { type: "slide", file: slide };
+        // 選手スライドは16:9。「32:9 一枚」のままだと上下が切れるため、「16:9 1枚」の枠に入れる（背景・位置はそのまま）
+        if (pvw.layout === "wide") {
+            pvw.layout = "single";
+            selectedSlot = "single";
+        }
     } else {
         src = { type: "player", card, player: playerData(p), showStats: $("#opt-player-stats").checked, showComment: $("#opt-player-comment").checked };
         if (label) src.label = label;
@@ -922,6 +929,26 @@ function bindEvents() {
     $$("[data-open]").forEach(b => b.addEventListener("click", () => openOutput(b.dataset.open)));
     $("#opt-guide").addEventListener("change", e => patch({ guide: e.target.checked }));
     $("#btn-black").addEventListener("click", () => control("black"));
+
+    // OBSに入れる（ドラッグ＆ドロップ／アドレスのコピー）※得点板システムと同じ
+    const drag = $("#obs-drag");
+    drag.href = OBS_URL;
+    drag.addEventListener("click", e => {
+        e.preventDefault();
+        showInfo("このボタンを、クリックではなくOBSの画面へドラッグ＆ドロップしてください。");
+    });
+    drag.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("text/uri-list", OBS_URL);
+        e.dataTransfer.setData("text/plain", OBS_URL);
+    });
+    $("#btn-copy-url").addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(OBS_URL);
+            showInfo("アドレスをコピーしました。OBSのブラウザソースのURL欄に貼り付けてください（幅3840・高さ1080）。");
+        } catch (e) {
+            showError(`コピーできませんでした。次のアドレスを手で入力してください：${OBS_URL}`);
+        }
+    });
 
     $$("#layout-seg button").forEach(b => b.addEventListener("click", () => setLayout(b.dataset.layout)));
     $$("[data-singlex]").forEach(b => b.addEventListener("click", () => setSingleX(b.dataset.singlex)));

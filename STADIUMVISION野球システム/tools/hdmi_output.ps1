@@ -2,9 +2,9 @@
 # スタジアムビジョン野球システム - HDMI出力（32:9 = フルHD 2画面）
 #   1. サーバーが動いていなければ起動する
 #   2. ビジョン用の画面（主画面以外）を探す
-#        ・2台ある          → 左の画面に「左半分」、右の画面に「右半分」を出す
-#        ・3840×1080 が1台   → その画面に「全体」を出す（NVIDIA Mosaic・LEDコントローラー等）
-#        ・それ以外          → どう出すかを番号で選ぶ
+#        ・1台              → その画面に「全体」(3840×1080) を出す（ビジョンへHDMI 1本。いちばん普通の形）
+#        ・2台              → 左の画面に「左半分」、右の画面に「右半分」を出す（HDMI 2本の場合）
+#        ・3台以上          → どう出すかを番号で選ぶ
 #   3. Microsoft Edge のキオスクモードで、それぞれ全画面で開く
 #   -DryRun を付けると、実際には開かずに「どの画面に出すか」だけを表示する（確認用）
 #   ※ 「STADIUMVISION得点板システム」の HDMI出力 をもとに、2画面出力に対応させたもの
@@ -84,8 +84,8 @@ if ($others.Count -eq 0) {
     $ans = Read-Host '確認のため、いまの画面に全体（32:9）を表示しますか？（Y = 表示する ／ それ以外 = やめる）'
     if ($ans -notmatch '^[Yy]$') { exit 1 }
     $plan += @{ View = 'all'; Screen = ($screens | Where-Object { $_.Primary }) }
-} elseif ($others.Count -eq 1 -and (Is-Wide $others[0])) {
-    # 2画面を1画面としてまとめている（3840×1080 など）
+} elseif ($others.Count -eq 1) {
+    # ビジョンへHDMI 1本（3840×1080）
     $plan += @{ View = 'all'; Screen = $others[0] }
 } elseif ($others.Count -eq 2) {
     # 左にある画面に左半分、右にある画面に右半分
@@ -123,6 +123,8 @@ foreach ($p in $plan) {
     }
     if ($p.View -eq 'all' -and -not (Is-Wide $p.Screen)) {
         Write-Host '  ※この画面は32:9ではないため、上下に黒い余白が付いて小さく表示されます。' -ForegroundColor Yellow
+        Write-Host '    Windowsの「設定」→「ディスプレイ」で、ビジョンの画面の解像度を 3840×1080 にしてください。' -ForegroundColor Yellow
+        Write-Host '    一覧に 3840×1080 が無いときは、グラフィックの設定（NVIDIA コントロールパネル等）の「カスタム解像度」で作ります。' -ForegroundColor Yellow
     }
 }
 
