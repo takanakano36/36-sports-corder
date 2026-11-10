@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="1080" viewBox="0 0 3840 1080">
+  <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#0b1f4a"/><stop offset="0.5" stop-color="#14306e"/><stop offset="1" stop-color="#0b1f4a"/></linearGradient></defs>
+  <rect width="3840" height="1080" fill="url(#g)"/>
+  <rect y="980" width="3840" height="100" fill="#b91c1c"/>
+  <text x="1920" y="500" fill="#fff" font-size="220" font-weight="900" text-anchor="middle" font-family="sans-serif">WELCOME TO THE BALLPARK</text>
+  <text x="1920" y="720" fill="#facc15" font-size="110" font-weight="700" text-anchor="middle" font-family="sans-serif">SAMPLE 32:9 SLIDE (3840×1080)</text>
+</svg>

@@ -1,0 +1,3 @@
+# Mac用の起動ファイルは、改行をMacの形式（LF）のままにする（CRLFになると動かない）
+*.command text eol=lf
+*.sh text eol=lf

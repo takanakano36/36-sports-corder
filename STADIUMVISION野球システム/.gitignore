@@ -1,0 +1,16 @@
+# 試合・式典の保存データ（式次第・名簿など）
+data/
+
+# 選手の顔写真・選手スライド（実在の個人の写真・名前入りの素材）は公開しない。フォルダだけ残す
+photos/*
+!photos/.gitkeep
+players/*
+!players/.gitkeep
+
+# 音楽・登場曲（各自の音源・著作物のため）もフォルダだけ残して中身は除外する
+music/*
+!music/.gitkeep
+
+# スライド（各チーム・大会の素材）は、動作確認用の sample/ だけ残す
+slides/*
+!slides/sample/

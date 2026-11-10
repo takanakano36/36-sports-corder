@@ -1147,6 +1147,15 @@
         desc: 'ダウン＆ディスタンス(DOWN & TO GO)、ボールオン位置、クォーター時間、ポゼッション表示対応',
         dashUrl: 'http://localhost:3001/americanfootball_dashboard.html',
         overlayUrl: 'http://localhost:3001/americanfootball_overlay.html'
+      },
+      {
+        id: 'stadiumvision-baseball',
+        nameJa: '野球場ビジョン (32:9)',
+        nameEn: 'STADIUM VISION',
+        icon: 'baseball',
+        desc: '32:9(フルHD×2)ビジョン送出。スライド登録、16:9左右/位置指定/トリミング、キャプチャーカメラ、選手紹介(打席・交代・HR競争)、式次第、音楽バー',
+        dashUrl: 'http://localhost:3007/',
+        overlayUrl: 'http://localhost:3007/vision.html'
       }
     ];
 
@@ -1156,12 +1165,37 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const list = JSON.parse(saved);
+          // 後から追加された標準カード(野球場ビジョン等)を、保存済みの一覧にも1回だけ追加する
+          const added = loadAddedDefaults();
+          let changed = false;
+          DEFAULT_SPORTS.forEach(def => {
+            if (!list.some(s => s.id === def.id) && !added.includes(def.id)) {
+              list.push(def);
+              added.push(def.id);
+              changed = true;
+            }
+          });
+          if (changed) {
+            localStorage.setItem(STORAGE_KEY + '_ADDED', JSON.stringify(added));
+            saveSportsList(list);
+          }
+          return list;
         } catch(e) {
           console.error(e);
         }
       }
       return DEFAULT_SPORTS;
+    }
+
+    // 一度追加した標準カードを利用者が削除した場合に、再び追加しないための記録
+    function loadAddedDefaults() {
+      try {
+        const v = localStorage.getItem(STORAGE_KEY + '_ADDED');
+        if (v) return JSON.parse(v);
+      } catch(e) { /* 読めなければ初期値 */ }
+      // 最初から存在していた5競技は追加済み扱い
+      return ['soccer', 'basketball', 'volleyball', 'baseball', 'americanfootball'];
     }
 
     function saveSportsList(list) {

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <rect width="1920" height="1080" fill="#7c2d12"/>
+  <rect x="160" y="160" width="1600" height="760" fill="none" stroke="#fdba74" stroke-width="16"/>
+  <text x="960" y="520" fill="#fff" font-size="150" font-weight="900" text-anchor="middle" font-family="sans-serif">16:9 B</text>
+  <text x="960" y="680" fill="#fed7aa" font-size="70" text-anchor="middle" font-family="sans-serif">1920×1080 SAMPLE</text>
+  <text x="960" y="90" fill="#fff" font-size="60" text-anchor="middle" font-family="sans-serif">▲ TOP</text>
+  <text x="960" y="1040" fill="#fff" font-size="60" text-anchor="middle" font-family="sans-serif">▼ BOTTOM</text>
+</svg>

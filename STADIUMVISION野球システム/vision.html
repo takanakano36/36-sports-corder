@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スタジアムビジョン野球 表示画面</title>
+    <link rel="stylesheet" href="css/fonts.css">
+    <link rel="stylesheet" href="css/vision.css">
+</head>
+<body>
+    <!--
+      3840×1080 (32:9) のキャンバス。
+      ?view=all   … 1つのウィンドウで 3840×1080 全体を表示 (Mosaic/Eyefinity・LEDプロセッサ等で1画面扱いの場合)
+      ?view=left  … 左半分 (1920×1080) のみ表示 → 1台目のHDMIへ全画面表示
+      ?view=right … 右半分 (1920×1080) のみ表示 → 2台目のHDMIへ全画面表示
+      ?monitor=pvw / pgm … 操作画面内のモニター用 (nocam=1 でカメラを開かない)
+    -->
+    <div id="viewport">
+        <div id="stage" class="waiting">
+            <div id="layers"></div>
+            <div id="black"></div>
+            <div id="guide">
+                <div class="guide-center"></div>
+                <div class="guide-label guide-l">LEFT 1920×1080</div>
+                <div class="guide-label guide-r">RIGHT 1920×1080</div>
+            </div>
+        </div>
+    </div>
+    <div id="conn-lost">サーバーにつながっていません（野球ビジョン 管理画面を起動してください）</div>
+    <script src="js/vision.js"></script>
+</body>
+</html>

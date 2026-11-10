@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>スタジアムビジョン野球 管理画面</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+<header class="topbar">
+    <h1>スタジアムビジョン野球 <small>32:9（FHD×2）管理画面</small></h1>
+    <span class="conn" id="conn">接続中…</span>
+    <div class="top-actions">
+        <div class="obs-box" title="確認用に表示画面をこのPCで開きます。本番のHDMI出力はデスクトップの「野球ビジョン HDMI出力」を使います">
+            <span class="obs-label">表示画面を開く</span>
+            <button type="button" class="btn small" data-open="all">全体</button>
+            <button type="button" class="btn small" data-open="left">左</button>
+            <button type="button" class="btn small" data-open="right">右</button>
+        </div>
+        <label class="toggle small-toggle" title="ビジョンの左右2画面の境目に赤い線を出します（設置・調整用）"><input type="checkbox" id="opt-guide"> 境目の線</label>
+        <button type="button" id="btn-black" class="btn btn-black" title="ビジョンを黒にします。もう一度押すと元に戻ります">BLACK</button>
+    </div>
+</header>
+
+
+<!-- 音楽バー：このPCで曲を鳴らす（どのタブを開いていても、下にスクロールしても、画面の一番上に残る） -->
+<div class="musicbar" id="musicbar">
+    <div class="mb-ctrl">
+        <span class="mb-title">♪ 音楽</span>
+        <div class="mb-now" id="mb-now">
+            <span class="mb-now-name" id="mb-now-name">停止中</span>
+            <span class="mb-time" id="mb-time"></span>
+            <i class="mb-prog"><b id="mb-prog"></b></i>
+        </div>
+        <button type="button" class="btn mb-stop" id="mb-stop">■ STOP</button>
+        <select id="mb-fade" class="mb-select" title="STOPを押してから止まるまでの秒数">
+            <option value="0">フェードなし</option>
+            <option value="1">フェード 1秒</option>
+            <option value="2">フェード 2秒</option>
+            <option value="3">フェード 3秒</option>
+            <option value="5">フェード 5秒</option>
+        </select>
+        <label class="mb-loop"><input type="checkbox" id="mb-loop"> くり返し</label>
+        <label class="mb-vol">音量<input type="range" id="mb-vol" min="0" max="100" step="1"><span id="mb-vol-num"></span></label>
+        <select id="mb-sink" class="mb-select mb-sink" title="音楽を鳴らす出力先（イヤホンジャックなど）"></select>
+        <button type="button" class="btn small mb-folder" id="mb-folder" title="クリックすると、曲が入っているフォルダを選べます"><span id="mb-folder-name"></span></button>
+        <button type="button" class="btn small hidden" id="mb-folder-resume"></button>
+        <button type="button" class="btn small hidden" id="mb-folder-default" title="野球ビジョンのフォルダの中の music フォルダの曲に戻します">既定のフォルダに戻す</button>
+        <input type="file" id="mb-folder-input" webkitdirectory multiple hidden>
+        <button type="button" class="btn small" id="mb-reload" title="曲を足したり差し替えたりしたときに押します">⟳ 曲を読み直す</button>
+    </div>
+    <div class="mb-songs" id="mb-songs"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<main class="layout">
+    <!-- ===== 左列：プレビュー・本線と画面の組み立て ===== -->
+    <section class="col">
+        <div class="panel">
+            <h2><span class="tally pvw">PREVIEW</span> 次に出す画面 <small id="pvw-desc"></small></h2>
+            <div class="monitor pvw" id="pvw-monitor">
+                <iframe id="pvw-frame" title="プレビュー" tabindex="-1"></iframe>
+                <div class="slot-overlay" id="slot-overlay"></div>
+            </div>
+            <p class="note">枠をクリックで選択。選んだ枠はドラッグでトリミング位置、マウスホイールで拡大・縮小できます。</p>
+        </div>
+
+        <div class="panel">
+            <div class="ctrl-row">
+                <span class="lbl">レイアウト</span>
+                <div class="seg" id="layout-seg">
+                    <button type="button" data-layout="wide">32:9 一枚</button>
+                    <button type="button" data-layout="split">16:9 左右2枚</button>
+                    <button type="button" data-layout="single">16:9 1枚（位置指定）</button>
+                </div>
+            </div>
+            <div class="ctrl-row" id="single-pos">
+                <span class="lbl">16:9の位置</span>
+                <div class="seg seg-sm">
+                    <button type="button" data-singlex="0">左</button>
+                    <button type="button" data-singlex="50">中央</button>
+                    <button type="button" data-singlex="100">右</button>
+                </div>
+                <input type="range" id="single-x" min="0" max="100" step="1" class="range">
+                <span id="single-x-val" class="ow"></span>
+            </div>
+            <div class="ctrl-row">
+                <span class="lbl">出す枠</span>
+                <div class="seg seg-sm" id="slot-seg"></div>
+                <span class="slot-src" id="slot-src"></span>
+            </div>
+            <div class="ctrl-row crop-row" id="crop-row">
+                <span class="lbl">トリミング</span>
+                <div class="seg seg-sm" id="fit-seg">
+                    <button type="button" data-fit="cover" title="枠いっぱいに出し、はみ出た所を切り取る">枠いっぱい</button>
+                    <button type="button" data-fit="contain" title="素材の全体を出す（すき間は黒）">全体を出す</button>
+                </div>
+                <span class="crop-field">上下
+                    <span class="seg seg-xs"><button type="button" data-posy="0">上</button><button type="button" data-posy="50">中</button><button type="button" data-posy="100">下</button></span>
+                    <input type="range" id="crop-posY" min="0" max="100" step="0.5" class="range">
+                    <input type="number" id="crop-posY-num" class="num-input sm" min="0" max="100" step="0.5">
+                </span>
+                <span class="crop-field">左右
+                    <input type="range" id="crop-posX" min="0" max="100" step="0.5" class="range">
+                    <input type="number" id="crop-posX-num" class="num-input sm" min="0" max="100" step="0.5">
+                </span>
+                <span class="crop-field">拡大
+                    <input type="range" id="crop-zoom" min="100" max="300" step="1" class="range">
+                    <input type="number" id="crop-zoom-num" class="num-input sm" min="100" max="400" step="1">%
+                </span>
+                <button type="button" class="btn small" id="btn-crop-reset">元に戻す</button>
+                <label class="toggle" title="プレビューと本線に同じ素材が出ているとき、位置の調整をそのまま本線にも反映します"><input type="checkbox" id="opt-live-crop"> 本線にもすぐ反映</label>
+            </div>
+        </div>
+
+        <div class="panel take-bar">
+            <div class="seg seg-sm" id="trans-seg">
+                <button type="button" data-trans="cut">CUT</button>
+                <button type="button" data-trans="fade">FADE</button>
+            </div>
+            <label class="toggle">時間 <input type="number" id="trans-ms" class="num-input sm" min="0" max="5000" step="100"> ミリ秒</label>
+            <button type="button" class="btn" id="btn-pgm-to-pvw" title="いま本線に出ている画面をプレビューに読み込みます">本線をプレビューへ</button>
+            <label class="toggle" title="プレビューを使わず、操作したらすぐビジョンに出します"><input type="checkbox" id="opt-auto-take"> 操作したらすぐ本線へ</label>
+            <button type="button" class="btn take" id="btn-take">TAKE <small>Space</small></button>
+        </div>
+
+        <div class="panel">
+            <h2><span class="tally pgm">PROGRAM</span> いまビジョンに出ている画面 <small id="pgm-desc"></small> <span class="black-flag" id="pgm-black-flag">BLACK中</span></h2>
+            <div class="monitor pgm"><iframe id="pgm-frame" title="本線" tabindex="-1"></iframe></div>
+        </div>
+    </section>
+
+    <!-- ===== 右列：素材・選手・式次第・設定 ===== -->
+    <section class="col">
+        <nav class="tabs side-tabs" id="tabs">
+            <button type="button" data-tab="media" class="on">素材</button>
+            <button type="button" data-tab="players">選手</button>
+            <button type="button" data-tab="cues">式次第</button>
+            <button type="button" data-tab="settings">設定</button>
+        </nav>
+
+        <!-- 素材 -->
+        <div class="tab-body" id="tab-media">
+            <div class="panel">
+                <h2>カメラ・その他 <small>押すと「出す枠」に入ります</small></h2>
+                <div class="quick-sources">
+                    <button type="button" data-src='{"type":"camera","cam":"cam1"}'>📹 カメラ1</button>
+                    <button type="button" data-src='{"type":"camera","cam":"cam2"}'>📹 カメラ2</button>
+                    <button type="button" data-src='{"type":"black"}'>■ 黒</button>
+                    <button type="button" data-src='{"type":"test"}'>▦ テスト画面</button>
+                    <button type="button" data-box="text-box">Ｔ 文字</button>
+                    <button type="button" data-box="url-box">🔗 URL</button>
+                </div>
+                <div class="sub-box hidden" id="text-box">
+                    <input type="text" id="text-title" class="text-input" maxlength="200" placeholder="タイトル（例：開会式）">
+                    <input type="text" id="text-sub" class="text-input" maxlength="300" placeholder="サブタイトル（なくてもよい）">
+                    <div class="ctrl-row">
+                        <label class="toggle">背景 <input type="color" id="text-bg" value="#0b1220"></label>
+                        <label class="toggle">文字 <input type="color" id="text-fg" value="#ffffff"></label>
+                        <button type="button" class="btn small go" id="btn-text">枠に入れる</button>
+                    </div>
+                </div>
+                <div class="sub-box hidden" id="url-box">
+                    <input type="text" id="url-input" class="text-input" placeholder="画像のURL、または GoogleスライドのURL">
+                    <button type="button" class="btn small go" id="btn-url">枠に入れる</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>スライド <small>クリックで「出す枠」へ／ダブルクリックでそのままTAKE</small></h2>
+                <div class="dropzone" id="slide-drop">
+                    画像・動画をここにドロップすると slides フォルダに登録します
+                    <div class="ctrl-row">
+                        <input type="text" id="upload-folder" class="text-input" maxlength="40" placeholder="分類（例：開会式）。空なら slides の直下" list="slide-folders">
+                        <datalist id="slide-folders"></datalist>
+                        <button type="button" class="btn small" id="btn-slide-file">ファイルを選ぶ</button>
+                        <input type="file" id="slide-file" accept="image/*,video/mp4,video/webm,.m4v" multiple hidden>
+                    </div>
+                </div>
+                <div class="lib-toolbar">
+                    <div class="chips" id="slide-folder-chips"></div>
+                    <input type="search" id="slide-search" class="text-input sm" placeholder="さがす">
+                    <button type="button" class="btn small" id="btn-slide-reload" title="slides フォルダにファイルを足したときに押します">⟳ 読み直す</button>
+                </div>
+                <label class="toggle"><input type="checkbox" id="opt-auto-layout" checked> 32:9のスライドは自動で「32:9 一枚」にする</label>
+                <div class="library" id="slide-library"></div>
+            </div>
+        </div>
+
+        <!-- 選手 -->
+        <div class="tab-body hidden" id="tab-players">
+            <div class="panel">
+                <div class="ctrl-row">
+                    <div class="seg seg-sm" id="team-filter">
+                        <button type="button" data-team="HOME" class="on">HOME</button>
+                        <button type="button" data-team="AWAY">AWAY</button>
+                        <button type="button" data-team="">全員</button>
+                    </div>
+                    <input type="search" id="player-search" class="text-input sm" placeholder="背番号・名前でさがす">
+                    <button type="button" class="btn small" id="btn-roster">名簿CSVを読み込む</button>
+                    <input type="file" id="roster-file" accept=".csv,.txt" hidden>
+                </div>
+                <div class="player-list" id="player-list"></div>
+            </div>
+
+            <div class="panel">
+                <div class="pa-player" id="pa-player">選手を選んでください</div>
+                <div class="pa-grid">
+                    <button type="button" class="btn big go" data-card="atbat">打席（NOW BATTING）</button>
+                    <button type="button" class="btn big hr" data-card="hr">HR競争</button>
+                    <button type="button" class="btn big sub" data-card="sub" data-label="代打">代打</button>
+                    <button type="button" class="btn big sub" data-card="sub" data-label="代走">代走</button>
+                    <button type="button" class="btn big sub" data-card="sub" data-label="守備交代">守備交代</button>
+                    <button type="button" class="btn big sub" data-card="sub" data-label="投手交代">投手交代</button>
+                </div>
+                <label class="field">交代で退く選手
+                    <select id="pa-out" class="text-input"><option value="">（出さない）</option></select>
+                </label>
+                <label class="field">見出しを変える
+                    <input type="text" id="pa-label" class="text-input" maxlength="60" placeholder="空なら自動（例：NOW BATTING）">
+                </label>
+                <div class="ctrl-row wrap">
+                    <label class="toggle"><input type="checkbox" id="opt-player-take" checked> すぐTAKE</label>
+                    <label class="toggle"><input type="checkbox" id="opt-player-music" checked> 登場曲を鳴らす</label>
+                    <label class="toggle"><input type="checkbox" id="opt-player-slide" checked> 作ったスライドがあれば使う</label>
+                    <label class="toggle"><input type="checkbox" id="opt-player-stats" checked> 成績を出す</label>
+                    <label class="toggle"><input type="checkbox" id="opt-player-comment"> コメントを出す</label>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>HR競争カウンター <small>ビジョンに出したまま数字だけ変わります</small></h2>
+                <div class="derby">
+                    <b class="derby-count" id="derby-count">0</b>
+                    <button type="button" class="btn big hr" data-derby="1">＋1本</button>
+                    <button type="button" class="btn" data-derby="-1">−1</button>
+                    <span class="derby-outs">アウト
+                        <button type="button" class="btn small" data-derby-out="-1">−</button>
+                        <b class="ow" id="derby-outs">0</b>
+                        <button type="button" class="btn small" data-derby-out="1">＋</button>
+                    </span>
+                    <button type="button" class="btn small danger" data-derby="reset">リセット</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>スタメン <small>打順の入った選手を一覧で出します</small></h2>
+                <div class="ctrl-row">
+                    <button type="button" class="btn" data-lineup="HOME">HOME を枠に入れる</button>
+                    <button type="button" class="btn" data-lineup="AWAY">AWAY を枠に入れる</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 式次第 -->
+        <div class="tab-body hidden" id="tab-cues">
+            <div class="panel">
+                <div class="ctrl-row">
+                    <button type="button" class="btn big next" id="btn-cue-next">▶ 次へ（NEXT）</button>
+                    <div class="cue-now" id="cue-now"></div>
+                </div>
+                <div class="ctrl-row wrap">
+                    <button type="button" class="btn small go" id="btn-cue-add">＋ いまのプレビューを追加</button>
+                    <button type="button" class="btn small" id="btn-cue-overwrite">選んだキューを上書き</button>
+                    <button type="button" class="btn small" data-cue-move="-1">▲</button>
+                    <button type="button" class="btn small" data-cue-move="1">▼</button>
+                    <button type="button" class="btn small danger" id="btn-cue-delete">消す</button>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn small" id="btn-cue-export">ファイルに書き出す</button>
+                    <button type="button" class="btn small" id="btn-cue-import">ファイルから読み込む</button>
+                    <input type="file" id="cue-file" accept=".json" hidden>
+                </div>
+                <div class="cue-list" id="cue-list"></div>
+            </div>
+            <div class="panel hidden" id="cue-editor">
+                <h2>選んだキュー</h2>
+                <label class="field">名前 <input type="text" id="cue-name" class="text-input" maxlength="100"></label>
+                <label class="field">音楽
+                    <div class="ctrl-row">
+                        <select id="cue-music-action" class="text-input">
+                            <option value="">そのまま（変えない）</option>
+                            <option value="play">曲を鳴らす</option>
+                            <option value="stop">止める（音楽バーのフェード秒数で）</option>
+                        </select>
+                        <select id="cue-music-path" class="text-input"></select>
+                    </div>
+                </label>
+                <label class="field">メモ <input type="text" id="cue-memo" class="text-input" maxlength="1000" placeholder="アナウンス原稿・きっかけなど"></label>
+            </div>
+            <p class="note">行をクリックするとプレビューに読み込みます。「GO」でその場でビジョンに出します。</p>
+        </div>
+
+        <!-- 設定 -->
+        <div class="tab-body hidden" id="tab-settings">
+            <div class="panel">
+                <h2>カメラ（キャプチャーボード）</h2>
+                <button type="button" class="btn small" id="btn-devices">カメラの一覧を出す（最初の1回は許可が必要）</button>
+                <label class="field">カメラ1 <select id="cam1-select" class="text-input" data-cam="cam1"></select></label>
+                <label class="field">カメラ2 <select id="cam2-select" class="text-input" data-cam="cam2"></select></label>
+                <label class="toggle"><input type="checkbox" id="opt-monitor-cam" checked> 管理画面のプレビューにもカメラを映す</label>
+                <p class="note">キャプチャーボードによっては、同時に複数の画面で開けない機種があります。そのときは上のチェックを外してください。</p>
+            </div>
+            <div class="panel">
+                <h2>チーム</h2>
+                <div class="team-row" data-team="HOME">
+                    <b>HOME</b>
+                    <input type="text" class="text-input" data-k="name" maxlength="60" placeholder="表示名">
+                    <input type="color" data-k="color">
+                    <input type="text" class="text-input" data-k="photoTeam" maxlength="100" placeholder="写真フォルダ名" list="photo-teams">
+                </div>
+                <div class="team-row" data-team="AWAY">
+                    <b>AWAY</b>
+                    <input type="text" class="text-input" data-k="name" maxlength="60" placeholder="表示名">
+                    <input type="color" data-k="color">
+                    <input type="text" class="text-input" data-k="photoTeam" maxlength="100" placeholder="写真フォルダ名" list="photo-teams">
+                </div>
+                <datalist id="photo-teams"></datalist>
+                <p class="note">
+                    顔写真：<code>photos/写真フォルダ名/player/背番号.jpg</code><br>
+                    作った選手スライド：<code>players/写真フォルダ名/背番号.png</code><br>
+                    登場曲：<code>music/登場曲/写真フォルダ名/背番号.mp3</code>（名簿CSVの「登場曲」列で指定も可）<br>
+                    写真フォルダ名が空のときは、表示名 → HOME/AWAY の順で探します。
+                </p>
+            </div>
+            <div class="panel">
+                <h2>Stream Deck などから操作</h2>
+                <pre class="api-list">http://localhost:3007/api/control?action=操作名&amp;val=値
+
+take            プレビューを本線へ（管理画面を開いておく）
+next / prev     式次第の次へ／前へ
+cue&amp;val=3      式次第の3番目
+black           BLACK（val=on / off、省略で切り替え）
+cut / fade      切り替え方
+derby&amp;val=1    HR +1（-1 / reset）
+derbyOut&amp;val=1 HR競争のアウト +1（-1）
+musicPlay&amp;val=01_入場曲.mp3   曲を鳴らす（music/ からの場所）
+musicStop       音楽を止める</pre>
+            </div>
+        </div>
+    </section>
+</main>
+
+<script src="js/common_admin.js"></script>
+<script src="js/music_admin.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
