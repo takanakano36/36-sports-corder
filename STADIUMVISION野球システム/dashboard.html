@@ -63,16 +63,17 @@
 <main class="layout">
     <!-- ===== 左列：プレビュー・本線と画面の組み立て ===== -->
     <section class="col">
-        <div class="panel">
+        <div class="panel mon-panel">
             <h2><span class="tally pvw">PREVIEW</span> 次に出す画面 <small id="pvw-desc"></small></h2>
-            <div class="monitor pvw" id="pvw-monitor">
-                <iframe id="pvw-frame" title="プレビュー" tabindex="-1"></iframe>
-                <div class="slot-overlay" id="slot-overlay"></div>
+            <div class="monitor-wrap">
+                <div class="monitor pvw" id="pvw-monitor" title="枠をクリックで選択。選んだ枠はドラッグでトリミング位置、マウスホイールで拡大・縮小">
+                    <iframe id="pvw-frame" title="プレビュー" tabindex="-1"></iframe>
+                    <div class="slot-overlay" id="slot-overlay"></div>
+                </div>
             </div>
-            <p class="note">枠をクリックで選択。選んだ枠はドラッグでトリミング位置、マウスホイールで拡大・縮小できます。</p>
         </div>
 
-        <div class="panel">
+        <div class="panel ctrl-panel">
             <div class="ctrl-row">
                 <span class="lbl">レイアウト</span>
                 <div class="seg" id="layout-seg">
@@ -131,9 +132,11 @@
             <button type="button" class="btn take" id="btn-take">TAKE <small>Space</small></button>
         </div>
 
-        <div class="panel">
-            <h2><span class="tally pgm">PROGRAM</span> いまビジョンに出ている画面 <small id="pgm-desc"></small> <span class="black-flag" id="pgm-black-flag">BLACK中</span></h2>
-            <div class="monitor pgm"><iframe id="pgm-frame" title="本線" tabindex="-1"></iframe></div>
+        <div class="panel mon-panel">
+            <h2><span class="tally pgm">ON AIR</span> いまビジョンに出ている画面 <span class="black-flag" id="pgm-black-flag">BLACK中</span> <small id="pgm-desc"></small></h2>
+            <div class="monitor-wrap">
+                <div class="monitor pgm"><iframe id="pgm-frame" title="本線" tabindex="-1"></iframe></div>
+            </div>
         </div>
     </section>
 
