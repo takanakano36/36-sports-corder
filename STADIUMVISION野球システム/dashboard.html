@@ -95,6 +95,7 @@
             <div class="ctrl-row">
                 <span class="lbl">出す枠</span>
                 <div class="seg seg-sm" id="slot-seg"></div>
+                <button type="button" class="btn small" id="btn-swap" title="左と右の中身（トリミング位置も）を入れ替えます。例：左カメラ・右スライド ⇄ 左スライド・右カメラ">⇄ 左右入れ替え</button>
                 <span class="slot-src" id="slot-src"></span>
             </div>
             <div class="ctrl-row crop-row" id="crop-row">
@@ -365,6 +366,7 @@
                 <pre class="api-list">http://localhost:3007/api/control?action=操作名&amp;val=値
 
 take            プレビューを本線へ（管理画面を開いておく）
+swap            左右2分割の左と右を入れ替え（プレビュー）
 next / prev     式次第の次へ／前へ
 cue&amp;val=3      式次第の3番目
 black           BLACK（val=on / off、省略で切り替え）

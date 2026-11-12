@@ -203,6 +203,16 @@ function setSingleX(x) {
     pvwChanged();
 }
 
+// 左右2分割の左と右を入れ替える（素材とトリミング位置をそのまま交換。選んでいる枠は同じ素材を追いかける）
+function swapSides() {
+    if (pvw.layout !== "split") return;
+    const l = pvw.slots.left;
+    pvw.slots.left = pvw.slots.right;
+    pvw.slots.right = l;
+    if (selectedSlot === "left" || selectedSlot === "right") selectedSlot = selectedSlot === "left" ? "right" : "left";
+    pvwChanged();
+}
+
 function selectSlot(slot) {
     selectedSlot = slot;
     renderControls();
@@ -273,6 +283,7 @@ function renderControls() {
     const ln = layoutNames();
     $$("#layout-seg button").forEach(b => { b.classList.toggle("on", b.dataset.layout === pvw.layout); b.textContent = ln[b.dataset.layout]; });
     $("#single-pos").classList.toggle("hidden", pvw.layout !== "single");
+    $("#btn-swap").classList.toggle("hidden", pvw.layout !== "split");
     $("#single-x").value = pvw.singleX;
     $("#single-x-val").textContent = Math.round(pvw.singleX);
 
@@ -413,6 +424,7 @@ function connect() {
 
 function handleCommand(cmd) {
     if (cmd.action === "take") doTake();
+    else if (cmd.action === "swap") swapSides();
     else if (cmd.action === "musicStop") musicStop();
     else if (cmd.action === "musicPlay") playMusicPath(cmd.val);
 }
@@ -1021,6 +1033,7 @@ function bindEvents() {
     $$("[data-singlex]").forEach(b => b.addEventListener("click", () => setSingleX(b.dataset.singlex)));
     $("#single-x").addEventListener("input", e => setSingleX(e.target.value));
     $("#slot-seg").addEventListener("click", e => { const b = e.target.closest("[data-slot]"); if (b) selectSlot(b.dataset.slot); });
+    $("#btn-swap").addEventListener("click", swapSides);
     $$("#fit-seg button").forEach(b => b.addEventListener("click", () => setCrop("fit", b.dataset.fit)));
     $$("[data-posy]").forEach(b => b.addEventListener("click", () => setCrop("posY", b.dataset.posy)));
     ["posX", "posY", "zoom"].forEach(k => {

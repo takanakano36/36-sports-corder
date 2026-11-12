@@ -382,6 +382,7 @@ function applyControl(action, val) {
     let command = null;
     switch (action) {
         case 'take':                 // 管理画面のプレビューを本線に出す（管理画面が開いている必要あり）
+        case 'swap':                 // プレビューの左右2分割の左と右を入れ替える（管理画面が開いている必要あり）
         case 'musicStop':            // 音楽を止める（フェードは音楽バーの設定どおり）
             command = { action };
             break;
