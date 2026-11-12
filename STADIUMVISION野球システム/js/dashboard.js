@@ -8,14 +8,23 @@
    ========================================================================== */
 
 const LAYOUT_SLOTS = { wide: ["wide"], split: ["left", "right"], single: ["single", "bg"] };
-const SLOT_NAMES = { wide: "全面 32:9", left: "左 16:9", right: "右 16:9", single: "16:9の枠", bg: "背景 32:9" };
+const SLOT_NAMES_WIDE = { wide: "全面 32:9", left: "左 16:9", right: "右 16:9", single: "16:9の枠", bg: "背景 32:9" };
+const SLOT_NAMES_SDI = { wide: "全面（帯）", left: "左半分", right: "右半分", single: "16:9の枠", bg: "背景（帯）" };
+const LAYOUT_NAMES_WIDE = { wide: "32:9 一枚", split: "16:9 左右2枚", single: "16:9 1枚（位置指定）" };
+const LAYOUT_NAMES_SDI = { wide: "帯 一枚", split: "左右に2分割", single: "16:9 1枚（位置指定）" };
+// 出力の形（設定タブ）。sdi = 1920×1080 で出し、ビジョンに映る帯だけを使う
+function isSdi() { return !!(state && state.output && state.output.mode === "sdi"); }
+function slotNames() { return isSdi() ? SLOT_NAMES_SDI : SLOT_NAMES_WIDE; }
+function layoutNames() { return isSdi() ? LAYOUT_NAMES_SDI : LAYOUT_NAMES_WIDE; }
+// ステージ（素材を並べる面）の大きさ
+function stageSize() { return isSdi() ? { w: 1920, h: state.output.bandH } : { w: 3840, h: 1080 }; }
 const CROP_KEYS = ["fit", "posX", "posY", "zoom"];
 const MEDIA_TYPES = ["slide", "url", "camera"];   // トリミングできる素材
 const TEAMS = ["HOME", "AWAY"];
 const PREF_KEY = "stadiumvision-baseball.prefs";
 // OBSに入れる表示画面のアドレス（layer-width / layer-height は、OBSにドラッグしたときのブラウザソースの大きさ）
 // camera=obs：カメラの枠を透明にする（キャプチャーボードはOBSの「映像キャプチャデバイス」で下に敷く）
-const OBS_URL = `${location.origin}/vision.html?camera=obs&layer-width=3840&layer-height=1080`;
+function obsUrl() { return `${location.origin}/vision.html?camera=obs&layer-width=${isSdi() ? 1920 : 3840}&layer-height=1080`; }
 const PVW_KEY = "stadiumvision-baseball.preview";
 
 let state = null;
@@ -146,9 +155,10 @@ function describeSrc(src) {
 function describeScene(scene) {
     if (!scene) return "";
     const s = scene.slots || {};
-    if (scene.layout === "split") return `16:9左右 ／ 左：${describeSrc(s.left)} ／ 右：${describeSrc(s.right)}`;
+    const n = layoutNames();
+    if (scene.layout === "split") return `${n.split} ／ 左：${describeSrc(s.left)} ／ 右：${describeSrc(s.right)}`;
     if (scene.layout === "single") return `16:9 1枚（位置 ${Math.round(scene.singleX)}）／ ${describeSrc(s.single)} ／ 背景：${describeSrc(s.bg)}`;
-    return `32:9 一枚 ／ ${describeSrc(s.wide)}`;
+    return `${n.wide} ／ ${describeSrc(s.wide)}`;
 }
 
 // --------------------------------------------------------------------------
@@ -241,10 +251,10 @@ function liveAdjust(mutate, slotOnly) {
 
 function assignSource(src, opts = {}) {
     src = clone(src);
-    // 32:9のスライドは「32:9 一枚」に自動で切り替える
+    // 横長（32:9・ビジョンの帯の形など）のスライドは「一枚」に自動で切り替える
     if (!opts.keepLayout && $("#opt-auto-layout").checked && src.type === "slide") {
         const r = aspectMap[src.file];
-        if (r && r > 3 && pvw.layout !== "wide") {
+        if (r && r > 2.4 && pvw.layout !== "wide") {
             pvw.layout = "wide";
             selectedSlot = "wide";
         }
@@ -260,13 +270,14 @@ function assignSource(src, opts = {}) {
 // 画面の組み立ての表示
 // --------------------------------------------------------------------------
 function renderControls() {
-    $$("#layout-seg button").forEach(b => b.classList.toggle("on", b.dataset.layout === pvw.layout));
+    const ln = layoutNames();
+    $$("#layout-seg button").forEach(b => { b.classList.toggle("on", b.dataset.layout === pvw.layout); b.textContent = ln[b.dataset.layout]; });
     $("#single-pos").classList.toggle("hidden", pvw.layout !== "single");
     $("#single-x").value = pvw.singleX;
     $("#single-x-val").textContent = Math.round(pvw.singleX);
 
     $("#slot-seg").innerHTML = LAYOUT_SLOTS[pvw.layout]
-        .map(s => `<button type="button" data-slot="${s}" class="${s === selectedSlot ? "on" : ""}">${SLOT_NAMES[s]}</button>`).join("");
+        .map(s => `<button type="button" data-slot="${s}" class="${s === selectedSlot ? "on" : ""}">${slotNames()[s]}</button>`).join("");
     const src = curSrc();
     $("#slot-src").textContent = describeSrc(src);
 
@@ -282,10 +293,15 @@ function renderControls() {
 }
 
 function slotRect(scene, slot) {
-    // 3840の幅に対する %
+    // ステージの幅に対する %
     if (slot === "left") return { left: 0, width: 50 };
     if (slot === "right") return { left: 50, width: 50 };
-    if (slot === "single") return { left: 50 * scene.singleX / 100, width: 50 };
+    if (slot === "single") {
+        // 16:9 の枠（高さいっぱい）。32:9 では半分、SDIの帯では 帯の高さ×16/9
+        const st = stageSize();
+        const w = Math.min(100, st.h * 16 / 9 / st.w * 100);
+        return { left: (100 - w) * scene.singleX / 100, width: w };
+    }
     return { left: 0, width: 100 };
 }
 
@@ -301,7 +317,7 @@ function renderOverlay() {
         box.style.left = r.left + "%";
         box.style.width = r.width + "%";
         if (s === "bg") box.style.borderStyle = "dotted";
-        box.innerHTML = `<span class="slot-name">${SLOT_NAMES[s]}</span>`;
+        box.innerHTML = `<span class="slot-name">${slotNames()[s]}</span>`;
         box.addEventListener("mousedown", e => onSlotMouseDown(e, s, box));
         box.addEventListener("wheel", e => onSlotWheel(e, s), { passive: false });
         ov.appendChild(box);
@@ -367,8 +383,9 @@ function setTransition(type) {
 }
 
 function openOutput(view) {
+    if (isSdi() && view !== "all") return showError("SDI 1本（1920×1080）で出す設定のため、左右に分けて開けません。「全体」を使ってください");
     const w = view === "all" ? 1280 : 960;
-    const h = view === "all" ? 360 : 540;
+    const h = view === "all" ? (isSdi() ? 720 : 360) : 540;
     window.open(`vision.html?view=${view}`, `sv_baseball_${view}`, `popup=yes,width=${w},height=${h}`);
     showInfo("確認用の表示画面を開きました。本番は「野球ビジョン HDMI出力」を使ってください（ダブルクリックかFキーで全画面）");
 }
@@ -406,6 +423,7 @@ function renderFromState() {
     $("#pgm-black-flag").classList.toggle("on", state.black);
     $("#pgm-desc").textContent = describeScene(state.program);
     $("#opt-guide").checked = state.guide;
+    renderOutput();
     $$("#trans-seg button").forEach(b => b.classList.toggle("on", b.dataset.trans === state.transition.type));
     if (document.activeElement !== $("#trans-ms")) $("#trans-ms").value = state.transition.ms;
     $("#derby-count").textContent = state.derby.count;
@@ -903,6 +921,49 @@ function setCamera(sel) {
     patch({ cameras });
 }
 
+// --------------------------------------------------------------------------
+// 出力の形（32:9 ／ SDI 1本の帯）
+// --------------------------------------------------------------------------
+let lastOutputKey = "";
+function renderOutput() {
+    const o = state.output;
+    $$("#out-mode-seg button").forEach(b => b.classList.toggle("on", b.dataset.outmode === o.mode));
+    $("#out-sdi-box").classList.toggle("hidden", o.mode !== "sdi");
+    if (document.activeElement !== $("#out-band-y")) $("#out-band-y").value = o.bandY;
+    if (document.activeElement !== $("#out-band-h")) $("#out-band-h").value = o.bandH;
+    $("#out-band-info").textContent = o.mode === "sdi"
+        ? `ビジョンに映る帯：1920×${o.bandH}（y=${o.bandY}〜${o.bandY + o.bandH}）／ 左右に2分割したときは 1枚 960×${o.bandH}`
+        : "";
+    $("#hdr-sub").textContent = o.mode === "sdi" ? `SDI 1本（1920×1080 の中の帯 1920×${o.bandH}）管理画面` : "32:9（FHD×2）管理画面";
+    $$("[data-open=left],[data-open=right]").forEach(b => { b.disabled = o.mode === "sdi"; });
+    const key = JSON.stringify(o);
+    if (key === lastOutputKey) return;
+    lastOutputKey = key;
+    // モニターの形をビジョンに合わせる（帯のときは 1920:帯の高さ）
+    const st = stageSize();
+    document.documentElement.style.setProperty("--mon-ar", String(st.w / st.h));
+    $("#obs-drag").href = obsUrl();
+    renderControls();
+    renderOverlay();
+}
+
+function setOutput(changes) {
+    const o = Object.assign({}, state.output, changes);
+    o.bandH = Math.max(80, Math.min(1080, Math.round(Number(o.bandH) || 630)));
+    o.bandY = Math.max(0, Math.min(1080 - o.bandH, Math.round(Number(o.bandY) || 0)));
+    patch({ output: o });
+}
+
+// LEDの大きさ（例 488×160）から、横100%・上下トリミングのときに映る帯の高さを出す
+function bandFromLed() {
+    const w = Number($("#out-led-w").value), h = Number($("#out-led-h").value);
+    if (!(w > 0 && h > 0)) return showError("ビジョン（LED）の横・縦のドット数を入れてください");
+    const bandH = Math.round(1920 * h / w);
+    if (bandH > 1080) return showError(`この比率だと帯の高さが1080を超えます（${bandH}）。横100%・上下トリミングの設定ではありません`);
+    setOutput({ bandH, bandY: Math.round((1080 - bandH) / 2) });
+    showInfo(`帯の高さを ${bandH}（上下の中央）にしました。テスト画面を出して、緑の枠がビジョンの四辺に合うか確かめてください`);
+}
+
 function renderTeams() {
     $$(".team-row").forEach(row => {
         const t = state.teams[row.dataset.team];
@@ -929,25 +990,30 @@ async function loadPhotoTeams() {
 function bindEvents() {
     $$("[data-open]").forEach(b => b.addEventListener("click", () => openOutput(b.dataset.open)));
     $("#opt-guide").addEventListener("change", e => patch({ guide: e.target.checked }));
+    $$("#out-mode-seg button").forEach(b => b.addEventListener("click", () => setOutput({ mode: b.dataset.outmode })));
+    $("#out-band-y").addEventListener("change", e => setOutput({ bandY: e.target.value }));
+    $("#out-band-h").addEventListener("change", e => setOutput({ bandH: e.target.value }));
+    $("#btn-band-center").addEventListener("click", () => setOutput({ bandY: Math.round((1080 - state.output.bandH) / 2) }));
+    $("#btn-band-led").addEventListener("click", bandFromLed);
     $("#btn-black").addEventListener("click", () => control("black"));
 
     // OBSに入れる（ドラッグ＆ドロップ／アドレスのコピー）※得点板システムと同じ
     const drag = $("#obs-drag");
-    drag.href = OBS_URL;
+    drag.href = obsUrl();
     drag.addEventListener("click", e => {
         e.preventDefault();
         showInfo("このボタンを、クリックではなくOBSの画面へドラッグ＆ドロップしてください。");
     });
     drag.addEventListener("dragstart", e => {
-        e.dataTransfer.setData("text/uri-list", OBS_URL);
-        e.dataTransfer.setData("text/plain", OBS_URL);
+        e.dataTransfer.setData("text/uri-list", obsUrl());
+        e.dataTransfer.setData("text/plain", obsUrl());
     });
     $("#btn-copy-url").addEventListener("click", async () => {
         try {
-            await navigator.clipboard.writeText(OBS_URL);
-            showInfo("アドレスをコピーしました。OBSのブラウザソースのURL欄に貼り付けてください（幅3840・高さ1080）。");
+            await navigator.clipboard.writeText(obsUrl());
+            showInfo(`アドレスをコピーしました。OBSのブラウザソースのURL欄に貼り付けてください（幅${isSdi() ? 1920 : 3840}・高さ1080）。`);
         } catch (e) {
-            showError(`コピーできませんでした。次のアドレスを手で入力してください：${OBS_URL}`);
+            showError(`コピーできませんでした。次のアドレスを手で入力してください：${obsUrl()}`);
         }
     });
 

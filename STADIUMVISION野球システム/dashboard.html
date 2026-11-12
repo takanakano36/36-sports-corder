@@ -9,10 +9,10 @@
 </head>
 <body>
 <header class="topbar">
-    <h1>スタジアムビジョン野球 <small>32:9（FHD×2）管理画面</small></h1>
+    <h1>スタジアムビジョン野球 <small id="hdr-sub">32:9（FHD×2）管理画面</small></h1>
     <span class="conn" id="conn">接続中…</span>
     <div class="top-actions">
-        <div class="obs-box" title="OBSに表示画面を入れるときに使います（最初の1回だけ）。OBSのキャンバスは 3840×1080 にします">
+        <div class="obs-box" title="OBSに表示画面を入れるときに使います（最初の1回だけ）。OBSのキャンバスは 3840×1080（SDI 1本のときは 1920×1080）にします">
             <span class="obs-label">OBSに入れる</span>
             <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
             <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
@@ -192,7 +192,7 @@
                     <input type="search" id="slide-search" class="text-input sm" placeholder="さがす">
                     <button type="button" class="btn small" id="btn-slide-reload" title="slides フォルダにファイルを足したときに押します">⟳ 読み直す</button>
                 </div>
-                <label class="toggle"><input type="checkbox" id="opt-auto-layout" checked> 32:9のスライドは自動で「32:9 一枚」にする</label>
+                <label class="toggle"><input type="checkbox" id="opt-auto-layout" checked> 横長（32:9・帯の形）のスライドは自動で「一枚」にする</label>
                 <div class="library" id="slide-library"></div>
             </div>
         </div>
@@ -302,6 +302,32 @@
 
         <!-- 設定 -->
         <div class="tab-body hidden" id="tab-settings">
+            <div class="panel">
+                <h2>出力の形</h2>
+                <div class="seg" id="out-mode-seg">
+                    <button type="button" data-outmode="wide" title="3840×1080（32:9）をそのまま出します">32:9（3840×1080）</button>
+                    <button type="button" data-outmode="sdi" title="1920×1080 で出し、ビジョンに映る帯だけを使います（HDMI→SDIコンバーター経由）">SDI 1本（1920×1080 の帯）</button>
+                </div>
+                <div id="out-sdi-box" class="hidden">
+                    <p class="note">ビジョン側のスケーラーが「横100%・上下トリミング」のとき用です。1920×1080 の中で、ビジョンに映る帯（下の上端・高さ）だけに素材を並べます。帯の外は黒になります。</p>
+                    <div class="ctrl-row">
+                        <span class="lbl">LEDの大きさ</span>
+                        <input type="number" id="out-led-w" class="num-input sm" value="488" min="1"> ×
+                        <input type="number" id="out-led-h" class="num-input sm" value="160" min="1">
+                        <button type="button" class="btn small" id="btn-band-led">ここから帯を計算（上下の中央）</button>
+                    </div>
+                    <div class="ctrl-row">
+                        <span class="lbl">帯の上端 y</span>
+                        <input type="number" id="out-band-y" class="num-input sm" min="0" max="1000" step="1">
+                        <span class="lbl">帯の高さ</span>
+                        <input type="number" id="out-band-h" class="num-input sm" min="80" max="1080" step="1">
+                        <button type="button" class="btn small" id="btn-band-center">上下の中央に置く</button>
+                    </div>
+                    <p class="note" id="out-band-info"></p>
+                    <p class="note">合わせ方：素材タブの「▦ テスト画面」をビジョンに出し、緑の枠がビジョンの四辺にぴったり合うように上端・高さを直します。
+                        PCの解像度は 1920×1080、コンバーター（CRO-H2SC）は EDID「0（SDI OUT）」か「5（1920×1080）」にします。</p>
+                </div>
+            </div>
             <div class="panel">
                 <h2>カメラ（キャプチャーボード）</h2>
                 <button type="button" class="btn small" id="btn-devices">カメラの一覧を出す（最初の1回は許可が必要）</button>

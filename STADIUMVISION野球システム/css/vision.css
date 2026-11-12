@@ -1,6 +1,6 @@
 /* ==========================================================================
-   スタジアムビジョン野球システム - 表示画面 (3840×1080 / 32:9)
-   3840×1080 固定で作り、JSでウィンドウに合わせて拡大・縮小する
+   スタジアムビジョン野球システム - 表示画面 (3840×1080 / 32:9、または SDI 1本の帯 1920×帯の高さ)
+   ステージの大きさは出力の形に合わせてJSで決め、ウィンドウに合わせて拡大・縮小する
    書体は fonts/ フォルダのもの（インターネットなしで動く）
    ========================================================================== */
 
@@ -49,7 +49,7 @@ body.monitor { cursor: default; }
 .slot {
     position: absolute;
     top: 0;
-    height: 1080px;
+    height: 100%;
     overflow: hidden;
     background: #000;
     container-type: size;
@@ -93,7 +93,7 @@ html.cam-hole, body.cam-hole, body.cam-hole #viewport, body.cam-hole #stage { ba
 
 #guide { display: none; position: absolute; inset: 0; z-index: 60; pointer-events: none; }
 body.show-guide #guide { display: block; }
-.guide-center { position: absolute; left: 1919px; top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.8); }
+.guide-center { position: absolute; left: calc(50% - 1px); top: 0; width: 2px; height: 100%; background: rgba(255, 0, 0, 0.8); }
 .guide-label { position: absolute; top: 20px; font: 700 28px 'Oswald', sans-serif; color: rgba(255, 80, 80, 0.9); }
 .guide-l { left: 30px; }
 .guide-r { right: 30px; }
@@ -155,19 +155,22 @@ body.disconnected #conn-lost { display: block; }
 }
 .test-pattern .tp-l { left: 0; border-color: #ef4444; }
 .test-pattern .tp-r { right: 0; border-color: #3b82f6; }
-.test-pattern .tp-big { font-size: 260px; font-weight: 700; line-height: 1; }
-.test-pattern .tp-small { font-size: 48px; opacity: 0.8; }
+.test-pattern .tp-big { font-size: 24cqh; font-weight: 700; line-height: 1; }
+.test-pattern .tp-small { font-size: 4.5cqh; opacity: 0.8; }
 .test-pattern .tp-circle {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 1000px;
-    height: 1000px;
-    margin: -500px 0 0 -500px;
+    width: 92cqh;
+    height: 92cqh;
+    margin: -46cqh 0 0 -46cqh;
     border: 4px solid #facc15;
     border-radius: 50%;
 }
-.test-pattern .tp-bars { position: absolute; left: 0; right: 0; bottom: 0; height: 60px; display: flex; }
+.test-pattern .tp-bars { position: absolute; left: 0; right: 0; bottom: 0; height: 5.5cqh; display: flex; }
+/* SDI 1本の帯：帯の外周（ビジョンの四辺）を緑の枠で示す */
+.test-pattern .tp-frame { position: absolute; inset: 0; border: 10px solid #22c55e; z-index: 2; }
+.test-pattern .tp-size { position: absolute; left: 50%; top: 3cqh; transform: translateX(-50%); font-size: 8cqh; color: #22c55e; z-index: 2; }
 .test-pattern .tp-bars span { flex: 1; }
 
 /* --------------------------------------------------------------------------

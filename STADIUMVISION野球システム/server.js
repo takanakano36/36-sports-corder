@@ -1,5 +1,5 @@
 /* ==========================================================================
-   スタジアムビジョン野球システム (32:9 / FHD×2) - SSE同期 ＆ API制御用ローカルサーバー (Node.js)
+   スタジアムビジョン野球システム (32:9 / FHD×2 / SDI 1本の帯) - SSE同期 ＆ API制御用ローカルサーバー (Node.js)
    - 管理画面(dashboard.html)で組んだ画面を、表示画面(vision.html)へ即時に送る
    - 状態は data/state.json に保存し、PCやブラウザが落ちても続きから再開できる
    - Stream Deck 等から /api/control で操作できる
@@ -53,6 +53,11 @@ function initialState() {
         program: emptyScene(),                 // いまビジョンに出ている画面
         black: false,                          // 黒にする（BLACK）
         guide: false,                          // 2画面の境目の線を出す（設置・調整用）
+        // 出力の形
+        //   wide … 3840×1080（32:9）をそのまま出す
+        //   sdi  … 1920×1080 で出し、ビジョンに映る「帯」（y=bandY から高さ bandH）だけを使う
+        //          （HDMI→SDIコンバーター経由で、スケーラーが横100%・上下トリミングする現場用）
+        output: { mode: 'wide', bandY: 225, bandH: 630 },
         transition: { type: 'fade', ms: 500 }, // 切り替え方（cut / fade）
         cameras: { cam1: { deviceId: '', label: '' }, cam2: { deviceId: '', label: '' } },
         teams: {
@@ -155,6 +160,10 @@ function validateState(s) {
     if (typeof s.black !== 'boolean' || typeof s.guide !== 'boolean') return 'BLACK・境目の線の設定が正しくありません';
     if (!isObj(s.transition) || !['cut', 'fade'].includes(s.transition.type) || !isInt(s.transition.ms, 0, 5000)) {
         return '切り替え方は CUT か FADE、時間は0〜5000ミリ秒にしてください';
+    }
+    const o = s.output;
+    if (!isObj(o) || !['wide', 'sdi'].includes(o.mode) || !isInt(o.bandY, 0, 1000) || !isInt(o.bandH, 80, 1080) || o.bandY + o.bandH > 1080) {
+        return '出力の形が正しくありません（帯の上端は0〜1000、高さは80〜1080、上端＋高さは1080以内）';
     }
     if (!isObj(s.cameras)) return 'カメラの設定が正しくありません';
     for (const c of CAMS) {

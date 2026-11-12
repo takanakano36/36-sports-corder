@@ -5,6 +5,8 @@
 #        ・1台              → その画面に「全体」(3840×1080) を出す（ビジョンへHDMI 1本。いちばん普通の形）
 #        ・2台              → 左の画面に「左半分」、右の画面に「右半分」を出す（HDMI 2本の場合）
 #        ・3台以上          → どう出すかを番号で選ぶ
+#      ※ 管理画面の設定タブで「SDI 1本（1920×1080 の帯）」にしているときは、左右に分けず、
+#        1つの画面に 1920×1080 で出す（ビジョンの画面が2台以上あるときは番号で選ぶ）
 #   3. Microsoft Edge のキオスクモードで、それぞれ全画面で開く
 #   -DryRun を付けると、実際には開かずに「どの画面に出すか」だけを表示する（確認用）
 #   ※ 「STADIUMVISION得点板システム」の HDMI出力 をもとに、2画面出力に対応させたもの
@@ -56,6 +58,18 @@ if (Test-Server) {
     Write-Host 'サーバー：起動しました'
 }
 
+# 出力の形（管理画面の設定タブ）：wide = 32:9 ／ sdi = SDI 1本（1920×1080 の帯）
+$outMode = 'wide'
+try {
+    $st = Invoke-RestMethod "$base/api/state" -TimeoutSec 2
+    if ($st.output -and $st.output.mode -eq 'sdi') { $outMode = 'sdi' }
+} catch { }
+if ($outMode -eq 'sdi') {
+    Write-Host '出力の形：SDI 1本（1920×1080。ビジョンに映る帯だけを使う）' -ForegroundColor Cyan
+} else {
+    Write-Host '出力の形：32:9（3840×1080）'
+}
+
 # --------------------------------------------------------------------------
 # 2. どの画面に、どう出すかを決める
 # --------------------------------------------------------------------------
@@ -66,6 +80,7 @@ $others = @($screens | Where-Object { -not $_.Primary } | Sort-Object { $_.Bound
 function Format-Screen($s) { '{0}x{1}（位置 {2},{3}）' -f $s.Bounds.Width, $s.Bounds.Height, $s.Bounds.X, $s.Bounds.Y }
 function Is-Wide($s) { [math]::Abs($s.Bounds.Width / $s.Bounds.Height - 32 / 9) -le 0.05 }
 function Is-169($s) { [math]::Abs($s.Bounds.Width / $s.Bounds.Height - 16 / 9) -le 0.02 }
+function Is-FHD($s) { $s.Bounds.Width -eq 1920 -and $s.Bounds.Height -eq 1080 }
 
 function Read-Number([string]$prompt, [int]$max) {
     $n = Read-Host $prompt
@@ -81,9 +96,20 @@ if ($others.Count -eq 0) {
     Write-Host 'ビジョン用の画面（2台目以降の画面）が見つかりません。次を確認してください。' -ForegroundColor Yellow
     Write-Host '  ・HDMIケーブルがPCとビジョン（またはスイッチャー）につながっているか'
     Write-Host '  ・Windowsの「設定」→「ディスプレイ」で「表示画面を拡張する」になっているか'
-    $ans = Read-Host '確認のため、いまの画面に全体（32:9）を表示しますか？（Y = 表示する ／ それ以外 = やめる）'
+    $ans = Read-Host '確認のため、いまの画面に全体を表示しますか？（Y = 表示する ／ それ以外 = やめる）'
     if ($ans -notmatch '^[Yy]$') { exit 1 }
     $plan += @{ View = 'all'; Screen = ($screens | Where-Object { $_.Primary }) }
+} elseif ($outMode -eq 'sdi') {
+    # SDI 1本：左右に分けず、1つの画面に 1920×1080 で出す
+    if ($others.Count -eq 1) {
+        $plan += @{ View = 'all'; Screen = $others[0] }
+    } else {
+        Write-Host ''
+        Write-Host 'SDIコンバーターにつないだ画面の番号を選んでください。見つかった画面：'
+        for ($i = 0; $i -lt $others.Count; $i++) { Write-Host ('  {0} : {1}' -f ($i + 1), (Format-Screen $others[$i])) }
+        $n = Read-Number '番号' $others.Count
+        $plan += @{ View = 'all'; Screen = $others[$n - 1] }
+    }
 } elseif ($others.Count -eq 1) {
     # ビジョンへHDMI 1本（3840×1080）
     $plan += @{ View = 'all'; Screen = $others[0] }
@@ -116,8 +142,17 @@ if ($others.Count -eq 0) {
 }
 
 $viewLabel = @{ left = '左半分（0〜1919）'; right = '右半分（1920〜3839）'; all = '全体（3840×1080）' }
+if ($outMode -eq 'sdi') { $viewLabel.all = '全体（1920×1080・SDI）' }
 foreach ($p in $plan) {
     Write-Host ('{0} → {1}' -f $viewLabel[$p.View], (Format-Screen $p.Screen))
+    if ($outMode -eq 'sdi') {
+        if (-not (Is-FHD $p.Screen)) {
+            Write-Host '  ※この画面は 1920×1080 ではありません。ビジョンに出る位置がずれます。' -ForegroundColor Yellow
+            Write-Host '    Windowsの「設定」→「ディスプレイ」で 1920×1080・拡大縮小100% にし、' -ForegroundColor Yellow
+            Write-Host '    SDIコンバーター（CRO-H2SC）の EDID を「0（SDI OUT）」か「5（1920×1080）」にしてください。' -ForegroundColor Yellow
+        }
+        continue
+    }
     if ($p.View -ne 'all' -and -not (Is-169 $p.Screen)) {
         Write-Host '  ※この画面は16:9ではありません。上下または左右に黒い余白が付きます。Windowsの表示設定で 1920×1080 にしてください。' -ForegroundColor Yellow
     }
