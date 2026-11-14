@@ -199,6 +199,8 @@ function bindBannerEvents() {
         $$("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
         $("#view-score").classList.toggle("hidden", tab !== "score");
         $("#view-banner").classList.toggle("hidden", tab !== "banner");
+        // 反則の欄は1つだけ。開いているタブの左の列の一番下へ移す（どちらのタブからでも反則を出せる）
+        $(`#view-${tab} .col`).appendChild($(".pen-panel"));
         try { localStorage.setItem("sv-tab", tab); } catch (e) { /* 保存できなくても表示には影響しない */ }
     };
     $$("#tabs button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));

@@ -254,7 +254,7 @@ function connect() {
 
 // --------------------------------------------------------------------------
 // 反則の画像：管理画面のボタンで全画面に出す。画像を読み込み終えてから出すので、途中まで描かれた絵は映らない
-// （対戦バナー専用の表示画面には出さない。得点板の表示画面に出る）
+// （得点板の表示画面にも、対戦バナー専用の表示画面にも出る）
 // --------------------------------------------------------------------------
 const pen = document.getElementById("pen");
 const penImg = document.getElementById("pen-img");
@@ -262,7 +262,7 @@ let penShowing = "";   // いま出している（出そうとしている）画
 let penHideTimer = null;
 
 function renderPenalty(src) {
-    if (ONLY_BANNER || src === penShowing) return;
+    if (src === penShowing) return;
     penShowing = src;
     clearTimeout(penHideTimer);
     if (!src) {
