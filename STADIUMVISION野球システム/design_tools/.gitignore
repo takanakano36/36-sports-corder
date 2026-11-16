@@ -1,0 +1,19 @@
+# MLBのロゴ（公式素材）は公開リポジトリに入れない
+assets/logo/*
+!assets/logo/.gitkeep
+
+# 顔検出モデル（各自ダウンロード）
+models/*
+!models/.gitkeep
+
+# 選手データ・選手写真（子どもの個人情報）と書き出した画像は公開しない
+input/*
+!input/.gitkeep
+!input/photos/
+input/photos/*
+!input/photos/.gitkeep
+output/*
+!output/.gitkeep
+
+# Python のキャッシュ
+__pycache__/
