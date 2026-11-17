@@ -75,7 +75,7 @@ def detect_face(rgb):
 MAX_SCALE = 1.25    # 写真が短いときの拡大の上限。これを超えるなら拡大しすぎず、写真の下端をなじませて消す（顔が大きく写りすぎないように）
 BOTTOM_FADE = 150   # 下端をなじませる長さ(px)
 
-def place(src, dst, mode=None, fixes=None):
+def place(src, dst, mode=None, fixes=None, lay=None):
     """fixes（人ごとの手直し。input/cutout_fixes.csv から）:
        crop  = (x0,y0,x1,y1) 元写真の割合(0〜1)。印刷した写真を撮った写真など、使う範囲を絞る
        xscale = 0〜1の数。元写真の横幅にかける倍率（横に伸びている写真を戻す。例 0.88）
@@ -84,6 +84,9 @@ def place(src, dst, mode=None, fixes=None):
        max_scale = 数（1以上）。この人だけ、写真が短いときの拡大の上限を変える"""
     global MODE
     MODE = mode or MODE
+    lay = lay or {}      # 配置の上書き（960x686版など）: W,H,FACE_W,FACE_CX,FACE_CY,CUT_Y。無ければ上の標準値
+    CW, CH = lay.get('W', W), lay.get('H', H)
+    FW, FCX, FCY, CUTY = lay.get('FACE_W', FACE_W), lay.get('FACE_CX', FACE_CX), lay.get('FACE_CY', FACE_CY), lay.get('CUT_Y', CUT_Y)
     fixes = fixes or {}
     rgb = load(src)
     if fixes.get('crop'):
@@ -113,12 +116,12 @@ def place(src, dst, mode=None, fixes=None):
         info['soft'] = float(np.median([al[i].sum() for i in rows]) / w)
     else:
         info['soft'] = 0.0      # 顔の下にほとんど写真が無い
-    s = FACE_W / w * fixes.get('face_scale', 1.0)     # face_scale：顔の検出の幅がずれて、顔が大きく/小さく出る人の補正（例 0.66）
-    # 写真の下端が CUT_Y まで届かない人は、届くところまで少しだけ拡大（顔基準の位置は維持）
+    s = FW / w * fixes.get('face_scale', 1.0)     # face_scale：顔の検出の幅がずれて、顔が大きく/小さく出る人の補正（例 0.66）
+    # 写真の下端が CUTY まで届かない人は、届くところまで少しだけ拡大（顔基準の位置は維持）
     cy_src = y + h / 2
-    reach = FACE_CY + (cut.height - cy_src) * s
-    if reach < CUT_Y + 4:
-        s2 = (CUT_Y + 4 - FACE_CY) / (cut.height - cy_src)
+    reach = FCY + (cut.height - cy_src) * s
+    if reach < CUTY + 4:
+        s2 = (CUTY + 4 - FCY) / (cut.height - cy_src)
         mx = fixes.get('max_scale', MAX_SCALE)
         if s2 / s > mx:      # 拡大しすぎると顔が大きく写るので、上限で止めて、下端はなじませて消す
             print(f'.. 写真が短い（{s2 / s:.2f} 倍必要）ので {mx} 倍で止めて下端をなじませる:', src)
@@ -129,35 +132,38 @@ def place(src, dst, mode=None, fixes=None):
             info['scaled'] = s2 / s
             s = s2
     im = cut.resize((round(cut.width * s), round(cut.height * s)), Image.LANCZOS)
-    ox = round(FACE_CX - (x + w / 2) * s); oy = round(FACE_CY - (y + h / 2) * s)
-    canvas = Image.new('RGBA', (W, H), (0, 0, 0, 0)); canvas.paste(im, (ox, oy), im)
-    for poly in fixes.get('keep', []):      # 手直し：切り抜きで欠けた所（白い壁に白いシャツの肩など）を、元の写真のまま戻す
+    ox = round(FCX - (x + w / 2) * s); oy = round(FCY - (y + h / 2) * s)
+    canvas = Image.new('RGBA', (CW, CH), (0, 0, 0, 0)); canvas.paste(im, (ox, oy), im)
+    # erase/keep の多角形は標準配置(1920x1080)の座標で書いてある。別の配置(960x686版)では、顔の中心を基準に拡大・移動して合わせる（標準配置ならそのまま）
+    kk = FW / FACE_W
+    tp = lambda poly: [((px - FACE_CX) * kk + FCX, (py - FACE_CY) * kk + FCY) for px, py in poly]
+    for poly in map(tp, fixes.get('keep', [])):      # 手直し：切り抜きで欠けた所（白い壁に白いシャツの肩など）を、元の写真のまま戻す
         full = rgb.resize(im.size, Image.LANCZOS).convert('RGBA')      # 元の写真の色（切り抜き後の画像は、消した所の色が黒になっているため使えない）
-        raw = Image.new('RGBA', (W, H), (0, 0, 0, 0)); raw.paste(full, (ox, oy))
-        pm_ = Image.new('L', (W, H), 0); ImageDraw.Draw(pm_).polygon(poly, fill=255)
+        raw = Image.new('RGBA', (CW, CH), (0, 0, 0, 0)); raw.paste(full, (ox, oy))
+        pm_ = Image.new('L', (CW, CH), 0); ImageDraw.Draw(pm_).polygon(poly, fill=255)
         canvas.paste(raw, (0, 0), pm_)
-    m = Image.new('L', (W, H), 255); d = ImageDraw.Draw(m)
-    for poly in fixes.get('erase', []):     # 手直し：残ってしまったものを消す
+    m = Image.new('L', (CW, CH), 255); d = ImageDraw.Draw(m)
+    for poly in map(tp, fixes.get('erase', [])):     # 手直し：残ってしまったものを消す
         d.polygon(poly, fill=0)
-    info['line_y'] = CUT_Y
-    if info['faded']:       # 拡大の上限で止めた人：写真の下端を折り返して下へ延ばし、全員と同じ高さ(CUT_Y)で水平にカットする（線の高さを全員そろえる）
+    info['line_y'] = CUTY
+    if info['faded']:       # 拡大の上限で止めた人：写真の下端を折り返して下へ延ばし、全員と同じ高さ(CUTY)で水平にカットする（線の高さを全員そろえる）
         end = oy + im.height
         # 画像は伸ばさない・延ばさない（引き伸ばし・折り返し・グラデは使わない）。写真が届かない分は、写真の下端でそのまま水平にカットし、
         # 線もその位置に引く。足りない量を info['gap'] に記録し、AIで肩・胸元を描き足した写真への差し替えを促す
-        info['gap'] = max(0, CUT_Y + 4 - end)
-        d.rectangle((0, end, W, H), fill=0)
-        info['line_y'] = min(CUT_Y, end)
+        info['gap'] = max(0, CUTY + 4 - end)
+        d.rectangle((0, end, CW, CH), fill=0)
+        info['line_y'] = min(CUTY, end)
     elif MODE == 'cut':   # 水平カット
-        d.rectangle((0, CUT_Y, W, H), fill=0)
+        d.rectangle((0, CUTY, CW, CH), fill=0)
     else:               # 下端グラデ透過
         end = min(FADE_END, oy + im.height)   # 写真が短い人は写真の下端で消え切る
-        for yy in range(end - FADE_LEN, H):
+        for yy in range(end - FADE_LEN, CH):
             t = min(1, (yy - (end - FADE_LEN)) / FADE_LEN)
-            d.line([(0, yy), (W, yy)], fill=int(255 * (1 - t) ** 1.5))
+            d.line([(0, yy), (CW, yy)], fill=int(255 * (1 - t) ** 1.5))
     canvas.putalpha(ImageChops.multiply(canvas.split()[3], m))
     # 写真の下端が足りずに途中で切れていないか
     bottom = oy + im.height
-    if MODE == 'cut' and bottom < CUT_Y and not info['faded']:
+    if MODE == 'cut' and bottom < CUTY and not info['faded']:
         print(f'!! 写真の下が短い（{bottom}px で切れる）:', src)
         info['short'] = True
     canvas.save(dst)

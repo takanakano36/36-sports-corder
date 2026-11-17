@@ -129,7 +129,11 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--root'); ap.add_argument('--team'); ap.add_argument('--no')
     ap.add_argument('--dry', action='store_true'); ap.add_argument('--accept-number-match', action='store_true')
+    ap.add_argument('--small', action='store_true', help='960x686 版（球場ビジョン左半分の枠）を output/960x686/ に作る。16:9 版は触らない')
     a = ap.parse_args(argv)
+    global OUT_DIR, CHECK
+    if a.small:
+        OUT_DIR = os.path.join(D, 'output', '960x686', '選手'); CHECK = os.path.join(D, 'output', '960x686', '確認_選手スライド_960x686.csv')
     root = data_root(a.root)
     teams = load_roster()
     overrides = pm.load_overrides(os.path.join(D, 'input', 'photo_overrides.csv'))
@@ -147,9 +151,13 @@ def main(argv=None):
             raise DataError(f'{next(iter(teams))[0]} に背番号 {a.no} の選手がいません（あるのは {sorted(int(p["no"]) for p in pls)}）。')
     for (team, folder) in teams:      # 途中で止まらないよう、先に全チームのフォルダがあるか調べる
         if not os.path.isdir(os.path.join(root, folder)): raise DataError(f'チームのフォルダがありません: {os.path.join(root, folder)}')
+    lay = None
     if not a.dry:
         import place
-        from slideA import slide
+        if a.small:
+            from slideA_960 import slide, LAYOUT as lay
+        else:
+            from slideA import slide
     rows, keys, cnt = [], set(), collections.Counter()
     fails_in_row = 0
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -179,12 +187,12 @@ def main(argv=None):
                     with tempfile.TemporaryDirectory() as tmp:
                         placed = os.path.join(tmp, 'p.png')
                         fx = fixes.get((team, norm_no(no)))
-                        info = place.place(r['path'], placed, 'cut', fx)
+                        info = place.place(r['path'], placed, 'cut', fx, lay)
                         img = slide(dict(pl), placed, 'cut', info['line_y'])
                     notes = [r['note']] if r['note'] else []
                     if fx: notes.append('手直しあり（input/cutout_fixes.csv）')
                     if info['gap']:
-                        notes.append(f'【要AI補正】写真が短く、拡大の上限でも線(y={place.CUT_Y})まで{info["gap"]}px届かない。画像は伸ばさず、写真の下端(y={info["line_y"]})で水平にカットして線もその位置。肩・胸元をAIで描き足した写真に差し替えると全員と同じ高さになる')
+                        notes.append(f'【要AI補正】写真が短く、拡大の上限でも線(y={(lay or {}).get("CUT_Y", place.CUT_Y)})まで{info["gap"]}px届かない。画像は伸ばさず、写真の下端(y={info["line_y"]})で水平にカットして線もその位置。肩・胸元をAIで描き足した写真に差し替えると全員と同じ高さになる')
                     sub = ''
                     if not info['face']: sub = '要確認'; notes.append('顔が見つからず位置は推測')
                     if info['faces'] > 1: notes.append(f'顔が{info["faces"]}つ見つかった（いちばん大きい顔を採用）。別の人が手前に写っていないか目で確認')
