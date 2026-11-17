@@ -10,7 +10,8 @@ SETS = {
 }
 CUT_Y = place.CUT_Y
 
-def slide(P, photo_png, mode):
+def slide(P, photo_png, mode, line_y=None):
+    ly = CUT_Y if line_y is None else line_y      # 細いラインの高さ（写真が短い人は、写真の下端の位置）
     bg = vgrad((W, H), (14, 40, 74), DEEP)
     glow(bg, 620, 520, 520, (30, 70, 122), 200)
     img = grain(bg, 5).convert('RGBA')
@@ -23,8 +24,8 @@ def slide(P, photo_png, mode):
     d = ImageDraw.Draw(img)
     if mode == 'cut':
         # 細いライン：左マージン〜赤ラインまで（写真の切り口）
-        xr = 905 - (905 - 705) * CUT_Y / H + 30
-        d.rectangle((120, CUT_Y, xr, CUT_Y + 2), fill=(255, 255, 255, 200))
+        xr = 905 - (905 - 705) * ly / H + 30
+        d.rectangle((120, ly, xr, ly + 2), fill=(255, 255, 255, 200))
     X = 1060
     # 1行目: 背番号（赤）＋チーム名
     nf = osw(64, 700); nw = tw(d, '#' + P['no'], nf)

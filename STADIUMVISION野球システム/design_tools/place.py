@@ -44,6 +44,12 @@ def keep_person(cut, face):
     if not len(ids): return cut
     keep = np.bincount(ids).argmax()
     m = np.where(lab == keep, a, 0).astype(np.uint8)
+    # 体の中にできた小さな穴（模様や影を背景と誤認したもの）を埋める。画像の縁につながる穴（腕と体のすきま等）は埋めない
+    n2, lab2, st2, _ = cv2.connectedComponentsWithStats((m <= 40).astype(np.uint8))
+    Hh, Ww = m.shape; thr = 0.004 * Hh * Ww
+    for k in range(1, n2):
+        bx, by, bw, bh, area = st2[k]
+        if area < thr and bx > 0 and by > 0 and bx + bw < Ww and by + bh < Hh: m[lab2 == k] = 255
     out = cut.copy(); out.putalpha(Image.fromarray(m)); return out
 
 import os
@@ -63,13 +69,29 @@ def detect_face(rgb):
     f = max(faces, key=lambda f: f[2] * f[3])
     return tuple(float(v) for v in f[:4])
 
-def place(src, dst, mode=None):
+MAX_SCALE = 1.15    # 写真が短いときの拡大の上限。これを超えるなら拡大しすぎず、写真の下端をなじませて消す（顔が大きく写りすぎないように）
+BOTTOM_FADE = 150   # 下端をなじませる長さ(px)
+
+def place(src, dst, mode=None, fixes=None):
+    """fixes（人ごとの手直し。input/cutout_fixes.csv から）:
+       crop  = (x0,y0,x1,y1) 元写真の割合(0〜1)。印刷した写真を撮った写真など、使う範囲を絞る
+       xscale = 0〜1の数。元写真の横幅にかける倍率（横に伸びている写真を戻す。例 0.88）
+       erase = [ [(x,y),...], ... ] スライド座標(1920x1080)の多角形。切り抜きで残ってしまったもの（背景の建物・隣の人の腕）を消す
+       keep  = [ [(x,y),...], ... ] スライド座標の多角形。切り抜きで欠けた所を、元の写真のまま戻す
+       max_scale = 数（1以上）。この人だけ、写真が短いときの拡大の上限を変える"""
     global MODE
     MODE = mode or MODE
+    fixes = fixes or {}
     rgb = load(src)
+    if fixes.get('crop'):
+        x0, y0, x1, y1 = fixes['crop']; rgb = rgb.crop((round(x0 * rgb.width), round(y0 * rgb.height), round(x1 * rgb.width), round(y1 * rgb.height)))
+    if fixes.get('xscale'):     # 元写真が横に伸びている（提出時に縦横比が変わっていた）ときの補正：横幅を縮める
+        rgb = rgb.resize((max(1, round(rgb.width * fixes['xscale'])), rgb.height), Image.LANCZOS)
+    if fixes.get('autocontrast') is not None:     # 色があせた写真（古い印刷写真など）の明暗をそろえる（PILの標準処理。cutoff=両端の無視する割合%）
+        rgb = ImageOps.autocontrast(rgb, cutoff=fixes['autocontrast'], preserve_tone=True)    # 色味は変えず、明暗だけそろえる
     cut = cutout(rgb)
     f = detect_face(rgb)
-    info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0)   # 一括ツールが確認リストに使う結果
+    info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0, faded=False)   # 一括ツールが確認リストに使う結果
     if f is None:
         print('!! 顔が見つからない（要確認）:', src)
         bx = cut.getbbox(); fx, fy, fw = bx[0] + (bx[2]-bx[0]) * 0.3, bx[1] + (bx[2]-bx[0]) * 0.2, (bx[2]-bx[0]) * 0.4
@@ -94,14 +116,32 @@ def place(src, dst, mode=None):
     reach = FACE_CY + (cut.height - cy_src) * s
     if reach < CUT_Y + 4:
         s2 = (CUT_Y + 4 - FACE_CY) / (cut.height - cy_src)
-        print(f'.. 写真が短いので {s2 / s:.2f} 倍に拡大:', src)
-        info['scaled'] = s2 / s
-        s = s2
+        mx = fixes.get('max_scale', MAX_SCALE)
+        if s2 / s > mx:      # 拡大しすぎると顔が大きく写るので、上限で止めて、下端はなじませて消す
+            print(f'.. 写真が短い（{s2 / s:.2f} 倍必要）ので {mx} 倍で止めて下端をなじませる:', src)
+            info['scaled'] = mx; info['faded'] = True
+            s = s * mx
+        else:
+            print(f'.. 写真が短いので {s2 / s:.2f} 倍に拡大:', src)
+            info['scaled'] = s2 / s
+            s = s2
     im = cut.resize((round(cut.width * s), round(cut.height * s)), Image.LANCZOS)
     ox = round(FACE_CX - (x + w / 2) * s); oy = round(FACE_CY - (y + h / 2) * s)
     canvas = Image.new('RGBA', (W, H), (0, 0, 0, 0)); canvas.paste(im, (ox, oy), im)
+    for poly in fixes.get('keep', []):      # 手直し：切り抜きで欠けた所（白い壁に白いシャツの肩など）を、元の写真のまま戻す
+        full = rgb.resize(im.size, Image.LANCZOS).convert('RGBA')      # 元の写真の色（切り抜き後の画像は、消した所の色が黒になっているため使えない）
+        raw = Image.new('RGBA', (W, H), (0, 0, 0, 0)); raw.paste(full, (ox, oy))
+        pm_ = Image.new('L', (W, H), 0); ImageDraw.Draw(pm_).polygon(poly, fill=255)
+        canvas.paste(raw, (0, 0), pm_)
     m = Image.new('L', (W, H), 255); d = ImageDraw.Draw(m)
-    if MODE == 'cut':   # 水平カット
+    for poly in fixes.get('erase', []):     # 手直し：残ってしまったものを消す
+        d.polygon(poly, fill=0)
+    info['line_y'] = CUT_Y
+    if info['faded']:       # 拡大の上限で止めた人：写真の下端でそのまま水平にカットし、細い線もその位置に引く（透過グラデにはしない）
+        end = oy + im.height
+        d.rectangle((0, end, W, H), fill=0)
+        info['line_y'] = min(CUT_Y, end)
+    elif MODE == 'cut':   # 水平カット
         d.rectangle((0, CUT_Y, W, H), fill=0)
     else:               # 下端グラデ透過
         end = min(FADE_END, oy + im.height)   # 写真が短い人は写真の下端で消え切る
@@ -111,7 +151,7 @@ def place(src, dst, mode=None):
     canvas.putalpha(ImageChops.multiply(canvas.split()[3], m))
     # 写真の下端が足りずに途中で切れていないか
     bottom = oy + im.height
-    if MODE == 'cut' and bottom < CUT_Y:
+    if MODE == 'cut' and bottom < CUT_Y and not info['faded']:
         print(f'!! 写真の下が短い（{bottom}px で切れる）:', src)
         info['short'] = True
     canvas.save(dst)

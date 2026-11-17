@@ -70,6 +70,52 @@ def retire_old(team, no, stamp):
     return moved
 
 
+def load_fixes(path):
+    """人ごとの手直し input/cutout_fixes.csv（team,no,kind,value）。kind: crop = 元写真の割合 x0,y0,x1,y1／erase = スライド座標の多角形 x,y;x,y;…（複数行可）"""
+    out = collections.defaultdict(dict)
+    if not os.path.exists(path): return out
+    for i, r in enumerate(csv.DictReader(open(path, encoding='utf-8-sig')), 2):
+        key = (r['team'].strip(), norm_no(r['no'])); kind = r['kind'].strip(); val = r['value'].strip()
+        try:
+            if kind == 'crop':
+                v = tuple(float(x) for x in val.split(','))
+                if len(v) != 4 or not (0 <= v[0] < v[2] <= 1 and 0 <= v[1] < v[3] <= 1): raise ValueError
+                out[key]['crop'] = v
+            elif kind == 'xscale':
+                v = float(val)
+                if not 0.5 <= v <= 1.0: raise ValueError
+                out[key]['xscale'] = v
+            elif kind == 'autocontrast':
+                v = float(val)
+                if not 0 <= v <= 20: raise ValueError
+                out[key]['autocontrast'] = v
+            elif kind == 'max_scale':
+                v = float(val)
+                if not 1.0 <= v <= 3.0: raise ValueError
+                out[key]['max_scale'] = v
+            elif kind in ('erase', 'keep'):
+                poly = [tuple(float(c) for c in p.split(',')) for p in val.split(';')]
+                if len(poly) < 3 or any(len(p) != 2 for p in poly): raise ValueError
+                out[key].setdefault(kind, []).append(poly)
+            else: raise ValueError
+        except ValueError:
+            raise DataError(f'cutout_fixes.csv {i}行目の書き方が違います（kind は crop か erase。crop は「x0,y0,x1,y1」(0〜1)、erase は「x,y;x,y;x,y」）: {r}')
+    return out
+
+
+REPLACE_DIR = os.path.join(D, 'input', 'photo_replace')
+REPLACE_EXT = ('.png', '.jpg', '.jpeg', '.webp', '.heic')
+
+
+def find_replacement(team, no):
+    """AIなどで補正した写真の置き場 input/photo_replace/。ファイル名は「チーム名_背番号.拡張子」（例: 関西南部リトル_05.png）。あれば、元の写真より優先して使う"""
+    if not os.path.isdir(REPLACE_DIR): return None
+    want = f'{safe(team)}_{int(no):02d}'
+    hits = [f for f in os.listdir(REPLACE_DIR) if os.path.splitext(f)[0] == want and f.lower().endswith(REPLACE_EXT)]
+    if len(hits) > 1: raise DataError(f'input/photo_replace に同じ選手の写真が複数あります: {hits}')
+    return os.path.join(REPLACE_DIR, hits[0]) if hits else None
+
+
 def norm_no(s):
     s = unicodedata.normalize('NFKC', str(s)).strip()
     return str(int(s)) if re.fullmatch(r'\d{1,3}', s) else s
@@ -83,6 +129,7 @@ def main(argv=None):
     root = data_root(a.root)
     teams = load_roster()
     overrides = pm.load_overrides(os.path.join(D, 'input', 'photo_overrides.csv'))
+    fixes = load_fixes(os.path.join(D, 'input', 'cutout_fixes.csv'))
     if a.team:
         a.team = unicodedata.normalize('NFKC', a.team).strip()
         teams = collections.OrderedDict((k, v) for k, v in teams.items() if a.team in unicodedata.normalize('NFKC', k[0]))
@@ -112,6 +159,8 @@ def main(argv=None):
             for pl in pls:
                 if a.no and norm_no(pl['no']) != a.no: continue
                 no, name = pl['no'], pl['name']; keys.add((team, no)); r = res[no]
+                rep = find_replacement(team, no)
+                if rep: r = dict(status='ok', path=rep, note='補正した写真を使用（input/photo_replace）')
                 ph = os.path.basename(r['path']) if r['path'] else ''
                 if not a.dry: retire_old(team, no, stamp)
                 if r['status'] in ('none', 'candidate', 'ambiguous') or not r['path']:
@@ -125,9 +174,12 @@ def main(argv=None):
                 try:
                     with tempfile.TemporaryDirectory() as tmp:
                         placed = os.path.join(tmp, 'p.png')
-                        info = place.place(r['path'], placed, 'cut')
-                        img = slide(dict(pl), placed, 'cut')
+                        fx = fixes.get((team, norm_no(no)))
+                        info = place.place(r['path'], placed, 'cut', fx)
+                        img = slide(dict(pl), placed, 'cut', info['line_y'])
                     notes = [r['note']] if r['note'] else []
+                    if fx: notes.append('手直しあり（input/cutout_fixes.csv）')
+                    if info['faded']: notes.append(f'写真が短く、顔が大きくなりすぎないよう拡大を上限で止め、写真の下端で水平にカットして線もその位置に引いた（y={info["line_y"]}）')
                     sub = ''
                     if not info['face']: sub = '要確認'; notes.append('顔が見つからず位置は推測')
                     if info['faces'] > 1: notes.append(f'顔が{info["faces"]}つ見つかった（いちばん大きい顔を採用）。別の人が手前に写っていないか目で確認')
