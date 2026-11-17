@@ -64,12 +64,15 @@ def detect_face(rgb):
     a = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
     det = cv2.FaceDetectorYN.create('onnx', _YUNET_BYTES, np.empty(0, np.uint8), (a.shape[1], a.shape[0]), 0.6)
     _, faces = det.detect(a)
+    if faces is None or not len(faces):       # 広角で顔がゆがんだ写真などは、基準をゆるめてもう一度だけ試す（それでも無ければ「見つからない」として確認リストへ）
+        det = cv2.FaceDetectorYN.create('onnx', _YUNET_BYTES, np.empty(0, np.uint8), (a.shape[1], a.shape[0]), 0.3)
+        _, faces = det.detect(a)
     detect_face.count = 0 if faces is None else len(faces)       # 見つかった顔の数（一括ツールが「複数」を確認リストに出すため）
     if faces is None or not len(faces): return None
     f = max(faces, key=lambda f: f[2] * f[3])
     return tuple(float(v) for v in f[:4])
 
-MAX_SCALE = 1.15    # 写真が短いときの拡大の上限。これを超えるなら拡大しすぎず、写真の下端をなじませて消す（顔が大きく写りすぎないように）
+MAX_SCALE = 1.25    # 写真が短いときの拡大の上限。これを超えるなら拡大しすぎず、写真の下端をなじませて消す（顔が大きく写りすぎないように）
 BOTTOM_FADE = 150   # 下端をなじませる長さ(px)
 
 def place(src, dst, mode=None, fixes=None):
@@ -91,7 +94,7 @@ def place(src, dst, mode=None, fixes=None):
         rgb = ImageOps.autocontrast(rgb, cutoff=fixes['autocontrast'], preserve_tone=True)    # 色味は変えず、明暗だけそろえる
     cut = cutout(rgb)
     f = detect_face(rgb)
-    info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0, faded=False)   # 一括ツールが確認リストに使う結果
+    info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0, faded=False, extended=0, gap=0)   # 一括ツールが確認リストに使う結果
     if f is None:
         print('!! 顔が見つからない（要確認）:', src)
         bx = cut.getbbox(); fx, fy, fw = bx[0] + (bx[2]-bx[0]) * 0.3, bx[1] + (bx[2]-bx[0]) * 0.2, (bx[2]-bx[0]) * 0.4
@@ -110,7 +113,7 @@ def place(src, dst, mode=None, fixes=None):
         info['soft'] = float(np.median([al[i].sum() for i in rows]) / w)
     else:
         info['soft'] = 0.0      # 顔の下にほとんど写真が無い
-    s = FACE_W / w
+    s = FACE_W / w * fixes.get('face_scale', 1.0)     # face_scale：顔の検出の幅がずれて、顔が大きく/小さく出る人の補正（例 0.66）
     # 写真の下端が CUT_Y まで届かない人は、届くところまで少しだけ拡大（顔基準の位置は維持）
     cy_src = y + h / 2
     reach = FACE_CY + (cut.height - cy_src) * s
@@ -137,8 +140,11 @@ def place(src, dst, mode=None, fixes=None):
     for poly in fixes.get('erase', []):     # 手直し：残ってしまったものを消す
         d.polygon(poly, fill=0)
     info['line_y'] = CUT_Y
-    if info['faded']:       # 拡大の上限で止めた人：写真の下端でそのまま水平にカットし、細い線もその位置に引く（透過グラデにはしない）
+    if info['faded']:       # 拡大の上限で止めた人：写真の下端を折り返して下へ延ばし、全員と同じ高さ(CUT_Y)で水平にカットする（線の高さを全員そろえる）
         end = oy + im.height
+        # 画像は伸ばさない・延ばさない（引き伸ばし・折り返し・グラデは使わない）。写真が届かない分は、写真の下端でそのまま水平にカットし、
+        # 線もその位置に引く。足りない量を info['gap'] に記録し、AIで肩・胸元を描き足した写真への差し替えを促す
+        info['gap'] = max(0, CUT_Y + 4 - end)
         d.rectangle((0, end, W, H), fill=0)
         info['line_y'] = min(CUT_Y, end)
     elif MODE == 'cut':   # 水平カット

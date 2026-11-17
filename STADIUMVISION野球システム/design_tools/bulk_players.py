@@ -89,6 +89,10 @@ def load_fixes(path):
                 v = float(val)
                 if not 0 <= v <= 20: raise ValueError
                 out[key]['autocontrast'] = v
+            elif kind == 'face_scale':
+                v = float(val)
+                if not 0.3 <= v <= 2.0: raise ValueError
+                out[key]['face_scale'] = v
             elif kind == 'max_scale':
                 v = float(val)
                 if not 1.0 <= v <= 3.0: raise ValueError
@@ -179,7 +183,8 @@ def main(argv=None):
                         img = slide(dict(pl), placed, 'cut', info['line_y'])
                     notes = [r['note']] if r['note'] else []
                     if fx: notes.append('手直しあり（input/cutout_fixes.csv）')
-                    if info['faded']: notes.append(f'写真が短く、顔が大きくなりすぎないよう拡大を上限で止め、写真の下端で水平にカットして線もその位置に引いた（y={info["line_y"]}）')
+                    if info['gap']:
+                        notes.append(f'【要AI補正】写真が短く、拡大の上限でも線(y={place.CUT_Y})まで{info["gap"]}px届かない。画像は伸ばさず、写真の下端(y={info["line_y"]})で水平にカットして線もその位置。肩・胸元をAIで描き足した写真に差し替えると全員と同じ高さになる')
                     sub = ''
                     if not info['face']: sub = '要確認'; notes.append('顔が見つからず位置は推測')
                     if info['faces'] > 1: notes.append(f'顔が{info["faces"]}つ見つかった（いちばん大きい顔を採用）。別の人が手前に写っていないか目で確認')
