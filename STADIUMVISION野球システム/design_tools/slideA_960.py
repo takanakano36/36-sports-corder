@@ -9,8 +9,8 @@ from make import *
 CW, CH = 1920, 1372
 OUT_W, OUT_H = 960, 686
 CUT_Y = 1222                                  # 写真の水平カット線＝右の成績の下のラインと同じ高さ（全員そろえる）
-FACE_W = 270                                  # 16:9版は218。肩幅の広い写真が右の成績の文字にかからない大きさ
-FACE_CX = 510                                 # 肩が左の縁で切れないよう 16:9版(500)より少し右
+FACE_W = 225                                  # 16:9版は218（270だと大きすぎると指摘 2026-11-18）。ほぼ16:9版と同じ見え方
+FACE_CX = 500
 FACE_CY = round(CUT_Y - (952 - 457) * FACE_W / 218)      # 16:9版(顔の中心457→線952, 顔218)と同じ比率
 LAYOUT = dict(W=CW, H=CH, FACE_W=FACE_W, FACE_CX=FACE_CX, FACE_CY=FACE_CY, CUT_Y=CUT_Y)
 
@@ -31,7 +31,7 @@ def slide(P, photo_png, mode='cut', line_y=None):
     if mode == 'cut':
         xr = 905 - SL * ly / CH + 30
         d.rectangle((120, ly, xr, ly + 3), fill=(255, 255, 255, 200))
-    X = 1090; RIGHT = CW - 80
+    X = 1040; RIGHT = CW - 80
     # 1行目: 背番号（青緑）＋チーム名
     BASE1 = 440
     nf = osw(78, 700); nw = tw(d, '#' + P['no'], nf)
