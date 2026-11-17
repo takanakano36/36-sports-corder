@@ -3,14 +3,11 @@ import csv
 from make import *
 import place
 
-ROWS = {(r['team'], r['no']): r for r in csv.DictReader(open(D + '/input/roster.csv', encoding='utf-8-sig'))}
 import sys
-# テスト用: (チーム名, 背番号) → input/photos 内のファイル名
+# テスト用: (チーム名, 背番号) → input/photos 内のファイル名（単体で動かすときだけ使う。一括は bulk_players.py）
 SETS = {
   'test': {},
 }
-SET = sys.argv[1] if len(sys.argv) > 1 else 'test'
-PHOTOS = SETS[SET]
 CUT_Y = place.CUT_Y
 
 def slide(P, photo_png, mode):
@@ -67,15 +64,19 @@ def slide(P, photo_png, mode):
     img.alpha_composite(lg, (W - 90 - lg.width, 92))
     return img.convert('RGB')
 
-outs = []
-for key, src in PHOTOS.items():
-    tag = src.split('.')[0]
-    ph = f'{OUT}/placed_{tag}.png'
-    place.place(f'{D}/input/photos/{src}', ph, 'cut')
-    slide(ROWS[key], ph, 'cut').save(f'{OUT}/A_{tag}.png', optimize=True); outs.append(f'{OUT}/A_{tag}.png')
+if __name__ == '__main__':
+    ROWS = {(r['team'], r['no']): r for r in csv.DictReader(open(D + '/input/roster.csv', encoding='utf-8-sig'))}
+    SET = sys.argv[1] if len(sys.argv) > 1 else 'test'
+    PHOTOS = SETS[SET]
+    outs = []
+    for key, src in PHOTOS.items():
+        tag = src.split('.')[0]
+        ph = f'{OUT}/placed_{tag}.png'
+        place.place(f'{D}/input/photos/{src}', ph, 'cut')
+        slide(ROWS[key], ph, 'cut').save(f'{OUT}/A_{tag}.png', optimize=True); outs.append(f'{OUT}/A_{tag}.png')
 
-# 並べて比較用シート
-ims = [Image.open(o).resize((960, 540)) for o in outs]
-sheet = Image.new('RGB', (1920, 1080), (0, 0, 0))
-for i, im in enumerate(ims): sheet.paste(im, ((i % 2) * 960, (i // 2) * 540))
-sheet.save(f'{OUT}/A_sheet_{SET}.png')
+    # 並べて比較用シート
+    ims = [Image.open(o).resize((960, 540)) for o in outs]
+    sheet = Image.new('RGB', (1920, 1080), (0, 0, 0))
+    for i, im in enumerate(ims): sheet.paste(im, ((i % 2) * 960, (i // 2) * 540))
+    sheet.save(f'{OUT}/A_sheet_{SET}.png')

@@ -5,7 +5,9 @@ FD = D + '/../fonts/'           # NotoSansJP / Oswald（同梱）
 LOGO = D + '/assets/logo/'      # MLBのロゴは公開リポジトリに入れない。各自ここに置く
 OUT = D + '/output/'
 W, H = 1920, 1080
-NAVY = (12, 35, 64); DEEP = (5, 16, 34); RED = (210, 38, 48); OFF = (242, 239, 232); GRAY = (139, 151, 171)
+NAVY = (12, 35, 64); DEEP = (5, 16, 34)
+RED = (33, 190, 198)   # アクセント色。MLB指定 #21BEC6（2026-11-16）。名前は元の赤(210,38,48)のまま RED（他のファイルがこの名前で参照）
+OFF = (242, 239, 232); GRAY = (139, 151, 171)
 
 P = dict(team='SAMPLE TEAM', no='0', name='山田 太郎', kana='やまだ たろう', grade='6年', pos='投手',
          avg='.000', throw='右', bat='右', era='0.00')   # 見本用のダミー

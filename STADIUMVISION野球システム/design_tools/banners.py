@@ -70,10 +70,11 @@ def matchup(block, game, time, venue, date, t1, t2):
     return img
 
 # ------------------------------------------------ 3. 進行
-def program(no, ja, en, kicker):
+def program(no, ja, en, kicker, show_no=False):
+    # 2026-11-17 プロデューサー指示：進行スライドに式次第の番号は出さない（no は並び順・ファイル名用。show_no=True で従来どおり表示）
     img = base(); d = ImageDraw.Draw(img)
     slash(img, 360, 50, 160)
-    outline_text(img, (60, 820), f'{no:02d}', osw(560, 700), 5, WHITE, 60)
+    if show_no: outline_text(img, (60, 820), f'{no:02d}', osw(560, 700), 5, WHITE, 60)
     X = 520
     text(d, (X, 360), kicker, osw(40, 600), RED, spacing=10)
     d.rectangle((X, 390, X + 100, 393), fill=LINE)
@@ -148,7 +149,79 @@ def matchup2(header, playball, t1, sub1, t2, sub2, footer_label, style='split'):
     footer(img, d, footer_label)
     return img
 
+# ------------------------------------------------ 2''. 対戦【決定版】名前を大きく・外側をセーフマージンにそろえる
+# 2026-11-16 プロデューサー承認。左チームは上段・左寄せ、右チームは下段・右寄せ。副題（連盟名）も同じ側に寄せる。
+# 色は make.py の RED（#21BEC6）。matchup2 は元の版として残してある。
+SAFE = 120                                   # セーフマージン（左右）
+BIG = dict(fs=120,                           # 名前の基準の大きさ（長い名前は幅に入るまで縮める。2チーム同じ大きさ）
+           center_y=(325, 722),              # 名前の行の中心（左チーム, 右チーム）
+           sub_center_y=(427, 822),          # 副題の行の中心
+           vs_fs=190, vs_ink_top=474, vs_center_x=935, vs_skew=0.25)
+
+def _ink(f, s, anchor='lm'):
+    l, t, r, b = f.getbbox(s, anchor=anchor); return l, r      # 文字の「見える部分」の左右
+
+def _shadow_mask(img, mask, color, alpha, dx, dy, sigma):
+    sh = mask.filter(ImageFilter.GaussianBlur(sigma)).point(lambda v: v * alpha // 255)
+    img.paste(Image.new('RGBA', img.size, color + (255,)), (dx, dy), sh)
+
+def matchup_big(header, playball, t1, sub1, t2, sub2, footer_label):
+    SPLIT_TOP, SPLIT_BOT = 1130, 790
+    img = base()
+    slash(img, SPLIT_TOP - 28, 56, SPLIT_TOP - SPLIT_BOT, y0=96)
+    d = ImageDraw.Draw(img)
+    # ヘッダー帯＋タブ（matchup2 と同じ）
+    HB = 96
+    d.rectangle((0, 0, W, HB), fill=DEEP + (255,))
+    center_text(d, 66, header, jp(50, 900), WHITE, spacing=8)
+    d.polygon([(690, HB), (1230, HB), (1180, 222), (740, 222)], fill=DEEP + (255,))
+    center_text(d, HB + 38, 'PLAY BALL', osw(26, 600), RED, spacing=10)
+    center_text(d, HB + 100, playball, osw(48, 600), WHITE, spacing=4)
+
+    # 名前：2チーム同じ大きさ。長いほうが「セーフマージンの内側いっぱい」に入る大きさまで縮める
+    maxw = W - 2 * SAFE
+    fs = BIG['fs']
+    for t in (t1, t2):
+        l, r = _ink(jp(BIG['fs'], 900), t)
+        if r - l > maxw: fs = min(fs, BIG['fs'] * maxw / (r - l))
+    f = jp(fs, 900)
+    sf = jp(40, 500); SP = 8; LN = 56; GAP = 31
+    names = Image.new('L', (W, H), 0); nd = ImageDraw.Draw(names)
+    subs = []
+    for i, (t, sub) in enumerate(((t1, sub1), (t2, sub2))):
+        l, r = _ink(f, t); inkw = r - l
+        ink_left = SAFE if i == 0 else (W - SAFE) - inkw        # 外側の端をセーフマージンにそろえる
+        cy = BIG['center_y'][i]
+        nd.text((ink_left - l, cy), t, font=f, fill=255, anchor='lm')
+        stw = tw(d, sub, sf, SP); subw = LN + GAP + stw + GAP + LN
+        sx = ink_left if i == 0 else ink_left + inkw - subw       # 副題：左チームは左端、右チームは右端にそろえる
+        subs.append((sx, BIG['sub_center_y'][i], sub, stw))
+    _shadow_mask(img, names, (2, 10, 28), 140, 0, 3, 8)           # 斜めラインの上でも読める、うすい影
+    img.paste(Image.new('RGBA', (W, H), WHITE + (255,)), (0, 0), names)
+    d = ImageDraw.Draw(img)
+    for sx, cy, sub, stw in subs:
+        d.rectangle((sx, cy - 1, sx + LN - 1, cy), fill=WHITE)
+        text(d, (sx + LN + GAP, cy), sub, sf, WHITE, anchor='lm', spacing=SP)
+        x2 = sx + LN + GAP + stw + GAP
+        d.rectangle((x2, cy - 1, x2 + LN - 1, cy), fill=WHITE)
+
+    # VS（黄・斜体）：2チームの間、赤ラインの上
+    vsf = osw(BIG['vs_fs'], 700)
+    l, t, r, b = vsf.getbbox('VS', anchor='ls')
+    yb = BIG['vs_ink_top'] - t                                     # 文字の見える上端が vs_ink_top になる基線
+    m = Image.new('L', (W, H), 0)
+    ImageDraw.Draw(m).text((BIG['vs_center_x'], yb), 'VS', font=vsf, fill=255, anchor='ms')
+    k = BIG['vs_skew']
+    m = m.transform(m.size, Image.AFFINE, (1, k, -k * yb, 0, 1, 0), Image.BICUBIC)
+    _shadow_mask(img, m, (0, 0, 0), 115, 6, 8, 7)
+    img.paste(Image.new('RGBA', (W, H), YELLOW + (255,)), (0, 0), m)
+    d = ImageDraw.Draw(img)
+    footer(img, d, footer_label)
+    return img
+
 if __name__ == '__main__':
+    matchup_big('Cブロック　第一試合', '11.22 SUN 9:00', '稲沢中央ボーイズ', 'ボーイズリーグ', '東京北砂リトルリーグ', '東京連盟',
+                'MORIYAMA CITY STADIUM').convert('RGB').save(f'{OUT}/T2_matchup_big.png')
     matchup2('Cブロック　第一試合', '11.22 SUN  9:00', '稲沢中央ボーイズ', 'ボーイズリーグ', '東京北砂リトルリーグ', '東京連盟',
              'MORIYAMA CITY STADIUM').convert('RGB').save(f'{OUT}/T2_matchup_v3.png')
     matchup2('Cブロック　第一試合', '11.22 SUN  9:00', '稲沢中央ボーイズ', 'ボーイズリーグ', '東京北砂リトルリーグ', '東京連盟',

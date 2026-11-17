@@ -8,6 +8,8 @@ Photoshop では photo レイヤーを「そのまま(As Is)」で差し替え�
 import sys, cv2, numpy as np
 from PIL import Image, ImageDraw, ImageChops, ImageOps
 from rembg import remove, new_session
+import pillow_heif
+pillow_heif.register_heif_opener()      # iPhone の HEIC 写真も開けるようにする
 
 W, H = 1920, 1080
 # ---- 配置ルール（ここだけ変えれば全員に反映） ----
@@ -46,11 +48,17 @@ def keep_person(cut, face):
 
 import os
 _YUNET = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models', 'yunet.onnx')
+_YUNET_BYTES = None
 def detect_face(rgb):
     # YuNet(OpenCV) 顔検出：横向き写真や隣の子が写っていても、一番大きい顔を採用
+    # ※ OpenCV は日本語を含むパスのモデルを直接読めないので、バイト列にして渡す
+    global _YUNET_BYTES
+    if _YUNET_BYTES is None:
+        with open(_YUNET, 'rb') as fh: _YUNET_BYTES = np.frombuffer(fh.read(), np.uint8)
     a = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
-    det = cv2.FaceDetectorYN.create(_YUNET, '', (a.shape[1], a.shape[0]), 0.6)
+    det = cv2.FaceDetectorYN.create('onnx', _YUNET_BYTES, np.empty(0, np.uint8), (a.shape[1], a.shape[0]), 0.6)
     _, faces = det.detect(a)
+    detect_face.count = 0 if faces is None else len(faces)       # 見つかった顔の数（一括ツールが「複数」を確認リストに出すため）
     if faces is None or not len(faces): return None
     f = max(faces, key=lambda f: f[2] * f[3])
     return tuple(float(v) for v in f[:4])
@@ -61,12 +69,25 @@ def place(src, dst, mode=None):
     rgb = load(src)
     cut = cutout(rgb)
     f = detect_face(rgb)
+    info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0)   # 一括ツールが確認リストに使う結果
     if f is None:
         print('!! 顔が見つからない（要確認）:', src)
         bx = cut.getbbox(); fx, fy, fw = bx[0] + (bx[2]-bx[0]) * 0.3, bx[1] + (bx[2]-bx[0]) * 0.2, (bx[2]-bx[0]) * 0.4
         f = (fx, fy, fw, fw)
     cut = keep_person(cut, f)
     x, y, w, h = f
+    # 切り抜きの欠けの目安：顔の下の「胴の幅」÷顔の幅（中央値）。普通は2.4以上。白い壁に白いシャツで胴が欠けたり、
+    # 顔のアップで胴がほとんど無い写真だと小さくなる。目視確認の目安であり、判定ではない（関西南部の19人で、欠けた4人が1.4〜2.0、ほかは2.4以上）
+    al = np.array(cut.split()[3]) > 127
+    if not al.any(): raise RuntimeError('背景の切り抜きで人が残りませんでした（写真を確認してください）')
+    ys = np.where(al.any(axis=1))[0]
+    bot = int(ys.max()) if len(ys) else 0
+    y0 = int(y + h)
+    if bot > y0 + 12:
+        rows = range(y0, bot, max(1, (bot - y0) // 12))
+        info['soft'] = float(np.median([al[i].sum() for i in rows]) / w)
+    else:
+        info['soft'] = 0.0      # 顔の下にほとんど写真が無い
     s = FACE_W / w
     # 写真の下端が CUT_Y まで届かない人は、届くところまで少しだけ拡大（顔基準の位置は維持）
     cy_src = y + h / 2
@@ -74,6 +95,7 @@ def place(src, dst, mode=None):
     if reach < CUT_Y + 4:
         s2 = (CUT_Y + 4 - FACE_CY) / (cut.height - cy_src)
         print(f'.. 写真が短いので {s2 / s:.2f} 倍に拡大:', src)
+        info['scaled'] = s2 / s
         s = s2
     im = cut.resize((round(cut.width * s), round(cut.height * s)), Image.LANCZOS)
     ox = round(FACE_CX - (x + w / 2) * s); oy = round(FACE_CY - (y + h / 2) * s)
@@ -91,8 +113,10 @@ def place(src, dst, mode=None):
     bottom = oy + im.height
     if MODE == 'cut' and bottom < CUT_Y:
         print(f'!! 写真の下が短い（{bottom}px で切れる）:', src)
+        info['short'] = True
     canvas.save(dst)
     print(f'ok {src} -> {dst}  scale={s:.3f} face=({x},{y},{w},{h})')
+    return info
 
 if __name__ == '__main__':
     place(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
