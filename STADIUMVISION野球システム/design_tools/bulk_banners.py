@@ -74,16 +74,21 @@ def init_templates():
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--init', action='store_true'); ap.add_argument('--only', choices=['入場', '対戦', '進行', 'ロゴ'])
+    ap.add_argument('--small', action='store_true', help='960x686 版（球場ビジョン左半分の枠）を output/960x686/ に作る。16:9 版は触らない')
     a = ap.parse_args(argv)
     if a.init: init_templates(); return 0
     import banners as B
+    out_root = OUT_ROOT
+    if a.small:
+        import banners_960 as B
+        out_root = os.path.join(OUT_ROOT, '960x686')
     tm = teams_map()
     def team(name, where):
         if name not in tm: raise DataError(f'{where}: チーム名「{name}」が teams.csv の display にありません（表記ゆれ？）。')
         return tm[name]
     made = []
     def save(img, sub, fname):
-        d = os.path.join(OUT_ROOT, sub); os.makedirs(d, exist_ok=True)
+        d = os.path.join(out_root, sub); os.makedirs(d, exist_ok=True)
         p = os.path.join(d, fname); img.convert('RGB').save(p, optimize=True); made.append(os.path.relpath(p, D)); print('  ', made[-1])
     if a.only in (None, '入場'):
         print('■ 入場')
@@ -114,7 +119,11 @@ def main(argv=None):
         for r in read_csv('closing.csv'):
             n = int(r['no'])
             save(B.program(n, r['ja'], r['en'], r['kicker'], footer_label=CLOSING_FOOTER), '進行_閉会式', f'{n:02d}_{safe(r["ja"])}.png')
-    if a.only in (None, 'ロゴ'):
+    if a.only in (None, 'ロゴ') and a.small:
+        print('■ ロゴ（横長・2段 960x686）')
+        for kind in ('horiz', 'stack'):
+            for st in ('design', 'black'): save(B.logo_960(kind, st), 'ロゴ', f'L_960x686_{kind}_{st}.png')
+    elif a.only in (None, 'ロゴ'):
         print('■ ロゴ（横長 32:9 と 16:9／2段 16:9）')
         for (w, h, tag) in ((3840, 1080, '32x9'), (1920, 1080, '16x9')):
             for st in ('design', 'black'): save(B.logo_banner(w, h, st), 'ロゴ', f'L_{tag}_{st}.png')
