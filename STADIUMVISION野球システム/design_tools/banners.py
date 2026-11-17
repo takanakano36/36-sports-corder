@@ -41,7 +41,7 @@ def entrance(order, team, league):
     d.rectangle((160, 410, 260, 413), fill=LINE)
     f = fit(d, team, lambda s: jp(s, 900), 180, 1400)
     text(d, (150, 650), team, f, WHITE)
-    text(d, (164, 740), league, jp(44, 500), (200, 210, 225), spacing=4)
+    if league: text(d, (164, 740), league, jp(44, 500), (200, 210, 225), spacing=4)     # 空なら出さない
     footer(img, d, '11.21 SAT  OPENING CEREMONY')
     return img
 
@@ -70,18 +70,32 @@ def matchup(block, game, time, venue, date, t1, t2):
     return img
 
 # ------------------------------------------------ 3. 進行
-def program(no, ja, en, kicker, show_no=False):
+def program(no, ja, en, kicker, show_no=False, footer_label='11.21 SAT  MORIYAMA CITY STADIUM'):
     # 2026-11-17 プロデューサー指示：進行スライドに式次第の番号は出さない（no は並び順・ファイル名用。show_no=True で従来どおり表示）
     img = base(); d = ImageDraw.Draw(img)
     slash(img, 360, 50, 160)
     if show_no: outline_text(img, (60, 820), f'{no:02d}', osw(560, 700), 5, WHITE, 60)
-    X = 520
-    text(d, (X, 360), kicker, osw(40, 600), RED, spacing=10)
-    d.rectangle((X, 390, X + 100, 393), fill=LINE)
-    f = fit(d, ja, lambda s: jp(s, 900), 210, W - X - 140)
-    text(d, (X - 8, 620), ja, f, WHITE)
-    text(d, (X, 710), en, osw(56, 500), (200, 210, 225), spacing=12)
-    footer(img, d, '11.21 SAT  MORIYAMA CITY STADIUM')
+    # 2026-11-18 配置を作り直し：見出し・線・項目名（・英語名）を「ひとかたまり」にして、
+    # 赤ラインの右〜右マージンの空き地の真ん中（縦は、上端〜フッターの線の真ん中）に置く。文字は中央そろえ。
+    CX = (350 + (W - 120)) / 2                  # 赤ラインの右端(中ほどで約350)〜右マージン(W-120)の中心
+    CY = FOOT_Y / 2                              # 縦の中心（上端〜フッターの線）
+    kf = osw(40, 600); KSP = 10
+    f = fit(d, ja, lambda s: jp(s, 900), 200, 1300)
+    ef = osw(56, 500); ESP = 12
+    GAP1, RULE, GAP2, GAP3 = 34, 4, 70, 44       # 見出し→線→項目名→英語名 のすき間
+    kt, kb = kf.getbbox(kicker, anchor='ls')[1::2]          # 文字の見える上端・下端（基線からの距離）
+    jt, jb = f.getbbox(ja, anchor='ls')[1::2]
+    et, eb = ef.getbbox(en, anchor='ls')[1::2] if en else (0, 0)
+    # 見出しと線の位置は全スライド共通（項目名の大きさが変わっても、切り替えたときに動かない）。項目名は、その枠の中で上下中央
+    rt, rb = jp(200, 900).getbbox('国', anchor='ls')[1::2]      # 基準の項目名の高さ（200px）
+    SLOT = rb - rt
+    total = (kb - kt) + GAP1 + RULE + GAP2 + SLOT
+    y = CY - total / 2                           # かたまりの上端
+    text(d, (CX, y - kt), kicker, kf, RED, anchor='ms', spacing=KSP); y += kb - kt + GAP1
+    d.rectangle((CX - 50, y, CX + 50, y + RULE - 1), fill=LINE); y += RULE + GAP2
+    text(d, (CX, y + SLOT / 2 - (jt + jb) / 2), ja, f, WHITE, anchor='ms'); y += SLOT
+    if en: text(d, (CX, y + GAP3 - et), en, ef, (200, 210, 225), anchor='ms', spacing=ESP)
+    footer(img, d, footer_label)
     return img
 
 if __name__ == '__main__':
@@ -90,7 +104,7 @@ if __name__ == '__main__':
     # ※対戦カードの組み合わせ順はサンプル（要確認）
     matchup('Cブロック', '第一試合', '9:00', 'MORIYAMA CITY STADIUM', '11.22 SUN',
             '稲沢中央ボーイズ', '東京北砂リトルリーグ').convert('RGB').save(f'{OUT}/T2_matchup.png')
-    program(7, '選手宣誓', "PLAYERS' OATH", 'OPENING CEREMONY').convert('RGB').save(f'{OUT}/T3_program.png')
+    program(3, '主催者挨拶', '', 'OPENING CEREMONY').convert('RGB').save(f'{OUT}/T3_program.png')
     print('ok')
 
 # ------------------------------------------------ 2'. 対戦（左右分割・左上→右下の対角配置）

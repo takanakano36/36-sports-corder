@@ -6,7 +6,8 @@
   python bulk_banners.py --only 対戦  … 入場／対戦／進行／ロゴ のどれかだけ作る
 
 一覧CSV（input/ に置く。Excelで開いて編集してよい。保存は「CSV UTF-8」）
-  entrance.csv … order,team          入場順とチーム名（teams.csv の display と同じ名前）
+  entrance.csv … order,team[,league] 入場順とチーム名（teams.csv の display と同じ名前）。名簿のないチームは league 列にリーグ名を書く
+  closing.csv  … no,ja,en,kicker     閉会式の進行スライド（program.csv と同じ書き方）
   matches.csv  … block,game,date,time,team1,team2,venue   例: Cブロック,第一試合,11.22 SUN,9:00,稲沢中央ボーイズ,東京北砂リトルリーグ,MORIYAMA CITY STADIUM
                  venue（画面右下に出る会場名）は必須。
   program.csv  … no,ja,en,kicker     並び順・項目名・英語名（空でもよい）・見出し。番号は画面には出さない（2026-11-17 指示）
@@ -29,8 +30,13 @@ BLOCKS = [('Aブロック', 'KUSATSU GREEN STADIUM', ['大洲ボーイズ', 'ガ
           ('Cブロック', 'MORIYAMA CITY STADIUM', ['稲沢中央ボーイズ', '東京北砂リトルリーグ', 'Unites Niigata']),
           ('Dブロック', 'SHIGA KIBOGAOKA PARK BASEBALL STADIUM', ['わかやまポニー ATTA BOYS', '深谷ボーイズ', '関西南部リトル'])]
 GAMES = [('第一試合', '9:00', 0, 1), ('第二試合', '11:30', 1, 2), ('第三試合', '14:00', 2, 0)]     # (名前, 開始, 先攻の番号, 後攻の番号)
+# 2026-11-18 最新マニュアル(p.50 開会式 式次第)より：選手宣誓は無くなり、始球式が7番
 PROGRAM = [(1, 'チーム入場行進', ''), (2, '開会宣言', ''), (3, '主催者挨拶', ''), (4, '後援団体参列者ご紹介', ''),
-           (5, '三日月滋賀県知事挨拶', ''), (6, 'ゲストご挨拶', ''), (7, '選手宣誓', "PLAYERS' OATH"), (8, '始球式', '')]
+           (5, '三日月滋賀県知事挨拶', ''), (6, 'ゲストご挨拶', ''), (7, '始球式', '')]
+# 2026-11-18 最新マニュアル(p.55 閉会式 11/23 15:00 式次第)。「表彰式（トロフィー・メダル授与）」は画面では「表彰式」だけにする
+CLOSING = [(1, '開式の辞', ''), (2, '成績発表', ''), (3, '表彰式', ''), (4, 'ゲストご挨拶', ''), (5, '閉会挨拶', '')]
+OPENING_FOOTER = '11.21 SAT  MORIYAMA CITY STADIUM'
+CLOSING_FOOTER = '11.23 MON  MORIYAMA CITY STADIUM'
 
 
 def safe(s):
@@ -62,6 +68,7 @@ def init_templates():
     put('matches.csv', ['block', 'game', 'date', 'time', 'team1', 'team2', 'venue'],
         [(b, g, '11.22 SUN', t, ts[i], ts[j], v) for b, v, ts in BLOCKS for g, t, i, j in GAMES])
     put('program.csv', ['no', 'ja', 'en', 'kicker'], [(n, ja, en, 'OPENING CEREMONY') for n, ja, en in PROGRAM])
+    put('closing.csv', ['no', 'ja', 'en', 'kicker'], [(n, ja, en, 'CLOSING CEREMONY') for n, ja, en in CLOSING])
 
 
 def main(argv=None):
@@ -81,7 +88,13 @@ def main(argv=None):
     if a.only in (None, '入場'):
         print('■ 入場')
         for i, r in enumerate(read_csv('entrance.csv'), 2):
-            t = team(r['team'], f'entrance.csv {i}行目'); o = int(r['order'])
+            o = int(r['order'])
+            if r['team'] not in tm and (r.get('league') or '').strip():
+                # 選手名簿のないチーム（招待チームなど）：リーグ名を entrance.csv の league 列に書けば、名簿なしで作る
+                lg = r['league'].strip()
+                t = dict(display=r['team'], league='' if lg == '-' else lg)      # 「-」ならリーグ名の行を出さない
+            else:
+                t = team(r['team'], f'entrance.csv {i}行目')
             save(B.entrance(o, t['display'], t['league']), '入場', f'{o:02d}_{safe(t["display"])}.png')
     if a.only in (None, '対戦'):
         print('■ 対戦')
@@ -96,7 +109,11 @@ def main(argv=None):
         print('■ 進行')
         for r in read_csv('program.csv'):
             n = int(r['no'])
-            save(B.program(n, r['ja'], r['en'], r['kicker']), '進行', f'{n:02d}_{safe(r["ja"])}.png')
+            save(B.program(n, r['ja'], r['en'], r['kicker'], footer_label=OPENING_FOOTER), '進行', f'{n:02d}_{safe(r["ja"])}.png')
+        print('■ 進行（閉会式）')
+        for r in read_csv('closing.csv'):
+            n = int(r['no'])
+            save(B.program(n, r['ja'], r['en'], r['kicker'], footer_label=CLOSING_FOOTER), '進行_閉会式', f'{n:02d}_{safe(r["ja"])}.png')
     if a.only in (None, 'ロゴ'):
         print('■ ロゴ（横長 32:9 と 16:9／2段 16:9）')
         for (w, h, tag) in ((3840, 1080, '32x9'), (1920, 1080, '16x9')):
