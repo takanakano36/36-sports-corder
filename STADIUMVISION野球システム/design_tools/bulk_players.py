@@ -93,6 +93,10 @@ def load_fixes(path):
                 v = float(val)
                 if not 0.3 <= v <= 2.0: raise ValueError
                 out[key]['face_scale'] = v
+            elif kind == 'face':
+                v = tuple(float(x) for x in val.split(','))
+                if len(v) != 4 or not (0 <= v[0] < 1 and 0 <= v[1] < 1 and 0 < v[2] <= 1 and 0 < v[3] <= 1): raise ValueError
+                out[key]['face'] = v
             elif kind == 'max_scale':
                 v = float(val)
                 if not 1.0 <= v <= 3.0: raise ValueError
@@ -130,10 +134,15 @@ def main(argv=None):
     ap.add_argument('--root'); ap.add_argument('--team'); ap.add_argument('--no')
     ap.add_argument('--dry', action='store_true'); ap.add_argument('--accept-number-match', action='store_true')
     ap.add_argument('--small', action='store_true', help='960x686 版（球場ビジョン左半分の枠）を output/960x686/ に作る。16:9 版は触らない')
+    ap.add_argument('--face-w', type=int, help='（--small のとき）顔の幅(px, 1920x1372の座標)。試すとき用。ふだんは slideA_960.py の値')
+    ap.add_argument('--face-cx', type=int, help='（--small のとき）顔の中心の横位置。試すとき用（標準は slideA_960.py の値）')
+    ap.add_argument('--align-left', type=int, help='（--small のとき）写真の左端をこの位置にそろえる（下線の左端は120）。試すとき用')
+    ap.add_argument('--out', help='（--small のとき）出力先フォルダ。試すときに本番の output を汚さないため')
     a = ap.parse_args(argv)
     global OUT_DIR, CHECK
     if a.small:
-        OUT_DIR = os.path.join(D, 'output', '960x686', '選手'); CHECK = os.path.join(D, 'output', '960x686', '確認_選手スライド_960x686.csv')
+        outroot = a.out or os.path.join(D, 'output', '960x686')
+        OUT_DIR = os.path.join(outroot, '選手'); CHECK = os.path.join(outroot, '確認_選手スライド_960x686.csv')
     root = data_root(a.root)
     teams = load_roster()
     overrides = pm.load_overrides(os.path.join(D, 'input', 'photo_overrides.csv'))
@@ -155,7 +164,10 @@ def main(argv=None):
     if not a.dry:
         import place
         if a.small:
-            from slideA_960 import slide, LAYOUT as lay
+            from slideA_960 import slide, LAYOUT as lay, make_layout
+            if a.face_w or a.face_cx is not None or a.align_left is not None:
+                from slideA_960 import FACE_W as _fw, FACE_CX as _fcx
+                lay = make_layout(a.face_w or _fw, _fcx if a.face_cx is None else a.face_cx, a.align_left)
         else:
             from slideA import slide
     rows, keys, cnt = [], set(), collections.Counter()

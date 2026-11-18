@@ -9,10 +9,22 @@ from make import *
 CW, CH = 1920, 1372
 OUT_W, OUT_H = 960, 686
 CUT_Y = 1222                                  # 写真の水平カット線＝右の成績の下のラインと同じ高さ（全員そろえる）
-FACE_W = 225                                  # 16:9版は218（270だと大きすぎると指摘 2026-11-18）。ほぼ16:9版と同じ見え方
+FACE_W = 247                                  # 16:9版は218。270は大きすぎ・225は頭の上があくと指摘され、その中間（2026-11-18）
 FACE_CX = 500
-FACE_CY = round(CUT_Y - (952 - 457) * FACE_W / 218)      # 16:9版(顔の中心457→線952, 顔218)と同じ比率
-LAYOUT = dict(W=CW, H=CH, FACE_W=FACE_W, FACE_CX=FACE_CX, FACE_CY=FACE_CY, CUT_Y=CUT_Y)
+ALIGN_LEFT = 120                              # 写真の左端(肩)を下線の左端にそろえる（B案・2026-11-18）。顔の位置は人ごとに動く
+RIGHT_LIMIT = 1010                            # 写真の右端はここまで（右の成績の文字は x=1040 から）
+
+
+def make_layout(face_w=FACE_W, face_cx=FACE_CX, align_left=None):
+    """写真の置き方。顔の中心から線までの距離÷顔の幅は、16:9版(顔の中心457→線952, 顔218)と同じ比率。
+    align_left を指定すると、写真の左端(肩)をその位置(下線の左端=120)にそろえる（顔の位置は人ごとに動く）"""
+    lay = dict(W=CW, H=CH, FACE_W=face_w, FACE_CX=face_cx, FACE_CY=round(CUT_Y - (952 - 457) * face_w / 218), CUT_Y=CUT_Y)
+    if align_left is not None:
+        lay['ALIGN_LEFT'] = align_left; lay['RIGHT_LIMIT'] = RIGHT_LIMIT
+    return lay
+
+
+LAYOUT = make_layout(align_left=ALIGN_LEFT)
 
 
 def slide(P, photo_png, mode='cut', line_y=None):

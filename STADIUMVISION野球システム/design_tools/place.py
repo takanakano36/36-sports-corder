@@ -97,6 +97,8 @@ def place(src, dst, mode=None, fixes=None, lay=None):
         rgb = ImageOps.autocontrast(rgb, cutoff=fixes['autocontrast'], preserve_tone=True)    # 色味は変えず、明暗だけそろえる
     cut = cutout(rgb)
     f = detect_face(rgb)
+    if fixes.get('face'):      # 手直し：顔の検出が帽子のロゴなどを顔と間違えるとき、顔の枠を直接指定（x,y,幅,高さ。処理後の写真に対する割合 0〜1）
+        fx0, fy0, fw0, fh0 = fixes['face']; f = (fx0 * rgb.width, fy0 * rgb.height, fw0 * rgb.width, fh0 * rgb.height)
     info = dict(face=f is not None, faces=getattr(detect_face, 'count', 0), scaled=1.0, short=False, soft=0.0, faded=False, extended=0, gap=0)   # 一括ツールが確認リストに使う結果
     if f is None:
         print('!! 顔が見つからない（要確認）:', src)
@@ -161,6 +163,14 @@ def place(src, dst, mode=None, fixes=None, lay=None):
             t = min(1, (yy - (end - FADE_LEN)) / FADE_LEN)
             d.line([(0, yy), (CW, yy)], fill=int(255 * (1 - t) ** 1.5))
     canvas.putalpha(ImageChops.multiply(canvas.split()[3], m))
+    if lay.get('ALIGN_LEFT') is not None:      # 写真の左端（肩）を指定位置にそろえる。顔の位置は人ごとに少し動く。動かす量は ALIGN_MAX まで
+        a = np.array(canvas.split()[3])[max(0, CUTY - 170):CUTY - 5]
+        cols = np.where((a > 127).any(axis=0))[0]
+        if len(cols):
+            dx = max(-lay.get('ALIGN_MAX', 150), min(lay.get('ALIGN_MAX', 150), lay['ALIGN_LEFT'] - int(cols.min())))
+            if lay.get('RIGHT_LIMIT') is not None: dx = min(dx, lay['RIGHT_LIMIT'] - int(cols.max()))      # 右の成績の文字にかからないように（肩幅の広い人は左端が下線より左に出る）
+            shifted = Image.new('RGBA', canvas.size, (0, 0, 0, 0)); shifted.paste(canvas, (dx, 0)); canvas = shifted
+            info['dx'] = dx
     # 写真の下端が足りずに途中で切れていないか
     bottom = oy + im.height
     if MODE == 'cut' and bottom < CUTY and not info['faded']:
