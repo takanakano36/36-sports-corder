@@ -747,7 +747,8 @@ function parseCSV(text) {
 // 音楽（登場曲・式次第の曲は、音楽バーの仕組みで鳴らす）
 // --------------------------------------------------------------------------
 function playMusicPath(p, label, opts) {
-    const found = typeof musicList !== "undefined" && musicList.find(m => m.path === p);
+    // 曲は場所で探し、見つからなければ名前で探す（曲のフォルダを選び直したときのため）
+    const found = typeof musicList !== "undefined" && (musicList.find(m => m.path === p) || (label && musicList.find(m => SC.norm(m.name) === SC.norm(label))));
     // 別フォルダの曲（local:）は、そのフォルダを選んでいないと鳴らせない
     if (!found && /^local:/.test(p)) return showError(`曲が見つかりません（${label || p}）。音楽バーの「曲のフォルダ」で、この曲の入ったフォルダを選んでください`);
     musicPlay(found || { path: p, no: null, name: label || baseName(p).replace(/\.[^.]+$/, "") }, opts);
@@ -906,7 +907,53 @@ function listHtml(edit) {
         }
         if (it.shown) parts.push(rowHtml(it, edit));
     });
-    return parts.join("") || `<div class="empty">${edit ? "台本がありません。上から Excel を読み込んでください。" : "キューがありません。「編集」で台本を読み込み、キューを付けます。"}</div>`;
+    if (parts.length) return parts.join("");
+    if (edit) return `<div class="empty">台本がありません。上から Excel を読み込んでください。</div>`;
+    if (!script().rows.length) return `<div class="sc-none"><b>台本がありません</b><button type="button" class="btn go" data-act="to-edit">編集で台本を読み込む</button></div>`;
+    // このシートにキューが1つも無い
+    const n = Object.keys(suggestions).filter(i => suggestions[i].cue && script().rows[i].sec === curSheet).length;
+    return n
+        ? `<div class="sc-none"><b>このシートにはまだ出すものが付いていません</b><button type="button" class="btn sc-none-btn" data-act="adopt-all">✓ 提案をすべて採用（${n}行）</button></div>`
+        : `<div class="sc-none"><b>このシートにはまだ出すものが付いていません</b><span>スライド・曲が見つかりません。slides フォルダ・music フォルダを確認してください</span><button type="button" class="btn go" data-act="to-edit">編集で確かめる</button></div>`;
+}
+
+// ---- 一覧の上の知らせ：提案がある／足りない素材がある ----
+function pendingSuggestionRows() { return Object.keys(suggestions).map(Number).filter(i => suggestions[i].cue && !script().rows[i].cue); }
+function missingMaterials() {
+    const sl = new Set(), mu = new Set();
+    Object.values(suggestions).forEach(sg => sg.hints.forEach(h => {
+        let m;
+        if ((m = /^スライドが見つかりません：(.+)$/.exec(h))) sl.add(m[1]);
+        else if ((m = /^曲が見つかりません：(.+)$/.exec(h))) mu.add(m[1]);
+    }));
+    return { slides: [...sl], songs: [...mu] };
+}
+function renderBanner() {
+    const edit = scMode === "edit";
+    const rows = pendingSuggestionRows();
+    const bn = $("#sc-banner");
+    bn.classList.toggle("hidden", edit || !rows.length);
+    bn.innerHTML = rows.length ? `<span>提案が ${rows.length} 行あります</span><button type="button" class="btn small sc-banner-ok" data-act="adopt-all">✓ すべて採用</button><button type="button" class="btn small" data-act="to-edit">編集で確かめる</button>` : "";
+    const ms = missingMaterials();
+    const mb = $("#sc-missing");
+    const total = ms.slides.length + ms.songs.length;
+    mb.classList.toggle("hidden", !total);
+    mb.textContent = `⚠ ${ms.slides.length ? "スライド" + ms.slides.length : ""}${ms.slides.length && ms.songs.length ? "・" : ""}${ms.songs.length ? "曲" + ms.songs.length : ""} が見つかりません`;
+    if (!total) $("#sc-missing-pop").classList.add("hidden");
+    return ms;
+}
+function adoptAllSuggestions() {
+    const rows = pendingSuggestionRows();
+    if (!rows.length) return showInfo("採用できる提案がありません");
+    if (confirm(`提案を${rows.length}行すべてに採用して、キューを付けます。よろしいですか？`)) adoptSuggestions(rows);
+}
+function toggleMissingPop() {
+    const pop = $("#sc-missing-pop");
+    const ms = missingMaterials();
+    pop.innerHTML = `<button type="button" class="btn small sc-missing-x" data-act="close-missing">閉じる</button>` +
+        (ms.slides.length ? `<h3>スライド</h3>${ms.slides.map(x => `<div>${escapeHtml(x)}</div>`).join("")}` : "") +
+        (ms.songs.length ? `<h3>曲</h3>${ms.songs.map(x => `<div>${escapeHtml(x)}</div>`).join("")}` : "");
+    pop.classList.toggle("hidden");
 }
 
 function renderScript() {
@@ -939,6 +986,7 @@ function renderScript() {
         $("#sc-summary").textContent = sc.rows.length ? `${sc.title ? sc.title + "：" : ""}キュー ${SC.cueRows(sc).length}個` : "";
         edKey = "";
     }
+    renderBanner();
     renderMarks();
     if (edit) renderEditor();
     sdRefresh();
@@ -1082,7 +1130,7 @@ function scEditQuiet(ops) {
 function refreshSuggestions() {
     if (!state) return;
     const sc = script();
-    const key = `${sc.rev}|${slides.length}|${musicList.map(m => m.path).join(",").length}|${musicList.length}|${state.futa.left}`;
+    const key = `${sc.rev}|${slides.map(s => s.path).join("\n")}|${musicList.map(m => m.path).join("\n")}|${state.futa.left}`;
     if (key === suggestKey) return;
     suggestKey = key;
     suggestions = SC.suggestAll(sc, { music: musicList, slides, futaLeft: state.futa.left });
@@ -1301,8 +1349,10 @@ function openPick(i) {
     if (!it || !it.pick) return;
     pickRowIndex = i;
     if (selRow() !== i) setSel(i);
+    $("#sc-pick-title").textContent = `${rowLabel(it.row)} に出す画像を選ぶ`;
     $("#pick-grid").innerHTML = slideThumbs(it.pick, it.cue && it.cue.left && it.cue.left.type === "slide" ? it.cue.left.file : "", true).replace(/data-ed="leftfile" data-v=/g, 'data-pickfile=');
     $("#sc-pick").classList.remove("hidden");
+    $("#sc-pick").scrollTop = 0;
 }
 function closePick() { $("#sc-pick").classList.add("hidden"); pickRowIndex = -1; }
 async function applyPick(file) {
@@ -1409,6 +1459,18 @@ function bindScript() {
         else if (e.target.id === "ed-loop") edMutate(c => { if (c.bgm && c.bgm.action === "play") c.bgm.loop = e.target.checked; });
     });
     $("#btn-pick-close").addEventListener("click", closePick);
+    // 一覧の上の知らせ・空のシート・足りない素材
+    const onAct = e => {
+        const a = e.target.closest("[data-act]");
+        if (!a) return;
+        if (a.dataset.act === "adopt-all") adoptAllSuggestions();
+        else if (a.dataset.act === "to-edit") setScMode("edit");
+        else if (a.dataset.act === "close-missing") $("#sc-missing-pop").classList.add("hidden");
+    };
+    $("#sc-banner").addEventListener("click", onAct);
+    $("#sc-list").addEventListener("click", onAct);
+    $("#sc-missing-pop").addEventListener("click", onAct);
+    $("#sc-missing").addEventListener("click", toggleMissingPop);
     $("#pick-grid").addEventListener("click", e => { const b = e.target.closest("[data-pickfile]"); if (b) applyPick(b.dataset.pickfile); });
 }
 
@@ -1421,6 +1483,7 @@ function selectTab(name) {
     $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
     // 台本タブでは、左に台本・右にモニターの並びにする（CSS の .script-mode）
     document.body.classList.toggle("script-mode", name === "script");
+    if (name !== "script") closePick();
     renderMonitorDesc();
     if (name === "script") {
         scListKey = "";
@@ -1820,6 +1883,7 @@ function bindEvents() {
 
     // キーボード：Space = TAKE（文字を入れている間は効かない）
     document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && !$("#sc-pick").classList.contains("hidden")) { closePick(); return; }
         const tag = document.activeElement ? document.activeElement.tagName : "";
         if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
         if (e.code === "Space" || (e.key === "Enter" && currentTab === "script")) { e.preventDefault(); doTake(); }
