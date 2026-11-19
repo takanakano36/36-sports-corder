@@ -83,7 +83,8 @@ function initialState() {
         scenes,                                // シーン（作った画面）
         sceneOrder: scenes.map(s => s.id),     // シーンの並び順
         preview: scenes[0].id,                 // PREVIEW（次に出す・いま直しているシーン）
-        cursor: ''                             // 台本の流れの中で、最後に出したシーン
+        cursor: '',                            // 台本の流れの中で、最後に出したシーン
+        bgmEnabled: false                      // BGM（音楽）をこのシステムで鳴らすか（既定は鳴らさない）
     };
 }
 
@@ -216,6 +217,7 @@ function validateScenes(s) {
     }
     if (!(s.preview === '' || ids.has(s.preview))) return 'PREVIEWのシーンが正しくありません';
     if (!(s.cursor === '' || ids.has(s.cursor))) return '台本の流れの位置が正しくありません';
+    if (typeof s.bgmEnabled !== 'boolean') return 'BGMの使う・使わないの設定が正しくありません';
     return null;
 }
 
@@ -807,7 +809,7 @@ function commitImport(req) {
 
     const ctx = { music: listMusic(), slides: listTree(SLIDE_DIR, 'slides', SLIDE_EXTS), futaLeft: state.futa.left };
     const sugg = Core.suggestAll({ sections, rows }, ctx);
-    const built = Scene.buildScenesFromScript({ sections, rows }, sugg, Scene.stageOf(next.output), { mergePicks: req.mergePicks !== false });
+    const built = Scene.buildScenesFromScript({ sections, rows }, sugg, Scene.stageOf(next.output), { mergePicks: req.mergePicks !== false, songWarn: next.bgmEnabled });
     if (!built.length) throw new Error('シーンにできる行がありません。スライド・曲の場所（slides・music フォルダ）を確かめてください');
 
     const firstImport = !next.scenes.some(sc => sc.script);
@@ -1109,6 +1111,11 @@ function handleRequest(req, res) {
     // 4. Stream Deck 等からの操作
     if (pathname === '/api/control') {
         const { action, val } = Object.fromEntries(reqUrl.searchParams);
+        // BGMをこのシステムで鳴らさない設定のときは、音楽の操作は何もせず、エラーにもしない
+        if (['musicPlay', 'musicStop', 'musicFade', 'musicDuck'].includes(action) && !state.bgmEnabled) {
+            console.log(`[操作] ${action} は、BGMを鳴らさない設定のため何もしませんでした`);
+            return sendJson(res, 200, { status: 'ok', ignored: true, message: 'BGMはこのシステムでは鳴らさない設定です' });
+        }
         let result;
         try {
             result = applyControl(action, val);

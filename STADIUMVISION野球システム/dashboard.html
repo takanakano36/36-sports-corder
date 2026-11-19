@@ -21,7 +21,7 @@
 </header>
 
 <!-- 音楽バー：このPCで曲を鳴らす -->
-<div class="musicbar" id="musicbar">
+<div class="musicbar bgm-only" id="musicbar">
     <div class="mb-ctrl">
         <span class="mb-title">♪ 音楽</span>
         <div class="mb-now" id="mb-now">
@@ -102,13 +102,13 @@
             <button type="button" data-add="image">🖼 画像</button><button type="button" data-add="camera">📹 カメラ</button><button type="button" data-add="color">■ 色</button>
             <button type="button" data-add="text">Ａ 文字</button><button type="button" data-add="logo">ロゴ</button><button type="button" data-add="video">動画</button>
         </div>
-        <div class="sec">このシーンの音 <small id="sn-now"></small></div>
+        <div class="bgm-only"><div class="sec">このシーンの音 <small id="sn-now"></small></div>
         <div class="grid3" id="sn-sound">
             <button type="button" data-snd="none">変えない</button><button type="button" data-snd="song">♪ 曲を選ぶ</button><button type="button" data-snd="fade">フェード</button>
             <button type="button" data-snd="stop">停止</button><button type="button" data-snd="duck">小さく</button><button type="button" data-snd="unduck">戻す</button>
         </div>
         <div class="sn-songs hidden" id="sn-songs"></div>
-        <label class="sn-loop hidden" id="sn-loop-wrap"><input type="checkbox" id="sn-loop"> くり返し</label>
+        <label class="sn-loop hidden" id="sn-loop-wrap"><input type="checkbox" id="sn-loop"> くり返し</label></div>
     </section>
 </main>
 
@@ -196,6 +196,7 @@
             </div>
             <div class="panel">
                 <h2>操作</h2>
+                <label class="toggle" title="切ると、音楽バー・シーンの音・BGMのキーが出ず、シーンを出しても曲は鳴りません（iPadなどで別に鳴らすとき）。シーンに付けた音の設定は消えません"><input type="checkbox" id="opt-bgm"> BGM（音楽）をこのシステムで鳴らす</label>
                 <label class="toggle" title="PREVIEW と本線に同じシーンが出ているとき、シーンを直したらそのまま本線にも反映します（ふだんは TAKE で反映）"><input type="checkbox" id="opt-live-program"> 本線に出ているシーンを直したら、すぐ本線にも反映する</label>
                 <div class="ctrl-row">
                     <span class="lbl">HR競争カウンター</span>

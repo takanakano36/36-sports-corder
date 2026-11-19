@@ -316,3 +316,5 @@ code { font-family: monospace; color: #93c5fd; }
     .dlg-picker, .dlg-script, .dlg-settings { width: 96vw; }
     .set-cols { flex-direction: column; }
 }
+
+body.no-bgm .bgm-only { display: none !important; }

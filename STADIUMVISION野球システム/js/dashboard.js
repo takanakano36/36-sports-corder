@@ -123,6 +123,7 @@ const mediaUrl = p => String(p).split("/").map(encodeURIComponent).join("/");
 const thumbUrl = p => `${mediaUrl(p)}?v=${slidesVer}`;
 const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
 const orderIds = () => (state ? state.sceneOrder : []);
+const bgmOn = () => !!(state && state.bgmEnabled);
 const flowIndexOf = id => SCN.flowIds(state).indexOf(id);
 
 function curLayer() {
@@ -182,12 +183,13 @@ function thumbHtml(sc) {
 }
 
 function soundBadge(sc) {
-    const b = sc.bgm;
+    const b = bgmOn() ? sc.bgm : null;
     const out = [];
+    const warn = bgmOn() ? sc.warn : String(sc.warn || "").split(" ／ ").filter(x => !/^曲が見つかりません/.test(x)).join(" ／ ");
     if (b) out.push(b.action === "play" ? `<span class="badge" title="曲：${escapeHtml(b.name)}${b.loop ? "（くり返し）" : ""}">♪</span>` : b.action === "fade" ? `<span class="badge" title="BGMをフェードアウト">♪↘</span>` : `<span class="badge" title="BGMを止める">■</span>`);
-    if (sc.duck === true) out.push(`<span class="badge" title="BGMを小さくする">小</span>`);
-    else if (sc.duck === false) out.push(`<span class="badge" title="BGMの音量を戻す">戻</span>`);
-    if (sc.warn) out.push(`<span class="badge warn" title="${escapeHtml(sc.warn)}">⚠</span>`);
+    if (bgmOn() && sc.duck === true) out.push(`<span class="badge" title="BGMを小さくする">小</span>`);
+    else if (bgmOn() && sc.duck === false) out.push(`<span class="badge" title="BGMの音量を戻す">戻</span>`);
+    if (warn) out.push(`<span class="badge warn" title="${escapeHtml(warn)}">⚠</span>`);
     return out.join("");
 }
 
@@ -208,7 +210,7 @@ function sceneInner(sc) {
 function renderSceneList() {
     if (!state) return;
     const box = $("#sc-list");
-    const lgSig = JSON.stringify(logos()) + "|" + slidesVer + "|" + JSON.stringify(state.output);
+    const lgSig = JSON.stringify(logos()) + "|" + bgmOn() + "|" + slidesVer + "|" + JSON.stringify(state.output);
     const nodes = [];
     let lastGroup = null;
     const live = new Set();
@@ -315,6 +317,7 @@ function onSceneFired(ev) {
 
 // シーンの音：BGM（鳴らす／フェードアウト／止める）と「小さく」
 function runSceneAudio(sc) {
+    if (!bgmOn()) return;       // BGMをこのシステムで鳴らさない設定
     const b = sc.bgm;
     if (b && b.action === "play") {
         if (musicCur && musicCur.item.path === b.path) {      // すでに同じ曲が鳴っていれば、二重に鳴らさない
@@ -1231,7 +1234,9 @@ function groupList() {
 
 function buildSdActions() {
     const A = [];
-    const add = (id, describe, run) => A.push({ id, describe, run });
+    const add0 = (id, describe, run) => A.push({ id, describe, run });
+    // BGMを鳴らさない設定のときは、BGM系のキーを割り当てに入れない
+    const add = (id, describe, run) => { if (bgmOn() || !/^bgm/.test(id)) add0(id, describe, run); };
     // 優先順位の高い順（6キー・8キーの機種には、この順に詰める）
     add("next", () => ({ label: "NEXT ▶", sub: sdNextTitle(), color: "#15803d" }), scNext);
     add("prev", () => ({ label: "◀ PREV", sub: "前のシーン", color: "#0f766e" }), scPrev);
@@ -1440,7 +1445,20 @@ function renderAll() {
     sdRefresh();
 }
 
+let lastBgm = null;
+function renderBgmMode() {
+    const on = bgmOn();
+    if (on === lastBgm) return;
+    const first = lastBgm === null;
+    lastBgm = on;
+    document.body.classList.toggle("no-bgm", !on);
+    $("#opt-bgm").checked = on;
+    if (!on && !first && typeof musicHalt === "function") musicHalt();
+    if (typeof StreamDeck !== "undefined") StreamDeck.setActions(buildSdActions());
+}
+
 function renderTopbar() {
+    renderBgmMode();
     $("#btn-black").classList.toggle("on", state.black);
     $("#pgm-black-flag").classList.toggle("on", state.black);
     $("#opt-guide").checked = state.guide;
@@ -1512,6 +1530,7 @@ function bindEvents() {
     $("#btn-futa-full").addEventListener("click", () => control("futaFull"));
     $("#futa-left").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { left: e.target.value }) }));
     $("#futa-full").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { full: e.target.value }) }));
+    $("#opt-bgm").addEventListener("change", e => patch({ bgmEnabled: e.target.checked }));
     $("#btn-settings").addEventListener("click", openSettings);
     $("#settings-close").addEventListener("click", () => $("#dlg-settings").close());
 

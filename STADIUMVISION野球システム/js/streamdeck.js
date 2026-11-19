@@ -74,6 +74,10 @@ const StreamDeck = (() => {
         const layout = LAYOUTS[keyCount];
         if (layout) {
             layout.forEach((id, i) => { if (i < keyCount) out[i] = byId.get(id) || null; });
+            // 使わない操作（BGMを鳴らさない設定のとき）で空いたキューは、まだ置いていない操作を優先順位の順に詰める
+            const placed = new Set(out.filter(Boolean));
+            const rest = list.filter(d => !placed.has(d));
+            for (let i = 0; i < keyCount; i++) if (!out[i] && rest.length && layout[i] && !byId.has(layout[i])) out[i] = rest.shift();
         } else {
             list.slice(0, keyCount).forEach((d, i) => { out[i] = d; });
         }

@@ -241,7 +241,7 @@
             const n = (used.get(key) || 0) + 1;
             used.set(key, n);
             if (n > 1) key += `#${n}`;
-            const warn = (sg.hints || []).filter(h => !/^当日に選ぶ/.test(h)).join(' ／ ').slice(0, 500);
+            const warn = (sg.hints || []).filter(h => !/^当日に選ぶ/.test(h) && !(opts && opts.songWarn === false && /^曲が見つかりません/.test(h))).join(' ／ ').slice(0, 500);
             const scene = {
                 id: uid('s'),
                 name: (oneLine((r.no ? r.no + ' ' : '') + oneLine(r.title)) || `${i + 1}行目`).slice(0, 100),
