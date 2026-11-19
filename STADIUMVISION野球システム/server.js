@@ -49,7 +49,8 @@ const MAX_SCRIPT_SECTIONS = 31;        // シート30 ＋ 手動の式次第
 const MAX_CELL = 5000;
 const MAX_XLSX_BYTES = 20 * 1024 * 1024;
 const MANUAL_SECTION = '手動の式次第';
-const ROW_TEXT_KEYS = ['time', 'dur', 'title', 'bgm', 'vision', 'mic', 'speaker', 'script', 'note'];
+const ROW_TEXT_KEYS = ['no', 'time', 'dur', 'title', 'bgm', 'vision', 'visionR', 'mic', 'speaker', 'script', 'note'];
+const ROW_KINDS = ['row', 'chapter'];
 const FUTA_ACTIVE = ['', 'left', 'full'];
 
 function emptyScene() {
@@ -186,7 +187,7 @@ function validateFace(f, label, types) {
     return null;
 }
 
-const CUE_KEYS = ['left', 'right', 'band', 'bgm', 'memo', 'scene'];
+const CUE_KEYS = ['left', 'right', 'band', 'bgm', 'duck', 'memo', 'scene'];
 function validateCue(c, label) {
     if (c === null) return null;
     if (!isObj(c)) return `${label}のキューの形が正しくありません`;
@@ -196,6 +197,7 @@ function validateCue(c, label) {
         || validateFace(c.band === undefined ? null : c.band, `${label}の帯全体`, ['futa', 'slide']);
     if (e) return e;
     if (!isStr(c.memo === undefined ? '' : c.memo, 1000)) return `${label}のメモは1000文字以内にしてください`;
+    if (c.duck !== undefined && c.duck !== null && typeof c.duck !== 'boolean') return `${label}の「小さく」の指定が正しくありません`;
     const b = c.bgm === undefined ? null : c.bgm;
     if (b !== null) {
         if (!isObj(b) || !['play', 'fade', 'stop'].includes(b.action)) return `${label}の音楽の指定が正しくありません`;
@@ -223,13 +225,15 @@ function validateScript(sc) {
         for (const k of Object.keys(sec)) if (!['name', 'manual'].includes(k)) return `台本のセクションに不明な項目があります (${k})`;
     }
     if (!Array.isArray(sc.rows) || sc.rows.length > MAX_SCRIPT_ROWS) return `台本の行は${MAX_SCRIPT_ROWS}行までです`;
-    const rowKeys = ['sec', 'cue', ...ROW_TEXT_KEYS];
+    const rowKeys = ['sec', 'cue', 'kind', ...ROW_TEXT_KEYS];
     for (let i = 0; i < sc.rows.length; i++) {
         const r = sc.rows[i];
         const label = `台本の${i + 1}行目`;
         if (!isObj(r)) return `${label}の形が正しくありません`;
         for (const k of Object.keys(r)) if (!rowKeys.includes(k)) return `${label}に不明な項目があります (${k})`;
         if (!isInt(r.sec, 0, sc.sections.length - 1)) return `${label}のセクションが正しくありません`;
+        if (!ROW_KINDS.includes(r.kind)) return `${label}の種類が正しくありません`;
+        if (r.kind === 'chapter' && r.cue) return `${label}は章の行のため、キューは付けられません`;
         for (const k of ROW_TEXT_KEYS) if (!isStr(r[k], MAX_CELL)) return `${label}の「${k}」は${MAX_CELL}文字以内の文字にしてください`;
         const e = validateCue(r.cue === undefined ? null : r.cue, label);
         if (e) return e;
@@ -336,6 +340,10 @@ function loadState() {
     }
     // 旧い「式次第（cues）」は、台本の「手動の式次第」セクションに移す
     migrateLegacyCues(s);
+    // 以前の台本の行には、番号・ビジョン右・種類の項目を書き足す
+    if (isObj(s.script) && Array.isArray(s.script.rows)) {
+        s.script.rows.forEach(r => { if (isObj(r)) { if (r.no === undefined) r.no = ''; if (r.visionR === undefined) r.visionR = ''; if (r.kind === undefined) r.kind = 'row'; } });
+    }
     // 機能を追加する前の保存データには、新しい項目を書き足す
     const init = initialState();
     STATE_KEYS.forEach(k => {
@@ -565,6 +573,10 @@ function applyControl(action, val) {
         case 'readPrev':             // 台本の読み位置を1行上へ
             command = { action };
             break;
+        case 'musicDuck':            // BGMを小さく／戻す（val=on / off、省略でトグル。管理画面が開いている必要あり）
+            if (val !== undefined && val !== '' && !['on', 'off'].includes(val)) throw new Error('val は on か off にしてください（省略で切り替え）');
+            command = { action, val: val || '' };
+            break;
         case 'futa':                 // 左フタ（左面だけロゴ）のオン・オフ
         case 'futaFull':             // 全面フタ（帯全体ロゴ）のオン・オフ
             notice = toggleFuta(next, action === 'futa' ? 'left' : 'full');
@@ -628,8 +640,12 @@ let lastImport = null;     // 直近に読み込んだファイルの中身（�
 let importSeq = 0;
 
 const collapse = t => String(t || '').replace(/\s+/g, '');
-function rowKey(sectionName, row) {
-    return `${collapse(sectionName)}\u0000${collapse(row.title)}\u0000${collapse(row.script).slice(0, 40)}`;
+// 引き継ぎの照合キー：番号があれば番号を最優先、無ければ（番号があっても見つからないときの予備として）内容＋セリフの先頭
+function rowKeys(sectionName, row) {
+    const keys = [];
+    if (row.kind !== 'chapter' && collapse(row.no)) keys.push(`${collapse(sectionName)}\u0000no\u0000${collapse(row.no)}`);
+    keys.push(`${collapse(sectionName)}\u0000${row.kind === 'chapter' ? 'ch' : 'tx'}\u0000${collapse(row.title)}\u0000${collapse(row.script).slice(0, 40)}`);
+    return keys;
 }
 
 function summarizeImport(imp) {
@@ -671,9 +687,10 @@ function commitImport(req) {
     const oldKeys = new Map();
     old.rows.forEach((r, i) => {
         if (old.sections[r.sec].manual) return;
-        const k = rowKey(old.sections[r.sec].name, r);
-        if (!oldKeys.has(k)) oldKeys.set(k, []);
-        oldKeys.get(k).push(i);
+        rowKeys(old.sections[r.sec].name, r).forEach(k => {
+            if (!oldKeys.has(k)) oldKeys.set(k, []);
+            oldKeys.get(k).push(i);
+        });
     });
 
     const sections = old.sections.filter(sc => sc.manual);
@@ -703,13 +720,16 @@ function commitImport(req) {
     let carried = 0;
     const used = new Set();
     newRows.forEach((r, j) => {
-        const list = oldKeys.get(rowKey(sections[r.sec].name, r));
-        if (!list) return;
-        const oi = list.find(i => !used.has(i));
+        let oi;
+        for (const k of rowKeys(sections[r.sec].name, r)) {
+            const list = oldKeys.get(k);
+            oi = list && list.find(i => !used.has(i));
+            if (oi !== undefined) break;
+        }
         if (oi === undefined) return;
         used.add(oi);
         indexMap.set(oi, manualCount + j);
-        if (old.rows[oi].cue) { r.cue = old.rows[oi].cue; carried++; }
+        if (old.rows[oi].cue && r.kind !== 'chapter') { r.cue = old.rows[oi].cue; carried++; }
     });
     const lost = [];
     old.rows.forEach((r, i) => {
@@ -747,12 +767,17 @@ function applyScriptOps(next, ops) {
         if (!isObj(op)) throw new Error('操作の形が正しくありません');
         switch (op.op) {
             case 'cue':
+                if (rowAt(op.row).kind === 'chapter' && op.cue) throw new Error('章の行には、キューは付けられません');
                 rowAt(op.row).cue = op.cue === null || op.cue === undefined ? null : op.cue;
                 touched = true;
                 break;
             case 'cues':
                 if (!Array.isArray(op.items)) throw new Error('キューの一覧が正しくありません');
-                op.items.forEach(it => { if (!isObj(it)) throw new Error('キューの形が正しくありません'); rowAt(it.row).cue = it.cue === undefined ? null : it.cue; });
+                op.items.forEach(it => {
+                    if (!isObj(it)) throw new Error('キューの形が正しくありません');
+                    if (rowAt(it.row).kind === 'chapter' && it.cue) throw new Error('章の行には、キューは付けられません');
+                    rowAt(it.row).cue = it.cue === undefined ? null : it.cue;
+                });
                 touched = true;
                 break;
             case 'clearSection':
@@ -767,7 +792,7 @@ function applyScriptOps(next, ops) {
                     sc.rows.forEach(r => { r.sec++; });
                 }
                 const at = sc.rows.filter(r => r.sec === 0).length;
-                const row = { sec: 0, cue: op.cue === undefined ? null : op.cue };
+                const row = { sec: 0, kind: 'row', cue: op.cue === undefined ? null : op.cue };
                 ROW_TEXT_KEYS.forEach(k => { row[k] = ''; });
                 row.title = op.title.trim();
                 sc.rows.splice(at, 0, row);
@@ -892,10 +917,8 @@ function handleScriptApi(pathname, req, res, reqUrl) {
     }
     if (pathname === '/api/script/suggestions') {
         if (req.method !== 'GET') { fail(405, 'GET で呼び出してください'); return true; }
-        const ctx = { music: listMusic(), slides: listTree(SLIDE_DIR, 'slides', SLIDE_EXTS) };
-        const out = {};
-        state.script.rows.forEach((r, i) => { if (!r.cue) { const sg = Core.suggestCue(r, ctx); if (sg) out[i] = sg; } });
-        sendJson(res, 200, { suggestions: out });
+        const ctx = { music: listMusic(), slides: listTree(SLIDE_DIR, 'slides', SLIDE_EXTS), futaLeft: state.futa.left };
+        sendJson(res, 200, { suggestions: Core.suggestAll(state.script, ctx) });
         return true;
     }
     fail(404, '不明な台本のAPIです');

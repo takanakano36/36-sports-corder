@@ -1,19 +1,24 @@
 /* ==========================================================================
    台本の取り込み（見出し行の自動検出・列の役割の割り当て・行の取り出し）
    ========================================================================== */
-const ROLES = ['time', 'dur', 'title', 'bgm', 'vision', 'mic', 'speaker', 'script', 'note'];
-const ROLE_NAMES = { time: '時刻', dur: '経過', title: '内容', bgm: 'BGM', vision: 'ビジョン', mic: 'MIC', speaker: '話者', script: 'セリフ', note: '備考' };
+const ROLES = ['no', 'time', 'dur', 'title', 'bgm', 'vision', 'visionR', 'mic', 'speaker', 'script', 'note'];
+const ROLE_NAMES = { no: '番号', visionR: 'ビジョン右', time: '時刻', dur: '経過', title: '内容', bgm: 'BGM', vision: 'ビジョン', mic: 'MIC', speaker: '話者', script: 'セリフ', note: '備考' };
 const VOCAB = {
     time: ['時刻', 'time', '時間'],
-    dur: ['経過', '尺'],
-    title: ['内容', '項目', '進行'],
+    dur: ['経過', '尺', '所要'],
+    title: ['内容', '項目', '進行', '場面'],
     bgm: ['bgm', 'music', '音源', '音響', '音楽'],
     vision: ['ビジョン', 'vision', '映像', '大型ビジョン'],
     mic: ['mic', 'マイク'],
     speaker: ['mc', '話者', '担当'],
     script: ['script', 'セリフ', '台詞', '原稿', 'コメント'],
-    note: ['備考', '動線', '演出']
+    note: ['備考', '動線', '演出'],
+    visionR: [],
+    no: []
 };
+// 番号の見出しは、完全に一致したときだけ（「no」は他の語に入りやすいため）
+const NO_WORDS = ['no.', 'no', '番号', '#', '№'];
+const CONTAINS_ROLES = ['time', 'dur', 'title', 'bgm', 'vision', 'mic', 'speaker', 'script', 'note'];
 const HEADER_SCAN_ROWS = 20;
 
 const norm = s => String(s === undefined || s === null ? '' : s).normalize('NFKC').toLowerCase().replace(/\s+/g, '');
@@ -22,19 +27,30 @@ const norm = s => String(s === undefined || s === null ? '' : s).normalize('NFKC
 function roleOfHeader(cell) {
     const t = norm(cell);
     if (!t) return '';
-    for (const r of ROLES) if (VOCAB[r].includes(t)) return r;
+    if (NO_WORDS.includes(t)) return 'no';
+    if (t === '左') return 'vision';
+    if (t === '右') return 'visionR';
+    for (const r of CONTAINS_ROLES) if (VOCAB[r].includes(t)) return r === 'vision' ? sideOfVision(t) : r;
     if (t.length <= 60) {
         // 「MIC（有線）」「備考（動線・MC・演者）」のように語を含むもの：最も前に現れる語（同じ位置なら長い語）で決める
         let best = '', bestPos = Infinity, bestLen = 0;
-        for (const r of ROLES) for (const w of VOCAB[r]) {
+        for (const r of CONTAINS_ROLES) for (const w of VOCAB[r]) {
             if (w.length < 2) continue;
             const pos = t.indexOf(w);
             if (pos < 0) continue;
             if (pos < bestPos || (pos === bestPos && w.length > bestLen)) { best = r; bestPos = pos; bestLen = w.length; }
         }
-        return best;
+        return best === 'vision' ? sideOfVision(t) : best;
     }
     return '';
+}
+
+// ビジョンの列：【右】（右）などが付いていれば右面（visionR）、それ以外は左面（vision）
+function sideOfVision(t) {
+    if (/[【\[（(]右[】\]）)]/.test(t)) return 'visionR';
+    if (/[【\[（(]左[】\]）)]/.test(t)) return 'vision';
+    if (t.includes('右') && !t.includes('左')) return 'visionR';
+    return 'vision';
 }
 
 function avgLen(grid, from, col) {
@@ -141,12 +157,23 @@ const SAME_RE = /^(↓|⇓|〃|以下[、,，]?\s*(繰り返し|くり返し|同
 function isSameMark(text) { return SAME_RE.test(norm(text)); }
 
 // シートの設定どおりに行を取り出す
+const NUMBER_RE = /^[A-Za-z]{1,4}[-－ー]?\d+$/;
 function extractRows(grid, headerRow, roles) {
     const out = [];
+    // 章の行：番号の列（無ければ、役割の無い1列目）だけに文字があり、他が空
+    let noCol = roles.indexOf('no');
+    if (noCol < 0 && roles.length && roles[0] === '') noCol = 0;
     for (let i = headerRow + 1; i < grid.length; i++) {
         const row = grid[i];
-        const o = { time: '', dur: '', title: '', bgm: '', vision: '', mic: '', speaker: '', script: '', note: '' };
+        const o = { no: '', time: '', dur: '', title: '', bgm: '', vision: '', visionR: '', mic: '', speaker: '', script: '', note: '', kind: 'row' };
         let any = false;
+        if (noCol >= 0 && row[noCol] && String(row[noCol]).trim() && !NUMBER_RE.test(String(row[noCol]).trim())
+            && row.every((c, k) => k === noCol || !String(c || '').trim())) {
+            o.kind = 'chapter';
+            o.title = String(row[noCol]).trim();
+            out.push(o);
+            continue;
+        }
         roles.forEach((role, c) => {
             if (!role || !row[c]) return;
             let v = String(row[c]).trim();
