@@ -299,7 +299,7 @@ function renderControls() {
         $(`#crop-${k}`).value = v;
         if (document.activeElement !== $(`#crop-${k}-num`)) $(`#crop-${k}-num`).value = v;
     });
-    $("#pvw-desc").textContent = describeScene(pvw);
+    renderMonitorDesc();
 }
 
 function slotRect(scene, slot) {
@@ -438,10 +438,11 @@ function renderFromState() {
     if (!state) return;
     $("#btn-black").classList.toggle("on", state.black);
     $("#pgm-black-flag").classList.toggle("on", state.black);
-    $("#pgm-desc").textContent = describeScene(state.program);
+    renderMonitorDesc();
     $("#opt-guide").checked = state.guide;
     renderOutput();
     $$("#trans-seg button").forEach(b => b.classList.toggle("on", b.dataset.trans === state.transition.type));
+    $("#sc-trans").textContent = state.transition.type === "fade" ? "FADE" : "CUT";
     if (document.activeElement !== $("#trans-ms")) $("#trans-ms").value = state.transition.ms;
     $("#derby-count").textContent = state.derby.count;
     $("#derby-outs").textContent = state.derby.outs;
@@ -793,6 +794,14 @@ let edPickAll = false;
 let edKey = "";
 
 const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
+// モニターの見出し：台本のキューの画面のときは「O-07 場面名」だけにする
+let pvwCue = null, pgmCue = null;
+const rowLabel = r => `${r.no ? r.no + " " : ""}${oneLine(r.title)}`;
+function renderMonitorDesc() {
+    const inScript = currentTab === "script";
+    $("#pvw-desc").textContent = inScript && pvwCue && pvwCue.key === JSON.stringify(pvw) ? pvwCue.label : describeScene(pvw);
+    if (state) $("#pgm-desc").textContent = inScript && pgmCue && pgmCue.key === JSON.stringify(state.program) ? pgmCue.label : describeScene(state.program);
+}
 const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
 
 // ---- 表示用の組み立て ----
@@ -973,6 +982,7 @@ function previewRow(i) {
     if (!cue) return;
     pvw = SC.buildScene(cue, state.program, logos());
     if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
+    pvwCue = { key: JSON.stringify(pvw), label: rowLabel(r) };
     pvwChanged({ noAuto: true });
 }
 const followNextInPreview = () => { lastPvwKey = ""; renderMarks(); };
@@ -1028,6 +1038,7 @@ const scPrev = () => control("prev");
 // キューが出されたとき（このPCのボタン・Stream Deck・HTTP どれでも）：音を動かし、選択を次の行へ進める
 function onCueFired(ev) {
     const r = script().rows[ev.index];
+    if (r) { pgmCue = { key: JSON.stringify(state.program), label: rowLabel(r) }; renderMonitorDesc(); }
     if (r && r.cue && !ev.silent) runCueAudio(r.cue);
     const n = view.shown.find(i => i > ev.index);
     setSel(n !== undefined ? n : ev.index);
@@ -1174,10 +1185,10 @@ function renderLost(lost) {
 
 
 // ---- 編集画面：行を選ぶと右に編集パネル（クリックするたびに保存） ----
-const slideThumbs = (folder, on) => slides
+const slideThumbs = (folder, on, named) => slides
     .filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && (!folder || SC.normPath(s.path).includes(SC.normPath(folder))))
     .map(s => `<button type="button" class="pick-item ${s.path === on ? "on" : ""}" data-ed="leftfile" data-v="${escapeHtml(s.path)}" title="${escapeHtml(s.name)}">${s.kind === "video"
-        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}</button>`).join("")
+        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}${named ? `<span class="pick-name">${escapeHtml(s.name)}</span>` : ""}</button>`).join("")
     || `<div class="empty">画像がありません</div>`;
 
 function edCue() {
@@ -1290,7 +1301,7 @@ function openPick(i) {
     if (!it || !it.pick) return;
     pickRowIndex = i;
     if (selRow() !== i) setSel(i);
-    $("#pick-grid").innerHTML = slideThumbs(it.pick, it.cue && it.cue.left && it.cue.left.type === "slide" ? it.cue.left.file : "").replace(/data-ed="leftfile" data-v=/g, 'data-pickfile=');
+    $("#pick-grid").innerHTML = slideThumbs(it.pick, it.cue && it.cue.left && it.cue.left.type === "slide" ? it.cue.left.file : "", true).replace(/data-ed="leftfile" data-v=/g, 'data-pickfile=');
     $("#sc-pick").classList.remove("hidden");
 }
 function closePick() { $("#sc-pick").classList.add("hidden"); pickRowIndex = -1; }
@@ -1328,6 +1339,7 @@ function setScMode(mode) {
 }
 
 function bindScript() {
+    $("#sc-trans").addEventListener("click", () => setTransition(state && state.transition.type === "fade" ? "cut" : "fade"));
     $("#sc-edit-toggle").addEventListener("click", () => setScMode(scMode === "edit" ? "live" : "edit"));
     $("#sc-showall").addEventListener("change", e => { scShowAll = e.target.checked; writeLocal(SC_ALL_KEY, scShowAll); scListKey = ""; renderScript(); });
     $("#sc-sheets").addEventListener("click", e => {
@@ -1409,6 +1421,7 @@ function selectTab(name) {
     $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
     // 台本タブでは、左に台本・右にモニターの並びにする（CSS の .script-mode）
     document.body.classList.toggle("script-mode", name === "script");
+    renderMonitorDesc();
     if (name === "script") {
         scListKey = "";
         renderScript();
