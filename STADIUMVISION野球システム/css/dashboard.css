@@ -116,8 +116,8 @@ body { display: flex; flex-direction: column; overflow: hidden; background: #111
 .topbar { padding: 7px 16px; background: #0b0d12; flex-wrap: nowrap; }
 .topbar h1 { font-size: 18px; }
 .musicbar { position: static; padding: 5px 16px 6px; gap: 5px; background: #0e1118; box-shadow: none; border-bottom: 1px solid #222; }
-.mb-songs { max-height: 76px; overflow-y: auto; }
-.mb-songs button { padding: 4px 10px; max-width: 210px; }
+.mb-songs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding-bottom: 2px; }
+.mb-songs button { flex: none; padding: 4px 10px; max-width: 200px; }
 .mb-ctrl { gap: 6px 8px; }
 .layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 410px minmax(0, 1fr) 340px; gap: var(--gap); padding: var(--gap); overflow: hidden; }
 .layout > * { min-height: 0; }

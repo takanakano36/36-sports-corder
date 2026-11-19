@@ -914,7 +914,7 @@ const GROUP_ORDER = ["全面", "ロゴ", "進行", "入場", "選手"];
 function slideGroup(s) {
     const segs = s.folder.split("/").filter(Boolean);
     if (segs.length && /^\d+x\d+$/.test(segs[0])) segs.shift();       // 960x686 のような大きさのフォルダは、とばす
-    return segs[0] || "（直下）";
+    return segs[0] || "その他";
 }
 function slideGroups(kinds) {
     const set = new Set(slides.filter(s => kinds.includes(s.kind)).map(slideGroup));
@@ -1002,7 +1002,7 @@ function bindPicker() {
 
 async function uploadSlides(files) {
     if (!files || files.length === 0) return;
-    const folder = picker && picker.tab && picker.tab !== "（直下）" ? picker.tab : "";
+    const folder = picker && picker.tab && picker.tab !== "その他" ? picker.tab : "";
     let ok = 0;
     for (const f of files) {
         try {
@@ -1493,6 +1493,11 @@ function handleCommand(cmd) {
 // ボタンなどのつなぎこみ
 // --------------------------------------------------------------------------
 function bindEvents() {
+    // 音楽バーの曲ボタンは1段。ホイールで横に動かす
+    $("#mb-songs").addEventListener("wheel", e => {
+        const el = e.currentTarget;
+        if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); }
+    }, { passive: false });
     $$("[data-open]").forEach(b => b.addEventListener("click", () => openOutput(b.dataset.open)));
     $("#opt-guide").addEventListener("change", e => patch({ guide: e.target.checked }));
     $$("#out-mode-seg button[data-outmode]").forEach(b => b.addEventListener("click", () => setOutput({ mode: b.dataset.outmode })));
