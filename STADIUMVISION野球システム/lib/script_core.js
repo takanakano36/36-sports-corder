@@ -162,8 +162,10 @@
             ctx._songs.forEach(x => { if (x.k.length >= 2 && k.includes(x.k) && (!best || x.k.length > best.k.length)) best = x; });
             if (best) r.song = best;
             else {
-                const fm = /([^\s→（）()「」『』]*[^→（）()「」『』]*?)\.(?:mp3|wav|m4a|aac|ogg|flac)/i.exec(seg);
-                r.miss = fm ? (fm[1].trim().split(/\s*で\s+/).pop() + seg.slice(fm.index + fm[1].length, fm.index + fm[0].length)).trim() : seg.trim();
+                const fm = /([^→（）()「」『』]*?\.(?:mp3|wav|m4a|aac|ogg|flac))/i.exec(seg);
+                let nm = fm ? fm[1] : seg;
+                nm = nm.replace(/^\d{1,2}:\d{2}\s+/, '').replace(/^.*[：）)]\s*/, '').replace(/^.*[でを]\s+(?=\S)/, '').trim();
+                r.miss = nm;
             }
         } else {
             r.song = plainSong(seg, ctx._songs);

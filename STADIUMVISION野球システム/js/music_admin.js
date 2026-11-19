@@ -131,7 +131,7 @@ async function loadMusic() {
     musicList = musicSource ? await readLocalMusic(musicSource) : await fetchDefaultMusic();
     const holder = $("#mb-songs");
     if (musicList.length === 0) {
-        holder.innerHTML = `<span class="mb-empty">${musicSource ? "このフォルダに曲がありません" : "曲がありません（「📁 曲のフォルダ」で曲の入ったフォルダを選ぶか、既定のフォルダに曲を入れて「⟳ 曲を読み直す」を押します）"}</span>`;
+        holder.innerHTML = `<span class="mb-empty">♪ 曲がありません</span><button type="button" class="btn small" data-mb-pick title="曲の入ったフォルダを選びます（music フォルダに曲を入れて「曲を読み直す」でもよい）">曲のフォルダを選ぶ</button>`;
     } else {
         holder.innerHTML = musicList.map(m =>
             `<button type="button" data-music="${escapeHtml(m.path)}" title="${escapeHtml(m.name)}"><span>${escapeHtml(m.name)}</span></button>`).join("");
@@ -427,6 +427,7 @@ function initMusic() {
     $("#mb-duck-pct").value = String(musicPrefs.duckPct);
 
     $("#mb-songs").addEventListener("click", e => {
+        if (e.target.closest("[data-mb-pick]")) return pickMusicFolder();
         const b = e.target.closest("[data-music]");
         if (!b) return;
         // 鳴っている曲をもう一度押したら止める
