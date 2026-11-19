@@ -443,7 +443,6 @@ function renderFromState() {
     $("#opt-guide").checked = state.guide;
     renderOutput();
     $$("#trans-seg button").forEach(b => b.classList.toggle("on", b.dataset.trans === state.transition.type));
-    $("#sc-trans").textContent = state.transition.type === "fade" ? "FADE" : "CUT";
     if (document.activeElement !== $("#trans-ms")) $("#trans-ms").value = state.transition.ms;
     $("#derby-count").textContent = state.derby.count;
     $("#derby-outs").textContent = state.derby.outs;
@@ -800,9 +799,8 @@ const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides)
 let pvwCue = null, pgmCue = null;
 const rowLabel = r => `${r.no ? r.no + " " : ""}${oneLine(r.title)}`;
 function renderMonitorDesc() {
-    const inScript = currentTab === "script";
-    $("#pvw-desc").textContent = inScript && pvwCue && pvwCue.key === JSON.stringify(pvw) ? pvwCue.label : describeScene(pvw);
-    if (state) $("#pgm-desc").textContent = inScript && pgmCue && pgmCue.key === JSON.stringify(state.program) ? pgmCue.label : describeScene(state.program);
+    $("#pvw-desc").textContent = pvwCue && pvwCue.key === JSON.stringify(pvw) ? pvwCue.label : describeScene(pvw);
+    if (state) $("#pgm-desc").textContent = pgmCue && pgmCue.key === JSON.stringify(state.program) ? pgmCue.label : describeScene(state.program);
 }
 const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
 
@@ -892,9 +890,8 @@ function rowHtml(it, edit) {
     const ok = edit && it.suggested ? `<button type="button" class="cr-ok" data-adopt="${it.i}" title="提案を採用してキューにする">✓</button>` : "";
     return `<div class="cr ${it.cue ? "" : "nocue"} ${it.suggested ? "sug" : ""}" data-i="${it.i}">
         <span class="cr-no">${escapeHtml(r.no)}</span>${thumbHtml(it)}
-        <span class="cr-title">${escapeHtml(oneLine(r.title))}</span>
-        <span class="cr-bgm">${escapeHtml(it.bgm)}</span><span class="cr-right">${escapeHtml(it.right)}</span>${warn}
-        <span class="cr-time">${escapeHtml(r.time.slice(0, 5))}</span>${ok}</div>`;
+        <span class="cr-title" title="${escapeHtml(oneLine(r.title) + (r.time ? "　" + r.time.slice(0, 5) : ""))}">${escapeHtml(oneLine(r.title))}</span>
+        <span class="cr-bgm">${escapeHtml(it.bgm)}${it.right ? " " + escapeHtml(it.right) : ""}</span>${warn}${ok}</div>`;
 }
 
 function listHtml(edit) {
@@ -1018,8 +1015,8 @@ function renderCard(sel) {
     const body = $("#sc-card-body");
     if (!it) { body.innerHTML = `<span class="sc-card-none">出すキューがありません</span>`; return; }
     const r = it.row;
-    body.innerHTML = `<span class="sc-card-label">次に出す</span>${thumbHtml(it, true)}
-        <span class="sc-card-text"><b class="sc-card-title">${escapeHtml(r.no)} ${escapeHtml(oneLine(r.title))}</b>
+    body.innerHTML = `${thumbHtml(it)}
+        <span class="sc-card-text"><b class="sc-card-title" title="次に出す">${escapeHtml(r.no)} ${escapeHtml(oneLine(r.title))}</b>
         <span class="sc-card-bgm">${escapeHtml(it.bgm)} ${escapeHtml(it.right)}</span></span>`;
 }
 
@@ -1389,6 +1386,7 @@ function openPick(i, mode = "row") {
     pickState = { mode, row: i, tab, sub };
     renderPick();
     $("#sc-pick").classList.remove("hidden");
+    $("#tab-script").classList.add("picking");
     $("#sc-pick").scrollTop = 0;
 }
 function renderPick() {
@@ -1407,7 +1405,7 @@ function renderPick() {
         ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}<span class="pick-name">${escapeHtml(s.name)}</span></button>`).join("")
         || `<div class="empty">画像がありません</div>`;
 }
-function closePick() { $("#sc-pick").classList.add("hidden"); pickState = null; }
+function closePick() { $("#sc-pick").classList.add("hidden"); $("#tab-script").classList.remove("picking"); pickState = null; }
 
 // 選んだ画像を、行のキューに入れる（全面なら帯全体、そうでなければ左）
 function putSlide(c, file, wide) {
@@ -1467,7 +1465,6 @@ function setScMode(mode) {
 }
 
 function bindScript() {
-    $("#sc-trans").addEventListener("click", () => setTransition(state && state.transition.type === "fade" ? "cut" : "fade"));
     $("#sc-edit-toggle").addEventListener("click", () => setScMode(scMode === "edit" ? "live" : "edit"));
     $("#sc-showall").addEventListener("change", e => { scShowAll = e.target.checked; writeLocal(SC_ALL_KEY, scShowAll); scListKey = ""; renderScript(); });
     $("#sc-sheets").addEventListener("click", e => {
@@ -1477,7 +1474,6 @@ function bindScript() {
         const first = view.items.find(x => !x.chapter && x.shown && x.sec === curSheet);
         if (first) setSel(first.i); else { scListKey = ""; renderScript(); }
     });
-    $("#btn-sc-take").addEventListener("click", scTake);
     $("#btn-sc-next").addEventListener("click", scNext);
     $("#btn-sc-prev").addEventListener("click", scPrev);
     $("#sc-card-body").addEventListener("click", e => { const p = e.target.closest("[data-pick]"); if (p) openPick(Number(p.dataset.pick)); });
@@ -1562,8 +1558,6 @@ function selectTab(name) {
     currentTab = name;
     $$("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
     $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
-    // 台本タブでは、左に台本・右にモニターの並びにする（CSS の .script-mode）
-    document.body.classList.toggle("script-mode", name === "script");
     if (name !== "script") { closePick(); adhocActive = false; }
     renderMonitorDesc();
     if (name === "script") {

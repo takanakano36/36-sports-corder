@@ -108,7 +108,7 @@ button, input, select { font: inherit; color: inherit; }
 /* ==========================================================================
    ここから下は野球ビジョン（32:9）用
    ========================================================================== */
-.layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(420px, 1fr); gap: 14px; padding: 14px; align-items: start; }
+.layout { display: grid; grid-template-columns: minmax(0, 1.38fr) minmax(0, 1fr); gap: 14px; padding: 14px; align-items: start; }
 @media (max-width: 1300px) { .layout { grid-template-columns: 1fr; } }
 code { font-family: monospace; color: #93c5fd; }
 .spacer { flex: 1; }
@@ -362,19 +362,6 @@ code { font-family: monospace; color: #93c5fd; }
 .as-head { font-weight: 900; font-size: 13px; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .as-sample { font-size: 11px; color: var(--sub); margin-top: 3px; max-height: 70px; overflow: hidden; }
 
-/* 台本タブでは、左＝キュー一覧（広く）、右＝PREVIEW／ON AIR（縦に2つ） */
-@media (min-width: 1301px) and (min-height: 680px) {
-    body.script-mode .layout { grid-template-columns: minmax(0, 1.55fr) minmax(380px, 1fr); }
-    body.script-mode .layout > .col:last-child { order: -1; overflow: hidden; }
-    body.script-mode .layout > .col:first-child .ctrl-panel { display: none; }
-    body.script-mode #tab-script { flex: 1; min-height: 0; }
-    body.script-mode .sc-view { flex: 1; min-height: 0; }
-    body.script-mode .cr-list { flex: 1; min-height: 0; max-height: none; }
-    body.script-mode .sc-edit-grid { flex: 1; min-height: 0; }
-    body.script-mode .sc-editor { max-height: none; }
-    body.script-mode #sc-import { max-height: 60vh; overflow-y: auto; }
-}
-body.script-mode .take-bar { display: none; }
 /* 「当日に選ぶ」：大きなサムネイル（4列）と、下に名前 */
 .pick-grid.big { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 #pick-grid .pick-item { aspect-ratio: auto; display: flex; flex-direction: column; background: #1b2130; }
@@ -411,3 +398,31 @@ body.script-mode .take-bar { display: none; }
 .pick-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; }
 .pick-tabs button { background: #232937; border: 1px solid var(--line); border-radius: 8px 8px 0 0; padding: 6px 16px; font-size: 15px; font-weight: 900; color: var(--sub); cursor: pointer; }
 .pick-tabs button.on { background: var(--accent); border-color: var(--accent); color: #111; }
+
+/* 台本タブも、ほかのタブと同じ配置（左＝PREVIEW・TAKE・ON AIR／右＝タブのパネル）。台本のパネルは右の列の中で高さいっぱいに使う */
+@media (min-width: 1301px) and (min-height: 680px) {
+    .layout > .col:last-child:has(#tab-script:not(.hidden)) { overflow: hidden; }
+    #tab-script:not(.hidden) { flex: 1; min-height: 0; }
+    #tab-script .sc-view { flex: 1; min-height: 0; }
+    #tab-script .cr-list { flex: 1; min-height: 0; max-height: none; }
+    #tab-script .sc-edit-grid { flex: 1; min-height: 0; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+    #tab-script .sc-editor { max-height: none; }
+    #tab-script #sc-import { max-height: 60vh; overflow-y: auto; }
+    #tab-script.picking .sc-pick { flex: 1; min-height: 0; }
+}
+#tab-script.picking > .sc-view { display: none !important; }
+.sc-pick { position: static; border-radius: 10px; }
+.sc-edit-grid { grid-template-columns: 1fr; }
+/* 狭い右の列でも読める一覧：番号・サムネイル・場面名・BGM（時刻は場面名の title に） */
+.cr { grid-template-columns: 44px minmax(64px, auto) minmax(0, 1fr) auto 18px auto; gap: 8px; height: 54px; }
+.cr-title { font-size: 18px; }
+.cr-bgm { max-width: 170px; font-size: 13px; }
+.cr-thumb { width: 64px; height: 40px; }
+.cr-thumb.wide { width: 120px; height: 43px; }
+.sc-card { padding: 6px 8px; }
+.sc-card-body { gap: 10px; padding-left: 0; }
+.sc-card-body .cr-thumb { margin-top: 0; }
+.sc-card-text { margin-top: 0; gap: 2px; }
+.sc-card-title { font-size: 18px; }
+.sc-card-bgm { font-size: 13px; }
+.sc-step { padding: 6px 12px; }
