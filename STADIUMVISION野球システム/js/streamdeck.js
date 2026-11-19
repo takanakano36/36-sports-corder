@@ -148,18 +148,26 @@ const StreamDeck = (() => {
         // 空白の位置で2行に分ける案（幅の大きい方がいちばん小さくなる位置）
         const words = text.split(/[\s\u3000]+/).filter(Boolean);
         const spaced = words.length >= 2;
-        for (let fs = Math.round(baseFs); fs >= minFs; fs--) {
+        // 1) まず1行で収まるか（元の大きさから7割まで縮めて測る）。収まるなら改行しない
+        for (let fs = Math.round(baseFs); fs >= Math.round(baseFs * 0.7); fs--) {
             ctx.font = fontOf(fs, true);
             if (ctx.measureText(text).width <= maxW) return { lines: [text], fs };
-            if (spaced) {
-                let best = null, bestW = Infinity;
-                for (let i = 1; i < words.length; i++) {
-                    const a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
-                    const w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
-                    if (w < bestW) { bestW = w; best = [a, b]; }
-                }
-                if (best && bestW <= maxW) return { lines: best, fs };
+        }
+        // 2) 収まらないときだけ、空白で2行にする（元の大きさから縮めながら）
+        for (let fs = Math.round(baseFs); fs >= minFs && spaced; fs--) {
+            ctx.font = fontOf(fs, true);
+            let best = null, bestW = Infinity;
+            for (let i = 1; i < words.length; i++) {
+                const a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
+                const w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
+                if (w < bestW) { bestW = w; best = [a, b]; }
             }
+            if (best && bestW <= maxW) return { lines: best, fs };
+        }
+        // 3) 空白が無いときは、最小の大きさまで縮めて1行
+        for (let fs = Math.round(baseFs * 0.7) - 1; fs >= minFs && !spaced; fs--) {
+            ctx.font = fontOf(fs, true);
+            if (ctx.measureText(text).width <= maxW) return { lines: [text], fs };
         }
         ctx.font = fontOf(minFs, true);
         if (spaced) {
@@ -198,17 +206,26 @@ const StreamDeck = (() => {
         ctx.textBaseline = "middle";
         const hasSub = !!lk.sub;
         const { lines, fs } = layoutLabel(ctx, lk.label, size - 10, size * 0.24);
-        const top = hasSub ? size * (lines.length > 1 ? 0.26 : 0.34) : size * 0.5;
         const step = fs * 1.15;
+        const sfs = Math.round(size * 0.15);
+        let sl = [];
+        if (hasSub) {
+            ctx.font = `${sfs}px "Noto Sans JP","Yu Gothic",sans-serif`;
+            sl = wrapChars(ctx, lk.sub, size - 10, 2);
+        }
+        const gap = sl.length ? size * 0.05 : 0;
+        // ラベル＋サブ全体の高さがキーの内側に収まらないときは、サブを1行にする
+        if (sl.length > 1 && lines.length * step + gap + sl.length * sfs * 1.2 > size - 8) sl = [ellipsize(ctx, sl.join(""), size - 10)];
+        const total = lines.length * step + gap + sl.length * sfs * 1.2;
+        let y = (size - total) / 2;
         ctx.fillStyle = "#ffffff";
         ctx.font = fontOf(fs, true);
-        lines.forEach((t, i) => ctx.fillText(t, size / 2, top + (i - (lines.length - 1) / 2) * step));
-        if (hasSub) {
-            const sfs = size * 0.15;
-            ctx.font = `${Math.round(sfs)}px "Noto Sans JP","Yu Gothic",sans-serif`;
+        lines.forEach((t, i) => ctx.fillText(t, size / 2, y + step * (i + 0.5)));
+        y += lines.length * step + gap;
+        if (sl.length) {
+            ctx.font = `${sfs}px "Noto Sans JP","Yu Gothic",sans-serif`;
             ctx.fillStyle = "rgba(255,255,255,0.85)";
-            const sl = wrapChars(ctx, lk.sub, size - 10, 2);
-            sl.forEach((t, i) => ctx.fillText(t, size / 2, size * (lines.length > 1 ? 0.66 : 0.68) + i * sfs * 1.2));
+            sl.forEach((t, i) => ctx.fillText(t, size / 2, y + sfs * 1.2 * (i + 0.5)));
         }
         return cv;
     }
