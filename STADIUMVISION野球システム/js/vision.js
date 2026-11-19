@@ -1,7 +1,10 @@
 /* ==========================================================================
    スタジアムビジョン野球システム - 表示画面
-   - サーバー(/events)から届いた本線(program)を 3840×1080 に描画する
-   - ?view=left / right … 左半分・右半分だけを出す（HDMI 2本で出すとき）
+   - サーバー(/events)から届いた本線(program)を描画する
+     出力の形（state.output）が
+       wide … 3840×1080（32:9）
+       sdi  … 1920×1080 の画面の中の「帯」（ビジョンに映る部分。例 1920×630）だけに描く。帯の外は黒
+   - ?view=left / right … 左半分・右半分だけを出す（HDMI 2本で出すとき。sdi のときは使わない）
    - ?monitor=pvw … 管理画面のプレビュー（管理画面から送られた画面を出す）
      ?monitor=pgm … 管理画面の本線モニター。nocam=1 でカメラを開かない
    ========================================================================== */
@@ -13,12 +16,19 @@ if (location.protocol === "file:" || location.hostname === "absolute") {
     location.replace("http://localhost:3007/vision.html");
 }
 
-const STAGE_W = 3840;
-const STAGE_H = 1080;
-const HALF_W = 1920;
+// ステージ（素材を並べる面）の大きさ。出力の形で変わる（applyOutput）
+let STAGE_W = 3840;
+let STAGE_H = 1080;
+let HALF_W = 1920;
+// ウィンドウに出す画面の大きさと、その中のステージの位置
+let FRAME_W = 3840;
+let FRAME_H = 1080;
+let STAGE_Y = 0;
+let OUTPUT_MODE = 'wide';
 
 const params = new URLSearchParams(location.search);
-const VIEW = ['left', 'right'].includes(params.get('view')) ? params.get('view') : 'all';
+const VIEW_PARAM = ['left', 'right'].includes(params.get('view')) ? params.get('view') : 'all';
+let VIEW = VIEW_PARAM;
 const MONITOR = params.get('monitor') || '';       // '' / pvw / pgm
 const NO_CAM = params.get('nocam') === '1';
 // ?camera=obs … OBS用。カメラの枠は透明にしてカメラを開かない
@@ -44,14 +54,41 @@ let lastDerbyCount = null;
 // --------------------------------------------------------------------------
 // ステージのスケーリング
 // --------------------------------------------------------------------------
+// 出力の形を反映する。形が変わったら true
+function applyOutput(o) {
+    const sdi = !!o && o.mode === 'sdi';
+    const next = sdi
+        ? { mode: 'sdi', w: 1920, h: o.bandH, y: o.bandY }
+        : { mode: 'wide', w: 3840, h: 1080, y: 0 };
+    const changed = next.mode !== OUTPUT_MODE || next.w !== STAGE_W || next.h !== STAGE_H || next.y !== STAGE_Y;
+    OUTPUT_MODE = next.mode;
+    STAGE_W = next.w;
+    STAGE_H = next.h;
+    HALF_W = STAGE_W / 2;
+    // 管理画面のモニターは、ビジョンに映る部分（帯）だけを出す
+    STAGE_Y = MONITOR ? 0 : next.y;
+    FRAME_W = STAGE_W;
+    FRAME_H = sdi && !MONITOR ? 1080 : STAGE_H;
+    // SDI 1本のときは左右に分けて出さない
+    VIEW = sdi ? 'all' : VIEW_PARAM;
+    document.body.classList.toggle('out-sdi', sdi);
+    const stage = document.getElementById('stage');
+    stage.style.width = STAGE_W + 'px';
+    stage.style.height = STAGE_H + 'px';
+    document.querySelector('.guide-l').textContent = `LEFT ${HALF_W}×${STAGE_H}`;
+    document.querySelector('.guide-r').textContent = `RIGHT ${HALF_W}×${STAGE_H}`;
+    fitStage();
+    return changed;
+}
+
 function fitStage() {
     const stage = document.getElementById('stage');
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const viewW = VIEW === 'all' ? STAGE_W : HALF_W;
-    const scale = Math.min(vw / viewW, vh / STAGE_H);
+    const viewW = VIEW === 'all' ? FRAME_W : HALF_W;
+    const scale = Math.min(vw / viewW, vh / FRAME_H);
     const offsetX = (vw - viewW * scale) / 2 - (VIEW === 'right' ? HALF_W * scale : 0);
-    const offsetY = (vh - STAGE_H * scale) / 2;
+    const offsetY = (vh - FRAME_H * scale) / 2 + STAGE_Y * scale;
     stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 }
 window.addEventListener('resize', fitStage);
@@ -248,8 +285,9 @@ function buildTestPattern() {
     el.className = 'test-pattern';
     const bars = ['#fff', '#ff0', '#0ff', '#0f0', '#f0f', '#f00', '#00f', '#000'];
     el.innerHTML = `
-        <div class="tp-half tp-l"><div class="tp-big">L</div><div class="tp-small">HDMI-1 / 0-1919</div></div>
-        <div class="tp-half tp-r"><div class="tp-big">R</div><div class="tp-small">HDMI-2 / 1920-3839</div></div>
+        <div class="tp-half tp-l"><div class="tp-big">L</div><div class="tp-small">${OUTPUT_MODE === 'sdi' ? `0-${HALF_W - 1}` : 'HDMI-1 / 0-1919'}</div></div>
+        <div class="tp-half tp-r"><div class="tp-big">R</div><div class="tp-small">${OUTPUT_MODE === 'sdi' ? `${HALF_W}-${STAGE_W - 1}` : 'HDMI-2 / 1920-3839'}</div></div>
+        ${OUTPUT_MODE === 'sdi' ? `<div class="tp-frame"></div><div class="tp-size">${STAGE_W}×${STAGE_H}</div>` : ''}
         <div class="tp-circle"></div>
         <div class="tp-bars">${bars.map(c => `<span style="background:${c}"></span>`).join('')}</div>`;
     return el;
@@ -361,8 +399,10 @@ function slotGeometry(scene, slot) {
         case 'left': return { left: 0, width: HALF_W };
         case 'right': return { left: HALF_W, width: HALF_W };
         case 'single': {
+            // 16:9 の枠（高さいっぱい）。32:9 のときは半分の幅、SDIの帯のときは帯の高さ×16/9
+            const w = Math.min(STAGE_W, Math.round(STAGE_H * 16 / 9));
             const x = scene.singleX !== undefined ? Number(scene.singleX) : 50;
-            return { left: Math.round((STAGE_W - HALF_W) * x / 100), width: HALF_W };
+            return { left: Math.round((STAGE_W - w) * x / 100), width: w };
         }
     }
     return { left: 0, width: STAGE_W };
@@ -384,7 +424,7 @@ function visibilityKey(scene) {
 
 function sceneKey(scene) {
     const slots = LAYOUT_SLOTS[scene.layout] || LAYOUT_SLOTS.wide;
-    return scene.layout + '|' + visibilityKey(scene) + '|' + slots.map(s => s + '=' + contentKey(scene.slots && scene.slots[s])).join('|');
+    return STAGE_W + 'x' + STAGE_H + '|' + scene.layout + '|' + visibilityKey(scene) + '|' + slots.map(s => s + '=' + contentKey(scene.slots && scene.slots[s])).join('|');
 }
 
 function buildLayer(scene) {
@@ -511,6 +551,7 @@ function applyBlack() {
 function onState(newState) {
     const first = !state;
     state = newState;
+    applyOutput(state.output);
     document.getElementById('stage').classList.remove('waiting');
     releaseUnusedCams();
     if (MONITOR === 'pvw') {

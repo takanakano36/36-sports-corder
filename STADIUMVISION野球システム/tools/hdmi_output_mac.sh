@@ -6,6 +6,8 @@
 #        ・1台            → その画面に「全体」(3840×1080)（ビジョンへHDMI 1本。いちばん普通の形）
 #        ・2台            → 左の画面に「左半分」、右の画面に「右半分」（HDMI 2本の場合）
 #        ・3台以上        → どう出すかを番号で選ぶ
+#      ※ 管理画面の設定タブで「SDI 1本（1920×1080 の帯）」にしているときは、左右に分けず、
+#        1つの画面に 1920×1080 で出す（ビジョンの画面が2台以上あるときは番号で選ぶ）
 #   3. Google Chrome（なければ Microsoft Edge）で、それぞれ全画面で開く
 #   --dry-run を付けると、実際には開かずに「どの画面に出すか」だけを表示する（確認用）
 # ==========================================================================
@@ -58,6 +60,15 @@ fi
 #   macOSから画面の一覧を受け取る（1行＝1画面：横位置 縦位置 幅 高さ 名前、1行目が主画面）
 #   位置は、主画面の左上を 0,0 とした値に直して受け取る（ブラウザの位置指定と同じ基準）
 # --------------------------------------------------------------------------
+# 出力の形（管理画面の設定タブ）：wide = 32:9 ／ sdi = SDI 1本（1920×1080 の帯）
+OUT_MODE=wide
+if curl -s -m 2 "$BASE/api/state" | grep -q '"output":{"mode":"sdi"'; then OUT_MODE=sdi; fi
+if [ "$OUT_MODE" = sdi ]; then
+    echo '出力の形：SDI 1本（1920×1080。ビジョンに映る帯だけを使う）'
+else
+    echo '出力の形：32:9（3840×1080）'
+fi
+
 SCREENS="$(osascript -l JavaScript -e '
 ObjC.import("AppKit");
 var list = $.NSScreen.screens;
@@ -110,8 +121,21 @@ if [ "$COUNT" -eq 0 ]; then
     echo 'ビジョン用の画面（2台目以降の画面）が見つかりません。次を確認してください。'
     echo '  ・HDMIケーブルがMacとビジョン（またはスイッチャー）につながっているか'
     echo '  ・「システム設定」→「ディスプレイ」で、「ミラーリング」ではなく「拡張ディスプレイ」になっているか'
-    read -r -p '確認のため、いまの画面に全体（32:9）を表示しますか？（Y = 表示する ／ それ以外 = やめる）' ans
+    read -r -p '確認のため、いまの画面に全体を表示しますか？（Y = 表示する ／ それ以外 = やめる）' ans
     case "$ans" in [Yy]) add_plan all "$MAIN_LINE" ;; *) exit 1 ;; esac
+elif [ "$OUT_MODE" = sdi ]; then
+    # SDI 1本：左右に分けず、1つの画面に 1920×1080 で出す
+    if [ "$COUNT" -eq 1 ]; then
+        add_plan all "${OTHER_LINES[0]}"
+    else
+        echo
+        echo 'SDIコンバーターにつないだ画面の番号を選んでください。見つかった画面：'
+        for i in "${!OTHER_LINES[@]}"; do
+            echo "  $((i + 1)) : $(format_screen "${OTHER_LINES[$i]}")"
+        done
+        n="$(read_number '番号：' "$COUNT")"
+        add_plan all "${OTHER_LINES[$((n - 1))]}"
+    fi
 elif [ "$COUNT" -eq 1 ]; then
     add_plan all "${OTHER_LINES[0]}"
 elif [ "$COUNT" -eq 2 ]; then
@@ -145,7 +169,16 @@ fi
 
 for i in "${!PLAN_VIEWS[@]}"; do
     case "${PLAN_VIEWS[$i]}" in left) lbl='左半分（0〜1919）' ;; right) lbl='右半分（1920〜3839）' ;; *) lbl='全体（3840×1080）' ;; esac
+    [ "$OUT_MODE" = sdi ] && lbl='全体（1920×1080・SDI）'
     echo "$lbl → $(format_screen "${PLAN_SCREENS[$i]}")"
+    if [ "$OUT_MODE" = sdi ]; then
+        IFS=$'\t' read -r _x _y _w _h _n <<< "${PLAN_SCREENS[$i]}"
+        if [ "$_w" != 1920 ] || [ "$_h" != 1080 ]; then
+            echo '  ※この画面は 1920×1080 ではありません。ビジョンに出る位置がずれます。'
+            echo '    「システム設定」→「ディスプレイ」で 1920×1080 にし、SDIコンバーターの EDID を「0」か「5」にしてください。'
+        fi
+        continue
+    fi
     if [ "${PLAN_VIEWS[$i]}" = all ] && ! is_wide "${PLAN_SCREENS[$i]}"; then
         echo '  ※この画面は32:9ではないため、上下に黒い余白が付いて小さく表示されます。'
         echo '    「システム設定」→「ディスプレイ」で、ビジョンの画面を 3840×1080 にしてください。'
