@@ -1023,7 +1023,7 @@ function pasteScript() {
 
 // 列の割り当て画面（シートごとに、見出し行と各列の役割をプルダウンで直せる）
 function beginAssign(resp) {
-    importState = { resp, cfg: resp.sheets.map(sh => ({ index: sh.index, include: sh.rowCount > 0, headerRow: sh.headerRow, roles: sh.columns.map(c => c.role) })) };
+    importState = { resp, cfg: resp.sheets.map(sh => ({ index: sh.index, include: !!sh.suggestInclude, headerRow: sh.headerRow, roles: sh.columns.map(c => c.role) })) };
     renderAssign();
 }
 

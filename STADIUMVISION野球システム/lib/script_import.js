@@ -132,7 +132,10 @@ function analyzeSheet(grid, forcedHeader) {
     }));
     let dataRows = 0;
     for (let i = headerRow + 1; i < grid.length; i++) if (grid[i].some(Boolean)) dataRows++;
-    return { headerRow, headerFound: headerRow >= 0, columns, rowCount: dataRows };
+    // 台本のシートらしいか：セリフの列があり、BGM・ビジョンのどれかもある（表紙・キュー表・名簿などは既定でOFF）
+    const has = r => roles.includes(r);
+    const suggestInclude = dataRows > 0 && has('script') && (has('bgm') || has('vision') || has('visionR'));
+    return { headerRow, headerFound: headerRow >= 0, columns, rowCount: dataRows, suggestInclude };
 }
 
 // Excel の時刻値（数値）を読める形にする。小数を含む数値だけが対象（「10」などの整数はそのまま）
