@@ -24,14 +24,16 @@
         (script.rows || []).forEach((r, i) => { if (r.cue) out.push(i); });
         return out;
     }
-    // 読み位置より後で最初のキュー付きの行（無ければ -1）
-    function nextCueRow(script) {
-        for (let i = script.pos + 1; i < script.rows.length; i++) if (script.rows[i].cue) return i;
+    // idx より後で最初のキュー付きの行（無ければ -1）
+    function nextCueAfter(script, idx) {
+        for (let i = idx + 1; i < script.rows.length; i++) if (script.rows[i].cue) return i;
         return -1;
     }
-    // 読み位置より前で最後のキュー付きの行（無ければ -1）
+    // 「いま本線に出している行（onair）」より後で最初のキュー付きの行（NEXT で出す行）
+    function nextCueRow(script) { return nextCueAfter(script, script.onair); }
+    // 「いま本線に出している行」より前で最後のキュー付きの行（PREV で出し直す行）
     function prevCueRow(script) {
-        for (let i = Math.min(script.pos, script.rows.length) - 1; i >= 0; i--) if (script.rows[i].cue) return i;
+        for (let i = Math.min(script.onair, script.rows.length) - 1; i >= 0; i--) if (script.rows[i].cue) return i;
         return -1;
     }
 
@@ -319,7 +321,13 @@
         (script.rows || []).forEach((r, i) => {
             if (r.sec !== sec) { sec = r.sec; st = { left: null, right: null, bgm: null, loop: null, duck: null }; }
             if (!isCueable(r)) return;
-            if (r.cue) { applyCueToState(st, r.cue); return; }
+            if (r.cue) {
+                applyCueToState(st, r.cue);
+                // 「当日に選ぶ」行は、キューを付けたあとも選び直せるよう、フォルダだけ覚えておく
+                const ps = r.vision && !isSame(r.vision) ? extractPaths(r.vision) : [];
+                if (ps.length && isPlaceholder(ps[0].path)) out[i] = { cue: null, reasons: [], hints: [], pick: [folderOf(ps[0].path)], hasCue: true };
+                return;
+            }
             if (!(r.bgm || r.vision || r.visionR || r.title)) return;
             const sg = suggestRow(r, ctx, st);
             if (sg) out[i] = sg;
@@ -357,5 +365,5 @@
         return '黒';
     }
 
-    return { cueRows, nextCueRow, prevCueRow, resolveLogo, buildScene, suggestCue, suggestAll, describeFace, isSame, norm, normPath, FUTA_FOLDER };
+    return { cueRows, nextCueRow, nextCueAfter, prevCueRow, resolveLogo, buildScene, suggestCue, suggestAll, describeFace, isSame, norm, normPath, FUTA_FOLDER };
 }));

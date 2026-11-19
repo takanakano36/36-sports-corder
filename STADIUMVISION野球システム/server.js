@@ -357,6 +357,11 @@ function loadState() {
         console.log('[起動] 前回の終了時に BLACK になっていたため、解除して始めます');
         s.black = false;
     }
+    // 旧い保存データでは pos が「出した行」だった。選択は「次に出すキュー」にする
+    if (isObj(s.script) && Array.isArray(s.script.rows) && s.script.pos >= 0 && s.script.pos === s.script.onair) {
+        const nx = Core.nextCueAfter(s.script, s.script.onair);
+        if (nx >= 0) s.script.pos = nx;
+    }
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
     console.log('[起動] 保存データから前回の状態を復元しました');
@@ -529,7 +534,9 @@ function fireCue(next, index, opts = {}) {
     next.program = Core.buildScene(row.cue, next.program, currentLogos(next));
     next.black = false;
     next.futa = Object.assign({}, next.futa, { active: '', prev: null });
-    next.script.pos = index;
+    // 出した行を「いま本線」にし、選択（pos）は次のキューへ進める（次のキューが PREVIEW に入る）
+    const nx = Core.nextCueAfter(next.script, index);
+    next.script.pos = nx >= 0 ? nx : index;
     next.script.onair = index;
     return { index, silent: !!opts.silent };
 }
@@ -586,7 +593,7 @@ function applyControl(action, val) {
             command = { action, val: val.startsWith('music/') ? val : `music/${val}` };
             if (!isMediaPath(command.val, ['music'])) throw new Error('曲の場所が正しくありません');
             break;
-        case 'next': {               // 読み位置より後の、最初のキュー付きの行を出す
+        case 'next': {               // いま出している行より後の、最初のキュー付きの行を出す
             const i = Core.nextCueRow(state.script);
             if (i < 0) throw new Error('次のキューがありません');
             cue = fireCue(next, i);
