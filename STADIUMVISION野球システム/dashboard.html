@@ -24,6 +24,9 @@
             <button type="button" class="btn small" data-open="right">右</button>
         </div>
         <label class="toggle small-toggle" title="ビジョンの左右2画面の境目に赤い線を出します（設置・調整用）"><input type="checkbox" id="opt-guide"> 境目の線</label>
+        <button type="button" id="sd-badge" class="btn small sd-badge" title="Stream Deck の接続（設定タブ）">SD 未接続</button>
+        <button type="button" id="btn-futa-left" class="btn btn-futa" title="左面だけロゴ（フタ）を本線に出します。もう一度押すと直前の画面に戻ります">左フタ</button>
+        <button type="button" id="btn-futa-full" class="btn btn-futa" title="帯全体にロゴ（全面フタ）を本線に出します。もう一度押すと直前の画面に戻ります">全面フタ</button>
         <button type="button" id="btn-black" class="btn btn-black" title="ビジョンを黒にします。もう一度押すと元に戻ります">BLACK</button>
     </div>
 </header>
@@ -146,7 +149,7 @@
         <nav class="tabs side-tabs" id="tabs">
             <button type="button" data-tab="media" class="on">素材</button>
             <button type="button" data-tab="players">選手</button>
-            <button type="button" data-tab="cues">式次第</button>
+            <button type="button" data-tab="script">台本</button>
             <button type="button" data-tab="settings">設定</button>
         </nav>
 
@@ -263,42 +266,81 @@
             </div>
         </div>
 
-        <!-- 式次第 -->
-        <div class="tab-body hidden" id="tab-cues">
-            <div class="panel">
-                <div class="ctrl-row">
-                    <button type="button" class="btn big next" id="btn-cue-next">▶ 次へ（NEXT）</button>
-                    <div class="cue-now" id="cue-now"></div>
+        <!-- 台本（読み込み・キューのひもづけ・本番） -->
+        <div class="tab-body hidden" id="tab-script">
+            <div class="sc-bar">
+                <div class="seg seg-sm" id="sc-mode">
+                    <button type="button" data-scmode="edit" title="台本を読み込み、各行にキュー（出すもの）をひもづけます">編集</button>
+                    <button type="button" data-scmode="live" title="台本を読み上げながら、NEXT でスライドとBGMを出します（編集の画面は隠れます）">本番</button>
+                </div>
+                <button type="button" class="btn next sc-big" id="btn-sc-prev" title="1つ前のキューを出し直します（BGMは鳴らし直しません）">◀ PREV</button>
+                <button type="button" class="btn next sc-big" id="btn-sc-next" title="読み位置より後で最初のキューを、本線に出します">NEXT ▶</button>
+                <button type="button" class="btn sc-big" id="btn-read-up" title="読み位置を1行上へ（キーボード ↑）">読み位置 ↑</button>
+                <button type="button" class="btn sc-big" id="btn-read-down" title="読み位置を1行下へ（キーボード ↓）">読み位置 ↓</button>
+                <select id="sc-jump" class="text-input sc-jump" title="セクションの先頭へ読み位置を移します"></select>
+            </div>
+            <div class="sc-edit-only" id="sc-edit-tools">
+                <div class="dropzone" id="sc-drop">
+                    台本の Excel（.xlsx）をここにドロップ、または
+                    <button type="button" class="btn small go" id="btn-sc-file">ファイルを選ぶ</button>
+                    <button type="button" class="btn small" id="btn-sc-paste-toggle">貼り付けで読み込む</button>
+                    <input type="file" id="sc-file" accept=".xlsx,.csv,.tsv,.txt" hidden>
+                    <div class="sub-box hidden" id="sc-paste-box">
+                        <textarea id="sc-paste" class="text-input" rows="5" placeholder="Excel でセルをコピーして貼り付け（タブ区切り。1行目は見出し）"></textarea>
+                        <button type="button" class="btn small go" id="btn-sc-paste">この内容を読み込む</button>
+                    </div>
                 </div>
                 <div class="ctrl-row wrap">
-                    <button type="button" class="btn small go" id="btn-cue-add">＋ いまのプレビューを追加</button>
-                    <button type="button" class="btn small" id="btn-cue-overwrite">選んだキューを上書き</button>
-                    <button type="button" class="btn small" data-cue-move="-1">▲</button>
-                    <button type="button" class="btn small" data-cue-move="1">▼</button>
-                    <button type="button" class="btn small danger" id="btn-cue-delete">消す</button>
-                    <span class="spacer"></span>
-                    <button type="button" class="btn small" id="btn-cue-export">ファイルに書き出す</button>
-                    <button type="button" class="btn small" id="btn-cue-import">ファイルから読み込む</button>
-                    <input type="file" id="cue-file" accept=".json" hidden>
+                    <button type="button" class="btn small go" id="btn-sc-adopt-all" title="薄く出ている提案を、キューのない行すべてに採用します">提案をすべて採用</button>
+                    <button type="button" class="btn small danger" id="btn-sc-clear-sec" title="読み位置のあるセクションのキューを全部消します">このセクションのキューを全部消す</button>
+                    <button type="button" class="btn small" id="btn-sc-add-manual" title="いまのPREVIEWの画面を、「手動の式次第」に1行足します">＋ いまのプレビューを手動の式次第に追加</button>
+                    <span class="note" id="sc-summary"></span>
                 </div>
-                <div class="cue-list" id="cue-list"></div>
+                <div class="panel sc-lost hidden" id="sc-lost"></div>
             </div>
-            <div class="panel hidden" id="cue-editor">
-                <h2>選んだキュー</h2>
-                <label class="field">名前 <input type="text" id="cue-name" class="text-input" maxlength="100"></label>
-                <label class="field">音楽
-                    <div class="ctrl-row">
-                        <select id="cue-music-action" class="text-input">
-                            <option value="">そのまま（変えない）</option>
-                            <option value="play">曲を鳴らす</option>
-                            <option value="stop">止める（音楽バーのフェード秒数で）</option>
+            <div class="panel hidden" id="sc-import"></div>
+            <div class="sc-list" id="sc-list"></div>
+            <div class="panel sc-edit-only hidden" id="sc-editor">
+                <h2>選んだ行のキュー <small id="sc-editor-title"></small></h2>
+                <div class="sc-grid">
+                    <label>左面
+                        <select id="cue-left" class="text-input">
+                            <option value="">変えない</option><option value="slide">スライド</option><option value="futa">左フタ</option><option value="black">黒</option>
                         </select>
-                        <select id="cue-music-path" class="text-input"></select>
-                    </div>
-                </label>
-                <label class="field">メモ <input type="text" id="cue-memo" class="text-input" maxlength="1000" placeholder="アナウンス原稿・きっかけなど"></label>
+                        <select id="cue-left-file" class="text-input hidden"></select>
+                    </label>
+                    <label>右面
+                        <select id="cue-right" class="text-input">
+                            <option value="">変えない</option><option value="cam1">カメラ1</option><option value="cam2">カメラ2</option><option value="slide">スライド</option><option value="black">黒</option>
+                        </select>
+                        <select id="cue-right-file" class="text-input hidden"></select>
+                    </label>
+                    <label>帯全体（左右より優先）
+                        <select id="cue-band" class="text-input">
+                            <option value="">使わない</option><option value="futa">全面フタ</option><option value="slide">スライド（1920×帯）</option>
+                        </select>
+                        <select id="cue-band-file" class="text-input hidden"></select>
+                    </label>
+                    <label>BGM
+                        <select id="cue-bgm" class="text-input">
+                            <option value="">変えない</option><option value="play">曲を鳴らす</option><option value="fade">フェードアウト</option><option value="stop">すぐ止める</option>
+                        </select>
+                        <select id="cue-bgm-song" class="text-input hidden"></select>
+                        <label class="toggle hidden" id="cue-bgm-loop-wrap"><input type="checkbox" id="cue-bgm-loop"> くり返し</label>
+                    </label>
+                </div>
+                <label class="field">メモ <input type="text" id="cue-memo" class="text-input" maxlength="1000" placeholder="きっかけなど（任意）"></label>
+                <div class="ctrl-row wrap">
+                    <button type="button" class="btn small go" id="btn-cue-save">この内容でキューを付ける</button>
+                    <button type="button" class="btn small" id="btn-cue-from-pvw" title="左右・帯の指定のかわりに、いまのPREVIEWの画面をそのまま使います（選手スライドや文字なども可）">いまのプレビューの画面を使う</button>
+                    <button type="button" class="btn small" id="btn-cue-test" title="この行のキューの画面をPREVIEWに出します">プレビューで確かめる</button>
+                    <button type="button" class="btn small danger" id="btn-cue-del">キューを外す</button>
+                    <span class="spacer"></span>
+                    <button type="button" class="btn small" data-row-move="-1" title="手動の式次第の行だけ">▲</button>
+                    <button type="button" class="btn small" data-row-move="1">▼</button>
+                    <button type="button" class="btn small danger" id="btn-row-del">行を消す</button>
+                </div>
             </div>
-            <p class="note">行をクリックするとプレビューに読み込みます。「GO」でその場でビジョンに出します。</p>
         </div>
 
         <!-- 設定 -->
@@ -308,6 +350,7 @@
                 <div class="seg" id="out-mode-seg">
                     <button type="button" data-outmode="wide" title="3840×1080（32:9）をそのまま出します">32:9（3840×1080）</button>
                     <button type="button" data-outmode="sdi" title="1920×1080 で出し、ビジョンに映る帯だけを使います（HDMI→SDIコンバーター経由）">SDI 1本（1920×1080 の帯）</button>
+                    <button type="button" id="btn-preset-moriyama" title="SDI 1本・帯の上端 197・高さ 686（1920×686＝14:5）にします">守山（197／686）</button>
                 </div>
                 <div id="out-sdi-box" class="hidden">
                     <p class="note">ビジョン側のスケーラーが「横100%・上下トリミング」のとき用です。1920×1080 の中で、ビジョンに映る帯（下の上端・高さ）だけに素材を並べます。帯の外は黒になります。</p>
@@ -362,25 +405,58 @@
                 </p>
             </div>
             <div class="panel">
-                <h2>Stream Deck などから操作</h2>
+                <h2>フタ（ロゴ画面） <small>上の「左フタ」「全面フタ」ボタンで本線に出します</small></h2>
+                <label class="field">左フタの画像（960×686） <select id="futa-left" class="text-input"></select></label>
+                <label class="field">全面フタの画像（1920×686） <select id="futa-full" class="text-input"></select></label>
+                <p class="note" id="futa-info"></p>
+            </div>
+            <div class="panel" id="sd-panel">
+                <h2>Stream Deck（USBで直接つなぐ） <small id="sd-state">未接続</small></h2>
+                <div class="ctrl-row wrap">
+                    <button type="button" class="btn go" id="btn-sd-connect">Stream Deck を接続</button>
+                    <button type="button" class="btn hidden" id="btn-sd-disconnect">切断</button>
+                    <button type="button" class="btn small" id="btn-sd-flip" title="キーの上下が逆のとき">上下反転</button>
+                    <button type="button" class="btn small" data-sd-shift="-1" title="押したキーと別のキーが反応するとき">位置ずれ −</button>
+                    <button type="button" class="btn small" data-sd-shift="1">位置ずれ ＋</button>
+                    <label class="toggle">明るさ <input type="range" id="sd-bright" min="10" max="100" step="5" class="range"></label>
+                </div>
+                <p class="note" id="sd-info">Chrome か Edge で開くと、Stream Deck をUSBでつなぐだけで使えます（Elgato のアプリは閉じておきます）。初めてのときは「接続」ボタンを押して機器を選びます。</p>
+                <div class="ctrl-row">
+                    <span class="lbl">キー配置の見本</span>
+                    <select id="sd-preview-count" class="text-input sm">
+                        <option value="15">15キー（5×3）</option><option value="6">6キー（Mini）</option><option value="8">8キー（+）</option><option value="32">32キー（XL）</option>
+                    </select>
+                </div>
+                <div class="sd-keys" id="sd-keys"></div>
+                <h2 class="sd-sub">BGMキューに割り当てる曲 <small>空欄は音楽バーの並び順どおり</small></h2>
+                <div class="sd-bgm" id="sd-bgm"></div>
+            </div>
+            <div class="panel">
+                <h2>Stream Deck などから操作（HTTP）</h2>
                 <pre class="api-list">http://localhost:3007/api/control?action=操作名&amp;val=値
 
 take            プレビューを本線へ（管理画面を開いておく）
 swap            左右2分割の左と右を入れ替え（プレビュー）
-next / prev     式次第の次へ／前へ
-cue&amp;val=3      式次第の3番目
+next / prev     台本の次のキューへ／前のキューへ
+cue&amp;val=3      キュー付きの行の3番目
+futa            左フタ（ロゴ）のオン・オフ
+futaFull        全面フタのオン・オフ
+readNext / readPrev  台本の読み位置を1行下／上（管理画面を開いておく）
 black           BLACK（val=on / off、省略で切り替え）
 cut / fade      切り替え方
 derby&amp;val=1    HR +1（-1 / reset）
 derbyOut&amp;val=1 HR競争のアウト +1（-1）
 musicPlay&amp;val=01_入場曲.mp3   曲を鳴らす（music/ からの場所）
-musicStop       音楽を止める</pre>
+musicStop       音楽を止める（音楽バーのフェード秒数で）
+musicFade       音楽をフェードアウト</pre>
             </div>
         </div>
     </section>
 </main>
 
+<script src="lib/script_core.js"></script>
 <script src="js/common_admin.js"></script>
+<script src="js/streamdeck.js"></script>
 <script src="js/music_admin.js"></script>
 <script src="js/dashboard.js"></script>
 </body>

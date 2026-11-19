@@ -207,7 +207,8 @@ function musicRelease(entry) {
     entry.objectUrl = null;
 }
 
-async function musicPlay(item) {
+// opts.loop … 台本のキューから鳴らすときの「くり返し」（省略時は音楽バーの設定）
+async function musicPlay(item, opts = {}) {
     const a = new Audio();
     a.preload = "auto";
     // 出力先を先に決める（決まらなければ鳴らさない。いま鳴っている曲はそのまま）
@@ -230,7 +231,7 @@ async function musicPlay(item) {
         }
     }
     a.src = entry.objectUrl || item.path;
-    a.loop = musicPrefs.loop;
+    a.loop = opts.loop !== undefined ? !!opts.loop : musicPrefs.loop;
     a.volume = musicMaster();
     a.addEventListener("ended", () => {
         musicRelease(entry);
@@ -261,9 +262,9 @@ async function musicPlay(item) {
 }
 
 // 音量を少しずつ下げて止める（フェードなしの設定なら、すぐ止める）
-function musicFadeOut(entry) {
+function musicFadeOut(entry, secOverride) {
     const a = entry.audio;
-    const sec = musicPrefs.fade;
+    const sec = secOverride !== undefined ? secOverride : musicPrefs.fade;
     const finish = () => {
         a.pause();
         a.removeAttribute("src");
@@ -291,10 +292,25 @@ function musicStop() {
     renderMusic();
 }
 
+// 台本・Stream Deck 用：フェードアウト（音楽バーの秒数。「フェードなし」のときも2秒かけて下げる）／すぐ止める
+function musicFade() {
+    if (!musicCur) return;
+    musicFadeOut(musicCur, musicPrefs.fade > 0 ? musicPrefs.fade : 2);
+    musicCur = null;
+    renderMusic();
+}
+function musicHalt() {
+    if (!musicCur) return;
+    musicFadeOut(musicCur, 0);
+    musicCur = null;
+    renderMusic();
+}
+
 // --------------------------------------------------------------------------
 // 表示
 // --------------------------------------------------------------------------
 function renderMusic() {
+    if (typeof sdRefresh === "function") sdRefresh();
     const cur = musicCur ? musicCur.item.path : "";
     $$("#mb-songs [data-music]").forEach(b => b.classList.toggle("on", b.dataset.music === cur));
     $("#mb-now").classList.toggle("on", !!musicCur);

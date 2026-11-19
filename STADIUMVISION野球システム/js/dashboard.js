@@ -37,15 +37,14 @@ let playerMedia = [];
 let walkups = [];
 let teamFilter = "HOME";
 let selectedPlayer = -1;
-let selectedCue = -1;
 let videoDevices = [];
 let lastRosterKey = "";
-let lastCueKey = "";
 
 function emptyScene() {
+    // 守山の既定：左右2分割で、右面は遊撃カメラ（cam1）
     return {
-        layout: "wide",
-        slots: { wide: { type: "black" }, left: { type: "black" }, right: { type: "black" }, single: { type: "black" }, bg: { type: "black" } },
+        layout: "split",
+        slots: { wide: { type: "black" }, left: { type: "black" }, right: { type: "camera", cam: "cam1" }, single: { type: "black" }, bg: { type: "black" } },
         singleX: 50
     };
 }
@@ -414,7 +413,7 @@ function connect() {
         renderFromState();
     });
     es.addEventListener("COMMAND", e => handleCommand(JSON.parse(e.data)));
-    es.addEventListener("CUE_FIRED", e => onCueFired(JSON.parse(e.data).index));
+    es.addEventListener("CUE_FIRED", e => onCueFired(JSON.parse(e.data)));
     es.addEventListener("NOTICE", e => showError(JSON.parse(e.data).message));
     es.onerror = () => {
         conn.textContent = "サーバーにつながっていません";
@@ -426,6 +425,9 @@ function handleCommand(cmd) {
     if (cmd.action === "take") doTake();
     else if (cmd.action === "swap") swapSides();
     else if (cmd.action === "musicStop") musicStop();
+    else if (cmd.action === "musicFade") musicFade();
+    else if (cmd.action === "readNext") moveReadPos(1);
+    else if (cmd.action === "readPrev") moveReadPos(-1);
     else if (cmd.action === "musicPlay") playMusicPath(cmd.val);
 }
 
@@ -444,8 +446,9 @@ function renderFromState() {
     renderCameraSelects();
     const rk = JSON.stringify([state.roster, state.teams]);
     if (rk !== lastRosterKey) { lastRosterKey = rk; renderPlayers(); }
-    const ck = JSON.stringify([state.cues, state.cueIndex]);
-    if (ck !== lastCueKey) { lastCueKey = ck; renderCues(); }
+    renderFuta();
+    refreshSuggestions();
+    renderScript();
     renderLibraryMarks();
 }
 
@@ -462,6 +465,7 @@ async function loadSlides() {
     $("#slide-folder-chips").innerHTML = ["", ...folders]
         .map(f => `<button type="button" class="chip ${f === slideFolder ? "on" : ""}" data-folder="${escapeHtml(f)}">${escapeHtml(f || "すべて")}</button>`).join("");
     renderLibrary();
+    if (state) { renderFuta(); refreshSuggestions(); }
 }
 
 function aspectLabel(r) {
@@ -738,9 +742,11 @@ function parseCSV(text) {
 // --------------------------------------------------------------------------
 // 音楽（登場曲・式次第の曲は、音楽バーの仕組みで鳴らす）
 // --------------------------------------------------------------------------
-function playMusicPath(p, label) {
-    const item = (typeof musicList !== "undefined" && musicList.find(m => m.path === p)) || { path: p, no: null, name: label || baseName(p).replace(/\.[^.]+$/, "") };
-    musicPlay(item);
+function playMusicPath(p, label, opts) {
+    const found = typeof musicList !== "undefined" && musicList.find(m => m.path === p);
+    // 別フォルダの曲（local:）は、そのフォルダを選んでいないと鳴らせない
+    if (!found && /^local:/.test(p)) return showError(`曲が見つかりません（${label || p}）。音楽バーの「曲のフォルダ」で、この曲の入ったフォルダを選んでください`);
+    musicPlay(found || { path: p, no: null, name: label || baseName(p).replace(/\.[^.]+$/, "") }, opts);
 }
 
 async function loadWalkups() {
@@ -758,139 +764,700 @@ async function loadPlayerMedia() {
 }
 
 // --------------------------------------------------------------------------
-// 式次第（キュー）
+// 台本（読み込み・キューのひもづけ・本番）
+//   台本の1行 ＝ 時刻・内容・BGM・ビジョン・MIC・話者・セリフ・備考 ＋ キュー（出すもの）
+//   旧「式次第」は「手動の式次第」セクションとして、台本の先頭に入っている
 // --------------------------------------------------------------------------
-const cues = () => (state && state.cues) || [];
+const SC = ScriptCore;
+const SC_MODE_KEY = "stadiumvision-baseball.scmode";
+const EMPTY_SCRIPT = { title: "", rev: 0, sections: [], rows: [], pos: -1, onair: -1 };
+const script = () => (state && state.script) || EMPTY_SCRIPT;
+let scMode = readLocal(SC_MODE_KEY, "edit") === "live" ? "live" : "edit";
+let currentTab = "media";
+let selectedRow = -1;
+let scListKey = "";
+let scMarks = { pos: -2, onair: -2, next: -2 };
+let suggestions = {};
+let suggestKey = "";
+let importState = null;     // 読み込み中のファイル { resp, cfg:[{index, include, headerRow, roles}] }
 
-function cueMusicLabel(m) {
-    if (!m || !m.action) return "";
-    return m.action === "play" ? `🎵 ${m.name}` : "🎵 止める";
+const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
+
+function cueChips(cue) {
+    if (!cue) return [];
+    const chips = [];
+    if (cue.scene) chips.push("画面（プレビューのまま）");
+    else if (cue.band) chips.push("帯：" + SC.describeFace(cue.band));
+    else {
+        if (cue.left) chips.push("左：" + SC.describeFace(cue.left));
+        if (cue.right) chips.push("右：" + SC.describeFace(cue.right));
+    }
+    const b = cue.bgm;
+    if (b) chips.push(b.action === "play" ? `♪ ${b.name}${b.loop ? " ↻" : ""}` : b.action === "fade" ? "♪ フェードアウト" : "♪ 停止");
+    return chips;
 }
 
-function renderCues() {
-    const cs = cues();
-    const onair = state ? state.cueIndex : -1;
-    $("#cue-now").textContent = cs[onair] ? `出している：${onair + 1}. ${cs[onair].name}` : "";
-    if (selectedCue >= cs.length) selectedCue = cs.length - 1;
-    const list = $("#cue-list");
-    if (cs.length === 0) {
-        list.innerHTML = `<div class="empty">キューがありません。<br>プレビューに画面を組んで「＋ いまのプレビューを追加」を押します。<br>式次第の順に並べておくと「▶ 次へ」で順番に出せます。</div>`;
-    } else {
-        list.innerHTML = cs.map((c, i) => `<div class="cue-row ${i === selectedCue ? "on" : ""} ${i === onair ? "onair" : ""} ${i === onair + 1 ? "next" : ""}" data-i="${i}">
-            <span class="idx">${i + 1}</span>
-            <div><div class="nm">${escapeHtml(c.name)}</div><div class="meta">${escapeHtml(describeScene(c.scene))} ${escapeHtml(cueMusicLabel(c.music))}${c.memo ? " ／ " + escapeHtml(c.memo) : ""}</div></div>
-            <button type="button" class="go" data-go="${i}">GO</button></div>`).join("");
+function rowHtml(r, i, edit) {
+    const sg = edit && !r.cue ? suggestions[i] : null;
+    const chips = r.cue ? cueChips(r.cue).map(c => `<span class="chip-cue">${escapeHtml(c)}</span>`).join("") : "";
+    let sgHtml = "";
+    if (sg && sg.cue) sgHtml = `<div class="sc-sg"><span class="sg-text">提案：${escapeHtml(sg.reasons.join(" ／ "))}</span><button type="button" class="btn small" data-adopt="${i}">採用</button>${sg.hints.length ? `<span class="sg-hint">${escapeHtml(sg.hints.join(" ／ "))}</span>` : ""}</div>`;
+    else if (sg && sg.hints.length) sgHtml = `<div class="sc-sg"><span class="sg-hint">${escapeHtml(sg.hints.join(" ／ "))}</span></div>`;
+    const tags = [["BGM", r.bgm], ["ビジョン", r.vision], ["MIC", r.mic]].filter(t => t[1]).map(t => `<span class="sc-tag"><b>${t[0]}</b>${escapeHtml(t[1])}</span>`).join("");
+    return `<div class="sc-row ${r.cue ? "hascue" : ""}" data-i="${i}">
+        <div class="sc-head"><span class="sc-time">${escapeHtml(r.time)}${r.dur ? `<small> ${escapeHtml(r.dur)}</small>` : ""}</span>
+            <span class="sc-title">${escapeHtml(r.title)}</span><span class="sc-spk">${escapeHtml(r.speaker)}</span>
+            <span class="sc-badges">${chips}</span></div>
+        ${tags ? `<div class="sc-tags">${tags}</div>` : ""}
+        ${r.script ? `<div class="sc-script">${escapeHtml(r.script)}</div>` : ""}
+        ${r.note && scMode === "edit" ? `<div class="sc-note">備考：${escapeHtml(r.note)}</div>` : ""}${sgHtml}</div>`;
+}
+
+function renderScript() {
+    const sc = script();
+    const edit = scMode === "edit";
+    document.body.classList.toggle("sc-live", scMode === "live");
+    $$("#sc-mode button").forEach(b => b.classList.toggle("on", b.dataset.scmode === scMode));
+    // 編集の部品は本番では隠す（本番中の誤操作を防ぐ）
+    $$(".sc-edit-only").forEach(el => { if (!edit) el.classList.add("hidden"); else if (el.id !== "sc-editor" && el.id !== "sc-lost") el.classList.remove("hidden"); });
+    if (!edit) $("#sc-import").classList.add("hidden");
+
+    const key = [sc.rev, scMode, Object.keys(suggestions).length, suggestKey].join("|");
+    if (key !== scListKey) {
+        scListKey = key;
+        const list = $("#sc-list");
+        if (sc.rows.length === 0) {
+            list.innerHTML = `<div class="empty">台本がありません。<br>「編集」で Excel の台本（.xlsx）を読み込むか、「＋ いまのプレビューを手動の式次第に追加」を使います。</div>`;
+        } else {
+            let lastSec = -1;
+            const parts = [];
+            sc.rows.forEach((r, i) => {
+                if (r.sec !== lastSec) {
+                    lastSec = r.sec;
+                    parts.push(`<div class="sc-sec" data-sec="${r.sec}" data-first="${i}">▼ ${escapeHtml(sc.sections[r.sec].name)}</div>`);
+                }
+                parts.push(rowHtml(r, i, edit));
+            });
+            list.innerHTML = parts.join("");
+        }
+        scMarks = { pos: -2, onair: -2, next: -2 };
+        $("#sc-jump").innerHTML = `<option value="">セクションへ…</option>` + sc.sections.map((s, i) => {
+            const first = sc.rows.findIndex(r => r.sec === i);
+            return `<option value="${first}">${escapeHtml(s.name)}</option>`;
+        }).join("");
+        $("#sc-summary").textContent = sc.rows.length ? `${sc.title ? sc.title + "：" : ""}${sc.sections.length}セクション・${sc.rows.length}行・キュー ${SC.cueRows(sc).length}個` : "";
+        if (selectedRow >= sc.rows.length) selectedRow = -1;
     }
+    renderScriptMarks();
     renderCueEditor();
 }
 
-async function renderCueEditor() {
-    const c = cues()[selectedCue];
-    $("#cue-editor").classList.toggle("hidden", !c);
-    if (!c) return;
-    if (document.activeElement !== $("#cue-name")) $("#cue-name").value = c.name;
-    if (document.activeElement !== $("#cue-memo")) $("#cue-memo").value = c.memo;
-    $("#cue-music-action").value = c.music.action;
-    const sel = $("#cue-music-path");
-    let songs = [];
-    try { songs = await fetch("/api/music").then(r => r.json()); } catch (e) { songs = []; }
-    const all = [...songs.map(s => ({ path: s.path, name: s.name })), ...walkups.map(w => ({ path: w.path, name: `登場曲 ${w.folder}/${w.name}` }))];
-    if (c.music.path && !all.some(s => s.path === c.music.path)) all.push({ path: c.music.path, name: `（見つからない）${c.music.name}` });
-    sel.innerHTML = `<option value="">（曲を選ぶ）</option>` + all.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.name)}</option>`).join("");
-    sel.value = c.music.path;
-    sel.classList.toggle("hidden", c.music.action !== "play");
+// 読み位置（青）・ON AIR（赤）・次のキュー（黄）の色だけを付け替える（行は作り直さない）
+function renderScriptMarks(opts = {}) {
+    const sc = script();
+    const next = SC.nextCueRow(sc);
+    const list = $("#sc-list");
+    const set = (cls, from, to) => {
+        if (from === to && !opts.force) return;
+        const a = from >= 0 ? list.querySelector(`.sc-row[data-i="${from}"]`) : null;
+        if (a) a.classList.remove(cls);
+        const b = to >= 0 ? list.querySelector(`.sc-row[data-i="${to}"]`) : null;
+        if (b) b.classList.add(cls);
+    };
+    const posChanged = scMarks.pos !== sc.pos;
+    set("pos", scMarks.pos, sc.pos);
+    set("onair", scMarks.onair, sc.onair);
+    set("next", scMarks.next, next);
+    const changed = posChanged || scMarks.onair !== sc.onair || scMarks.next !== next;
+    scMarks = { pos: sc.pos, onair: sc.onair, next };
+    if (posChanged || opts.scroll) scrollToPos();
+    if (changed || opts.force) followNextInPreview();
+    $("#sc-jump").value = "";
+    sdRefresh();
 }
 
-function saveCues(list) { return patch({ cues: list }); }
-
-function addCue() {
-    const list = clone(cues());
-    const name = prompt("キューの名前（式次第の項目名）", `${list.length + 1}. `);
-    if (name === null) return;
-    const at = selectedCue >= 0 ? selectedCue + 1 : list.length;
-    list.splice(at, 0, { name: (name.trim() || `キュー${list.length + 1}`).slice(0, 100), scene: clone(pvw), music: { action: "", path: "", name: "" }, memo: "" });
-    selectedCue = at;
-    saveCues(list);
+// 読み位置が、一覧の上から1/3の位置に来るようにする
+function scrollToPos() {
+    const sc = script();
+    const list = $("#sc-list");
+    if (sc.pos < 0 || list.offsetParent === null) return;
+    const el = list.querySelector(`.sc-row[data-i="${sc.pos}"]`);
+    if (!el) return;
+    const top = el.offsetTop - list.offsetTop - list.clientHeight / 3;
+    list.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
 }
 
-function overwriteCue() {
-    const list = clone(cues());
-    if (!list[selectedCue]) return showError("上書きするキューを選んでください");
-    if (!confirm(`「${list[selectedCue].name}」を、いまのプレビューの画面で上書きしますか？`)) return;
-    list[selectedCue].scene = clone(pvw);
-    saveCues(list);
-}
-
-function moveCue(d) {
-    const list = clone(cues());
-    const to = selectedCue + d;
-    if (!list[selectedCue] || to < 0 || to >= list.length) return;
-    [list[selectedCue], list[to]] = [list[to], list[selectedCue]];
-    selectedCue = to;
-    // いま出しているキューの番号も一緒に動かす
-    let idx = state.cueIndex;
-    if (idx === to) idx = to - d; else if (idx === to - d) idx = to;
-    patch({ cues: list, cueIndex: idx });
-}
-
-function deleteCue() {
-    const list = clone(cues());
-    if (!list[selectedCue]) return showError("消すキューを選んでください");
-    if (!confirm(`「${list[selectedCue].name}」を消しますか？`)) return;
-    list.splice(selectedCue, 1);
-    let idx = state.cueIndex;
-    if (idx === selectedCue) idx = -1; else if (idx > selectedCue) idx--;
-    selectedCue = Math.min(selectedCue, list.length - 1);
-    patch({ cues: list, cueIndex: idx });
-}
-
-function editCue(changes) {
-    const list = clone(cues());
-    if (!list[selectedCue]) return;
-    Object.assign(list[selectedCue], changes);
-    saveCues(list);
-}
-
-function loadCueToPvw(i) {
-    const c = cues()[i];
-    if (!c) return;
-    selectedCue = i;
-    pvw = clone(c.scene);
+// 本番モードでは、PREVIEWにいつも「次のキュー」の画面を出す
+function followNextInPreview() {
+    if (scMode !== "live" || currentTab !== "script" || !state) return;
+    const sc = script();
+    const i = SC.nextCueRow(sc);
+    if (i < 0) return;
+    pvw = SC.buildScene(sc.rows[i].cue, state.program, logos());
     if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
     pvwChanged({ noAuto: true });
-    renderCues();
 }
 
-// キューが出されたとき（このPCのボタン・Stream Deck どちらでも）：曲を鳴らし、次のキューをプレビューに用意する
-function onCueFired(index) {
-    const c = cues()[index];
-    if (c && c.music.action === "play" && c.music.path) playMusicPath(c.music.path, c.music.name);
-    else if (c && c.music.action === "stop") musicStop();
-    if (cues()[index + 1]) loadCueToPvw(index + 1);
-    else { selectedCue = index; renderCues(); }
+function setScMode(mode) {
+    scMode = mode;
+    writeLocal(SC_MODE_KEY, mode);
+    scListKey = "";
+    renderScript();
+    scrollToPos();
+    followNextInPreview();
 }
 
-function exportCues() {
-    const blob = new Blob([JSON.stringify(cues(), null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `式次第_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-
-async function importCues(file) {
-    if (!file) return;
-    let list;
+// ---- 台本の編集（サーバーへ） ----
+async function scEdit(ops) {
     try {
-        list = JSON.parse(await file.text());
-        if (!Array.isArray(list)) throw new Error("式次第のファイルではありません");
+        const res = await fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) });
+        const body = await res.json();
+        if (!res.ok) { showError(`反映できませんでした：${body.error}`); return false; }
+        return true;
     } catch (e) {
-        return showError(`読み込めませんでした：${e.message}`);
+        showError(SERVER_NG);
+        return false;
     }
-    if (cues().length && !confirm(`いまの式次第（${cues().length}個）を、ファイルの内容（${list.length}個）に置き換えますか？`)) return;
-    selectedCue = -1;
-    if (await patch({ cues: list, cueIndex: -1 })) showInfo(`${list.length}個のキューを読み込みました`);
+}
+
+// 読み位置を動かす（キューは出さない）。続けて押しても数えこぼさないよう、先に手元の値を変える
+function moveReadPos(d) {
+    const sc = script();
+    if (!sc.rows.length) return;
+    const n = Math.max(0, Math.min(sc.rows.length - 1, sc.pos + d));
+    if (n === sc.pos) return;
+    sc.pos = n;
+    renderScriptMarks();
+    scEdit([{ op: "pos", pos: n }]);
+}
+function jumpToRow(i) {
+    const sc = script();
+    if (!(i >= 0 && i < sc.rows.length)) return;
+    sc.pos = i;
+    renderScriptMarks();
+    scEdit([{ op: "pos", pos: i }]);
+}
+const scNext = () => control("next");
+const scPrev = () => control("prev");
+
+// 行をダブルクリック：キューがあれば出す。無ければ読み位置だけ移す
+function fireRow(i) {
+    const sc = script();
+    const r = sc.rows[i];
+    if (!r) return;
+    if (r.cue) control("cue", SC.cueRows(sc).indexOf(i) + 1);
+    else jumpToRow(i);
+}
+
+// ---- キューが出されたとき：BGM を音楽バーで鳴らす（このPCのボタン・Stream Deck・HTTP どれでも） ----
+function onCueFired(ev) {
+    const r = script().rows[ev.index];
+    if (r && r.cue && !ev.silent) runBgm(r.cue.bgm);
+}
+
+function runBgm(b) {
+    if (!b) return;
+    if (b.action === "play") {
+        if (musicCur && musicCur.item.path === b.path) return;     // すでに同じ曲が鳴っていれば、二重に鳴らさない
+        playMusicPath(b.path, b.name, { loop: b.loop });
+    } else if (b.action === "fade") musicFade();
+    else if (b.action === "stop") musicHalt();
+}
+
+// ---- 提案（BGM・ビジョン・内容の文字から） ----
+function refreshSuggestions() {
+    if (!state) return;
+    const sc = script();
+    const key = `${sc.rev}|${slides.length}|${musicList.map(m => m.path).join(",").length}|${musicList.length}`;
+    if (key === suggestKey) return;
+    suggestKey = key;
+    const ctx = { music: musicList, slides };
+    const out = {};
+    sc.rows.forEach((r, i) => {
+        if (r.cue || !(r.bgm || r.vision || r.title)) return;
+        const sg = SC.suggestCue(r, ctx);
+        if (sg) out[i] = sg;
+    });
+    suggestions = out;
+    scListKey = "";
+    renderScript();
+}
+
+async function adoptSuggestions(rows) {
+    const items = rows.filter(i => suggestions[i] && suggestions[i].cue).map(i => ({ row: i, cue: suggestions[i].cue }));
+    if (!items.length) return showInfo("採用できる提案がありません");
+    if (await scEdit([{ op: "cues", items }])) showInfo(`${items.length}行にキューを付けました`);
+}
+
+// ---- 台本の読み込み ----
+async function sendScriptFile(body, query) {
+    try {
+        const res = await fetch(`/api/script/import?${new URLSearchParams(query)}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body });
+        const j = await res.json();
+        if (!res.ok) return showError(`台本を読み込めませんでした：${j.error}`);
+        beginAssign(j);
+    } catch (e) {
+        showError(SERVER_NG);
+    }
+}
+function uploadScript(file) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) return showError("ファイルが大きすぎます（20MBまで）");
+    sendScriptFile(file, { filename: file.name });
+}
+function pasteScript() {
+    const t = $("#sc-paste").value;
+    if (!t.trim()) return showError("貼り付ける内容がありません");
+    sendScriptFile(t, { filename: "貼り付け", format: "paste" });
+}
+
+// 列の割り当て画面（シートごとに、見出し行と各列の役割をプルダウンで直せる）
+function beginAssign(resp) {
+    importState = { resp, cfg: resp.sheets.map(sh => ({ index: sh.index, include: sh.rowCount > 0, headerRow: sh.headerRow, roles: sh.columns.map(c => c.role) })) };
+    renderAssign();
+}
+
+function renderAssign() {
+    const box = $("#sc-import");
+    if (!importState) { box.classList.add("hidden"); return; }
+    const { resp, cfg } = importState;
+    const roleOpts = sel => `<option value="">（使わない）</option>` + resp.roles.map(r => `<option value="${r.role}" ${r.role === sel ? "selected" : ""}>${r.label}</option>`).join("");
+    box.innerHTML = `<h2>列の割り当て <small>${escapeHtml(resp.filename)}：シートごとに、見出しの行と各列の役割を確かめます</small></h2>` +
+        resp.sheets.map((sh, k) => {
+            const c = cfg[k];
+            const cols = sh.columns.map((col, ci) => `<div class="as-col">
+                <div class="as-head">${escapeHtml(col.header || "（見出しなし）")}</div>
+                <select data-as-role="${k}:${ci}" class="text-input">${roleOpts(c.roles[ci])}</select>
+                <div class="as-sample">${col.sample.map(escapeHtml).join("<br>")}</div></div>`).join("");
+            return `<div class="as-sheet"><div class="ctrl-row wrap">
+                <label class="toggle"><input type="checkbox" data-as-inc="${k}" ${c.include ? "checked" : ""}> <b>${escapeHtml(sh.name)}</b></label>
+                <span class="note">${sh.rowCount}行${sh.headerFound ? "" : "（見出しが見つかりません。仮に割り当てました）"}</span>
+                <label class="toggle">見出しの行 <input type="number" min="0" max="999" value="${c.headerRow + 1}" data-as-header="${k}" class="num-input sm"> <small>（0＝見出しなし）</small></label></div>
+                <div class="as-cols">${cols}</div></div>`;
+        }).join("") +
+        `<div class="ctrl-row"><button type="button" class="btn go" id="btn-as-ok">この内容で取り込む</button><button type="button" class="btn" id="btn-as-cancel">やめる</button></div>`;
+    box.classList.remove("hidden");
+}
+
+async function reanalyze(k, headerRow) {
+    const { resp, cfg } = importState;
+    try {
+        const res = await fetch("/api/script/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importId: resp.importId, sheet: resp.sheets[k].index, headerRow }) });
+        const j = await res.json();
+        if (!res.ok) return showError(j.error);
+        resp.sheets[k] = Object.assign({}, resp.sheets[k], j);
+        cfg[k].headerRow = j.headerRow;
+        cfg[k].roles = j.columns.map(c => c.role);
+        renderAssign();
+    } catch (e) { showError(SERVER_NG); }
+}
+
+async function commitAssign() {
+    const { resp, cfg } = importState;
+    const hadScript = script().rows.some(r => !script().sections[r.sec].manual);
+    if (hadScript && !confirm("いまの台本を、この内容に置き換えます。ひもづけたキューは、同じ内容の行に引き継ぎます。よろしいですか？")) return;
+    try {
+        const res = await fetch("/api/script/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importId: resp.importId, sheets: cfg.map(c => ({ index: c.index, include: c.include, headerRow: c.headerRow, roles: c.roles })) }) });
+        const j = await res.json();
+        if (!res.ok) return showError(`取り込めませんでした：${j.error}`);
+        importState = null;
+        renderAssign();
+        selectedRow = -1;
+        showInfo(`${j.sections}セクション・${j.rows}行を取り込みました${j.carried ? `（キューを${j.carried}個引き継ぎ）` : ""}`);
+        renderLost(j.lost || []);
+    } catch (e) { showError(SERVER_NG); }
+}
+
+function renderLost(lost) {
+    const box = $("#sc-lost");
+    if (!lost.length) { box.classList.add("hidden"); return; }
+    box.innerHTML = `<h2>引き継げなかったキュー（${lost.length}個） <button type="button" class="btn small" id="btn-lost-close">閉じる</button></h2>
+        <div class="note">読み直した台本で、同じ内容の行が見つからなかったため外れました。必要なら、該当の行に付け直してください。</div>` +
+        lost.map(l => `<div class="lost-row">${escapeHtml(l.section)}／${escapeHtml(l.title || l.script)}</div>`).join("");
+    box.classList.remove("hidden");
+}
+
+// ---- 選んだ行のキューの編集 ----
+function fillFileSelect(sel, value) {
+    const opts = slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER)).map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides\//, ""))}</option>`).join("");
+    sel.innerHTML = `<option value="">（スライドを選ぶ）</option>` + opts;
+    sel.value = value || "";
+}
+function fillSongSelect(sel, value) {
+    const all = musicList.map(m => ({ path: m.path, name: m.name }));
+    if (value && !all.some(s => s.path === value)) all.push({ path: value, name: "（見つからない）" + value });
+    sel.innerHTML = `<option value="">（曲を選ぶ）</option>` + all.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.name)}</option>`).join("");
+    sel.value = value || "";
+}
+
+let editorRow = -2, editorRev = -1;
+function renderCueEditor() {
+    const sc = script();
+    const r = sc.rows[selectedRow];
+    const box = $("#sc-editor");
+    $$(".sc-list .sc-row.sel").forEach(el => el.classList.remove("sel"));
+    if (!r || scMode !== "edit") { box.classList.add("hidden"); editorRow = -2; return; }
+    const el = $(`#sc-list .sc-row[data-i="${selectedRow}"]`);
+    if (el) el.classList.add("sel");
+    box.classList.remove("hidden");
+    if (editorRow === selectedRow && editorRev === sc.rev) return;     // 入力中の内容を消さない
+    editorRow = selectedRow; editorRev = sc.rev;
+    const c = r.cue || (suggestions[selectedRow] && suggestions[selectedRow].cue) || {};
+    $("#sc-editor-title").textContent = `${selectedRow + 1}行目 ${r.title ? "「" + r.title.slice(0, 30) + "」" : ""}${r.cue ? "" : "（キューなし" + (suggestions[selectedRow] ? "・提案を入れています" : "") + "）"}`;
+    const face = (sel, fileSel, f) => {
+        sel.value = f ? (f.type === "camera" ? f.cam : f.type) : "";
+        fillFileSelect(fileSel, f && f.type === "slide" ? f.file : "");
+        fileSel.classList.toggle("hidden", sel.value !== "slide");
+    };
+    face($("#cue-left"), $("#cue-left-file"), c.left);
+    face($("#cue-right"), $("#cue-right-file"), c.right);
+    face($("#cue-band"), $("#cue-band-file"), c.band);
+    const b = c.bgm;
+    $("#cue-bgm").value = b ? b.action : "";
+    fillSongSelect($("#cue-bgm-song"), b && b.action === "play" ? b.path : "");
+    $("#cue-bgm-song").classList.toggle("hidden", !b || b.action !== "play");
+    $("#cue-bgm-loop-wrap").classList.toggle("hidden", !b || b.action !== "play");
+    $("#cue-bgm-loop").checked = !!(b && b.loop);
+    $("#cue-memo").value = c.memo || "";
+    const manual = sc.sections[r.sec].manual;
+    $$("[data-row-move], #btn-row-del").forEach(x => x.classList.toggle("hidden", !manual));
+}
+
+function readCueForm() {
+    const faceOf = (sel, fileSel, isRight) => {
+        const v = sel.value;
+        if (!v) return null;
+        if (v === "slide") { if (!fileSel.value) throw new Error("スライドを選んでください"); return { type: "slide", file: fileSel.value }; }
+        if (v === "cam1" || v === "cam2") return { type: "camera", cam: v };
+        return { type: v };
+    };
+    const cue = { left: faceOf($("#cue-left"), $("#cue-left-file")), right: faceOf($("#cue-right"), $("#cue-right-file")), band: faceOf($("#cue-band"), $("#cue-band-file")), bgm: null, memo: $("#cue-memo").value.slice(0, 1000) };
+    const a = $("#cue-bgm").value;
+    if (a === "play") {
+        const sel = $("#cue-bgm-song");
+        if (!sel.value) throw new Error("鳴らす曲を選んでください");
+        cue.bgm = { action: "play", path: sel.value, name: sel.options[sel.selectedIndex].text.slice(0, 300), loop: $("#cue-bgm-loop").checked };
+    } else if (a) cue.bgm = { action: a };
+    const old = script().rows[selectedRow].cue;
+    // 左右・帯を指定せず、前から「プレビューの画面」を持っているキューは、その画面を残す
+    if (old && old.scene && !cue.left && !cue.right && !cue.band) cue.scene = old.scene;
+    return cue;
+}
+
+async function saveCue() {
+    let cue;
+    try { cue = readCueForm(); } catch (e) { return showError(e.message); }
+    if (!(await scEdit([{ op: "cue", row: selectedRow, cue }]))) return;
+    editorRow = -2;
+    showInfo("キューを付けました");
+}
+
+async function cueFromPreview() {
+    const r = script().rows[selectedRow];
+    if (!r) return;
+    const cue = { scene: clone(pvw), bgm: r.cue ? r.cue.bgm || null : null, memo: r.cue ? r.cue.memo || "" : "" };
+    try { const f = readCueForm(); if (f.bgm) cue.bgm = f.bgm; } catch (e) { /* 曲の選び途中などは、前のBGMのまま */ }
+    if (await scEdit([{ op: "cue", row: selectedRow, cue }])) { editorRow = -2; showInfo("いまのプレビューの画面を、キューにしました"); }
+}
+
+function testCueInPreview() {
+    const r = script().rows[selectedRow];
+    let cue = r && r.cue;
+    if (!cue) { try { cue = readCueForm(); } catch (e) { return showError(e.message); } }
+    pvw = SC.buildScene(cue, state.program, logos());
+    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
+    pvwChanged({ noAuto: true });
+}
+
+async function addManualCue() {
+    const name = prompt("手動の式次第に足すキューの名前（いまのプレビューの画面を使います）", "");
+    if (name === null) return;
+    if (!name.trim()) return showError("名前を入れてください");
+    if (await scEdit([{ op: "addManual", title: name.trim().slice(0, 300), cue: { scene: clone(pvw), bgm: null, memo: "" } }])) {
+        selectedRow = script().rows.findIndex((r, i) => script().sections[r.sec].manual && r.title === name.trim() && i >= 0) ;
+        showInfo("手動の式次第に追加しました");
+    }
+}
+
+async function clearSectionCues() {
+    const sc = script();
+    const ref = sc.rows[selectedRow >= 0 ? selectedRow : sc.pos];
+    if (!ref) return showError("セクションの中の行を選んでください（読み位置か、クリックした行のセクションが対象です）");
+    const name = sc.sections[ref.sec].name;
+    if (!confirm(`「${name}」のキューを全部消しますか？（台本の文字は消えません）`)) return;
+    if (await scEdit([{ op: "clearSection", sec: ref.sec }])) showInfo(`「${name}」のキューを消しました`);
+}
+
+function bindScript() {
+    $$("#sc-mode button").forEach(b => b.addEventListener("click", () => setScMode(b.dataset.scmode)));
+    $("#btn-sc-next").addEventListener("click", scNext);
+    $("#btn-sc-prev").addEventListener("click", scPrev);
+    $("#btn-read-up").addEventListener("click", () => moveReadPos(-1));
+    $("#btn-read-down").addEventListener("click", () => moveReadPos(1));
+    $("#sc-jump").addEventListener("change", e => { if (e.target.value !== "") jumpToRow(Number(e.target.value)); });
+
+    $("#btn-sc-file").addEventListener("click", () => $("#sc-file").click());
+    $("#sc-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; uploadScript(f); });
+    $("#btn-sc-paste-toggle").addEventListener("click", () => $("#sc-paste-box").classList.toggle("hidden"));
+    $("#btn-sc-paste").addEventListener("click", pasteScript);
+    const drop = $("#sc-drop");
+    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadScript(e.dataTransfer.files[0]); });
+
+    $("#sc-import").addEventListener("change", e => {
+        const t = e.target;
+        if (!importState) return;
+        if (t.dataset.asRole) { const [k, c] = t.dataset.asRole.split(":").map(Number); importState.cfg[k].roles[c] = t.value; }
+        else if (t.dataset.asInc !== undefined) importState.cfg[Number(t.dataset.asInc)].include = t.checked;
+        else if (t.dataset.asHeader !== undefined) {
+            const n = parseInt(t.value, 10);
+            reanalyze(Number(t.dataset.asHeader), Number.isInteger(n) && n >= 0 ? n - 1 : null);
+        }
+    });
+    $("#sc-import").addEventListener("click", e => {
+        if (e.target.closest("#btn-as-ok")) commitAssign();
+        else if (e.target.closest("#btn-as-cancel")) { importState = null; renderAssign(); }
+    });
+    $("#sc-lost").addEventListener("click", e => { if (e.target.closest("#btn-lost-close")) $("#sc-lost").classList.add("hidden"); });
+
+    $("#btn-sc-adopt-all").addEventListener("click", () => {
+        const rows = Object.keys(suggestions).map(Number).filter(i => suggestions[i].cue);
+        if (!rows.length) return showInfo("採用できる提案がありません");
+        if (confirm(`提案を${rows.length}行すべてに採用して、キューを付けます。よろしいですか？`)) adoptSuggestions(rows);
+    });
+    $("#btn-sc-clear-sec").addEventListener("click", clearSectionCues);
+    $("#btn-sc-add-manual").addEventListener("click", addManualCue);
+
+    const list = $("#sc-list");
+    list.addEventListener("click", e => {
+        const ad = e.target.closest("[data-adopt]");
+        if (ad) return adoptSuggestions([Number(ad.dataset.adopt)]);
+        const sec = e.target.closest(".sc-sec");
+        if (sec) return jumpToRow(Number(sec.dataset.first));
+        const row = e.target.closest(".sc-row");
+        if (row && scMode === "edit") {
+            selectedRow = Number(row.dataset.i);
+            editorRow = -2;
+            const r = script().rows[selectedRow];
+            if (r.cue && state) { pvw = SC.buildScene(r.cue, state.program, logos()); pvwChanged({ noAuto: true }); }
+            renderCueEditor();
+        }
+    });
+    list.addEventListener("dblclick", e => {
+        if (e.target.closest("[data-adopt]") || e.target.closest(".sc-sec")) return;
+        const row = e.target.closest(".sc-row");
+        if (row) fireRow(Number(row.dataset.i));
+    });
+
+    // キューの編集
+    ["left", "right", "band"].forEach(k => $(`#cue-${k}`).addEventListener("change", e => $(`#cue-${k}-file`).classList.toggle("hidden", e.target.value !== "slide")));
+    $("#cue-bgm").addEventListener("change", e => {
+        $("#cue-bgm-song").classList.toggle("hidden", e.target.value !== "play");
+        $("#cue-bgm-loop-wrap").classList.toggle("hidden", e.target.value !== "play");
+        if (e.target.value === "play" && $("#cue-bgm-song").options.length <= 1) fillSongSelect($("#cue-bgm-song"), "");
+    });
+    $("#btn-cue-save").addEventListener("click", saveCue);
+    $("#btn-cue-from-pvw").addEventListener("click", cueFromPreview);
+    $("#btn-cue-test").addEventListener("click", testCueInPreview);
+    $("#btn-cue-del").addEventListener("click", async () => {
+        if (selectedRow < 0) return;
+        if (await scEdit([{ op: "cue", row: selectedRow, cue: null }])) { editorRow = -2; showInfo("キューを外しました"); }
+    });
+    $$("[data-row-move]").forEach(b => b.addEventListener("click", async () => {
+        const d = Number(b.dataset.rowMove);
+        if (selectedRow < 0) return;
+        if (await scEdit([{ op: "moveRow", row: selectedRow, dir: d }])) { selectedRow = Math.max(0, selectedRow + d); editorRow = -2; scListKey = ""; renderScript(); }
+    }));
+    $("#btn-row-del").addEventListener("click", async () => {
+        const r = script().rows[selectedRow];
+        if (!r || !confirm(`「${r.title}」の行を消しますか？`)) return;
+        if (await scEdit([{ op: "deleteRow", row: selectedRow }])) { selectedRow = -1; editorRow = -2; }
+    });
+}
+
+// --------------------------------------------------------------------------
+// タブの切り替え・フタ
+// --------------------------------------------------------------------------
+function selectTab(name) {
+    currentTab = name;
+    $$("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
+    $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
+    // 台本タブでは、左に台本・右にモニターの並びにする（CSS の .script-mode）
+    document.body.classList.toggle("script-mode", name === "script");
+    if (name === "script") {
+        scListKey = "";
+        renderScript();
+        scrollToPos();
+        followNextInPreview();
+    }
+}
+
+function renderFuta() {
+    const f = state.futa;
+    $("#btn-futa-left").classList.toggle("on", f.active === "left");
+    $("#btn-futa-full").classList.toggle("on", f.active === "full");
+    renderFutaSelects();
+    const lg = logos();
+    $("#futa-info").textContent = (lg.left ? `左フタ：${baseName(lg.left)}` : "左フタ：画像がありません（黒になります）") + " ／ " +
+        (lg.full ? `全面フタ：${baseName(lg.full)}` : "全面フタ：画像がありません（黒になります）") +
+        (!lg.left || !lg.full ? "　→ slides/フタ/ に画像を入れて「⟳ 読み直す」を押すか、上で選んでください" : "");
+    sdRefresh();
+}
+
+let lastFutaOptKey = "";
+function renderFutaSelects() {
+    if (!state) return;
+    const imgs = slides.filter(s => s.kind === "image");
+    const key = imgs.map(s => s.path).join("|") + "|" + state.futa.left + "|" + state.futa.full;
+    if (key === lastFutaOptKey) return;
+    lastFutaOptKey = key;
+    const opts = `<option value="">自動（slides/フタ/ の最初の画像）</option>` + imgs.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides\//, ""))}</option>`).join("");
+    ["left", "full"].forEach(k => {
+        const sel = $(`#futa-${k}`);
+        let o = opts;
+        if (state.futa[k] && !imgs.some(s => s.path === state.futa[k])) o += `<option value="${escapeHtml(state.futa[k])}">（見つからない）${escapeHtml(state.futa[k])}</option>`;
+        sel.innerHTML = o;
+        sel.value = state.futa[k];
+    });
+}
+
+// 右面のカメラ⇔ロゴ（本線に直接）。カメラのときはロゴに、そうでなければカメラ1に切り替える
+function rightCamLogo() {
+    if (!state) return;
+    const prog = clone(state.program);
+    if (prog.layout !== "split") prog.layout = "split";
+    const logo = logos().left;
+    const isLogo = prog.slots.right.type === "slide" && prog.slots.right.file === logo && !!logo;
+    prog.slots.right = isLogo ? { type: "camera", cam: "cam1" } : (logo ? { type: "slide", file: logo } : { type: "black" });
+    if (!logo && !isLogo) showError("フタの画像がありません。slides/フタ/ に画像を入れてください");
+    patch({ program: prog });
+}
+
+// --------------------------------------------------------------------------
+// Stream Deck（USB直結）。キーの割り当て・LCD描画は streamdeck.js。ここでは「操作の一覧」を渡す
+// --------------------------------------------------------------------------
+const SD_BGM_KEY = "stadiumvision-baseball.sdbgm";
+const SD_SECTION_KEYS = 8;
+const SD_BGM_KEYS = 12;
+const sdBgmPrefs = readLocal(SD_BGM_KEY, []);
+const wrapLabel = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n) + "\n" + t.slice(n, n * 2) : t; };
+
+function sdSong(i) {
+    const path = sdBgmPrefs[i];
+    return (path && musicList.find(m => m.path === path)) || (!path ? musicList[i] : null) || null;
+}
+function sdNextTitle() {
+    const sc = script();
+    const i = SC.nextCueRow(sc);
+    return i >= 0 ? (sc.rows[i].title || `${i + 1}行目`) : "（なし）";
+}
+
+function buildSdActions() {
+    const A = [];
+    const add = (id, describe, run) => A.push({ id, describe, run });
+    // 優先順位の高い順（6キー・8キーの機種には、この順に詰める）
+    add("next", () => ({ label: "NEXT ▶", sub: sdNextTitle(), color: "#15803d" }), scNext);
+    add("prev", () => ({ label: "◀ PREV", sub: "前のキュー", color: "#0f766e" }), scPrev);
+    add("futaLeft", () => ({ label: "左フタ", sub: "ロゴ", color: "#7c3aed", toggle: true, on: !!state && state.futa.active === "left", onColor: "#a78bfa" }), () => control("futa"));
+    add("black", () => ({ label: "BLACK", color: "#475569", toggle: true, on: !!state && state.black, onColor: "#dc2626" }), () => control("black"));
+    add("bgmFade", () => ({ label: "BGM\nフェード", sub: "アウト", color: "#b45309" }), musicFade);
+    add("bgmStop", () => ({ label: "BGM\n停止", sub: "すぐ止める", color: "#991b1b" }), musicHalt);
+    add("futaFull", () => ({ label: "全面フタ", sub: "ロゴ", color: "#6d28d9", toggle: true, on: !!state && state.futa.active === "full", onColor: "#a78bfa" }), () => control("futaFull"));
+    add("take", () => ({ label: "TAKE", sub: "PVW→本線", color: "#dc2626" }), doTake);
+    add("readDown", () => ({ label: "読み位置\n↓", color: "#1d4ed8" }), () => moveReadPos(1));
+    add("readUp", () => ({ label: "読み位置\n↑", color: "#1d4ed8" }), () => moveReadPos(-1));
+    add("swap", () => ({ label: "⇄ 入替", sub: "左右", color: "#0369a1" }), swapSides);
+    add("camLogo", () => {
+        const logo = logos().left;
+        const isLogo = !!state && !!logo && state.program.slots.right.type === "slide" && state.program.slots.right.file === logo;
+        return { label: "右面\nカメラ⇔ロゴ", color: "#0e7490", toggle: true, on: isLogo, onColor: "#22d3ee" };
+    }, rightCamLogo);
+    for (let i = 0; i < SD_BGM_KEYS; i++) {
+        add(`bgm${i + 1}`, () => {
+            const m = sdSong(i);
+            if (!m) return { label: `BGM ${i + 1}`, sub: "（曲なし）", color: "#1e293b" };
+            return { label: wrapLabel(m.name, 5), sub: `BGM ${i + 1}`, color: "#1d4ed8", toggle: true, on: !!musicCur && musicCur.item.path === m.path, onColor: "#16a34a" };
+        }, () => {
+            const m = sdSong(i);
+            if (!m) return showError(`BGM ${i + 1} に曲がありません`);
+            if (musicCur && musicCur.item.path === m.path) return musicStop();
+            musicPlay(m);
+        });
+    }
+    for (let i = 0; i < SD_SECTION_KEYS; i++) {
+        add(`sec${i + 1}`, () => {
+            const s = script().sections[i];
+            return s ? { label: wrapLabel(s.name, 4), sub: "読み位置へ", color: "#854d0e" } : { label: "", color: "#05070c" };
+        }, () => { const first = script().rows.findIndex(r => r.sec === i); if (first >= 0) jumpToRow(first); });
+    }
+    return A;
+}
+
+let lastSdMusicKey = "";
+function sdRefresh() {
+    if (typeof StreamDeck === "undefined" || !state) return;
+    StreamDeck.refresh();
+    renderSdKeys();
+    const mk = musicList.map(m => m.path).join("|");
+    if (mk !== lastSdMusicKey) { lastSdMusicKey = mk; renderSdBgmSelects(); refreshSuggestions(); }
+}
+
+function renderSdKeys() {
+    const box = $("#sd-keys");
+    if (!box) return;
+    const count = StreamDeck.getKeyCount();
+    const cols = { 6: 3, 8: 4, 15: 5, 32: 8 }[count] || 5;
+    box.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    box.innerHTML = StreamDeck.layoutFor(count).map((d, i) => {
+        const lk = StreamDeck.look(d);
+        return `<button type="button" class="sd-key ${lk.on ? "on" : ""}" data-sd-key="${i}" style="background:${lk.bg}">${lk.empty ? "" : `<b>${escapeHtml(lk.label).replace(/\n/g, "<br>")}</b><small>${escapeHtml(lk.sub)}</small>`}</button>`;
+    }).join("");
+}
+
+function renderSdBgmSelects() {
+    const box = $("#sd-bgm");
+    if (!box) return;
+    box.innerHTML = Array.from({ length: SD_BGM_KEYS }, (_, i) => `<label>BGM ${i + 1}<select data-sd-bgm="${i}" class="text-input"><option value="">（${musicList[i] ? musicList[i].name : "曲なし"}）自動</option>` +
+        musicList.map(m => `<option value="${escapeHtml(m.path)}" ${sdBgmPrefs[i] === m.path ? "selected" : ""}>${escapeHtml(m.name)}</option>`).join("") + `</select></label>`).join("");
+}
+
+function onSdStatus(st) {
+    $("#sd-badge").textContent = st.connected ? `SD ${st.keyCount}キー` : "SD 未接続";
+    $("#sd-badge").classList.toggle("on", st.connected);
+    $("#sd-state").textContent = !st.supported ? "このブラウザでは使えません" : st.connected ? `接続中：${st.name}（${st.keyCount}キー）` : "未接続";
+    $("#btn-sd-connect").classList.toggle("hidden", !st.supported || st.connected);
+    $("#btn-sd-disconnect").classList.toggle("hidden", !st.connected);
+    $("#btn-sd-flip").classList.toggle("on", st.flipVertical);
+    $("#sd-bright").value = st.brightness;
+    $("#sd-preview-count").value = String(st.keyCount);
+    $("#sd-preview-count").disabled = st.connected;
+    if (!st.supported) $("#sd-info").textContent = "Stream Deck をUSBで直接つなぐには、Chrome か Edge で開いてください（このブラウザには WebHID がありません）。";
+    renderSdKeys();
+}
+
+function initStreamDeck() {
+    StreamDeck.setActions(buildSdActions());
+    StreamDeck.init({ onStatus: onSdStatus });
+}
+
+function bindStreamDeckUi() {
+    $("#btn-sd-connect").addEventListener("click", () => StreamDeck.requestAndConnect());
+    $("#btn-sd-disconnect").addEventListener("click", () => StreamDeck.disconnect());
+    $("#btn-sd-flip").addEventListener("click", () => StreamDeck.toggleFlip());
+    $$("[data-sd-shift]").forEach(b => b.addEventListener("click", () => StreamDeck.shiftKeys(Number(b.dataset.sdShift))));
+    $("#sd-bright").addEventListener("change", e => StreamDeck.setBrightness(Number(e.target.value)));
+    $("#sd-preview-count").addEventListener("change", e => { StreamDeck.setPreviewCount(Number(e.target.value)); renderSdKeys(); });
+    $("#sd-badge").addEventListener("click", () => { selectTab("settings"); $("#sd-panel").scrollIntoView({ block: "center" }); });
+    // 画面上のキー見本をクリックしても、実機のキーと同じ操作をする
+    $("#sd-keys").addEventListener("click", e => { const k = e.target.closest("[data-sd-key]"); if (k) StreamDeck.press(Number(k.dataset.sdKey)); });
+    $("#sd-bgm").addEventListener("change", e => {
+        const sel = e.target.closest("[data-sd-bgm]");
+        if (!sel) return;
+        sdBgmPrefs[Number(sel.dataset.sdBgm)] = sel.value;
+        writeLocal(SD_BGM_KEY, sdBgmPrefs);
+        sdRefresh();
+    });
 }
 
 // --------------------------------------------------------------------------
@@ -1047,10 +1614,7 @@ function bindEvents() {
     $("#btn-pgm-to-pvw").addEventListener("click", pgmToPvw);
     $("#btn-take").addEventListener("click", doTake);
 
-    $$("#tabs button").forEach(b => b.addEventListener("click", () => {
-        $$("#tabs button").forEach(x => x.classList.toggle("on", x === b));
-        $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${b.dataset.tab}`));
-    }));
+    $$("#tabs button").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
 
     // 素材
     $$("[data-src]").forEach(b => b.addEventListener("click", () => assignSource(JSON.parse(b.dataset.src))));
@@ -1098,41 +1662,16 @@ function bindEvents() {
     $$("[data-derby-out]").forEach(b => b.addEventListener("click", () => control("derbyOut", b.dataset.derbyOut)));
     $$("[data-lineup]").forEach(b => b.addEventListener("click", () => sendLineup(b.dataset.lineup)));
 
-    // 式次第
-    $("#btn-cue-next").addEventListener("click", () => control("next"));
-    $("#btn-cue-add").addEventListener("click", addCue);
-    $("#btn-cue-overwrite").addEventListener("click", overwriteCue);
-    $$("[data-cue-move]").forEach(b => b.addEventListener("click", () => moveCue(Number(b.dataset.cueMove))));
-    $("#btn-cue-delete").addEventListener("click", deleteCue);
-    $("#btn-cue-export").addEventListener("click", exportCues);
-    $("#btn-cue-import").addEventListener("click", () => $("#cue-file").click());
-    $("#cue-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; importCues(f); });
-    $("#cue-list").addEventListener("click", e => {
-        const go = e.target.closest("[data-go]");
-        if (go) return control("cue", Number(go.dataset.go) + 1);
-        const r = e.target.closest(".cue-row");
-        if (r) loadCueToPvw(Number(r.dataset.i));
-    });
-    $("#cue-name").addEventListener("change", e => editCue({ name: e.target.value.trim().slice(0, 100) }));
-    $("#cue-memo").addEventListener("change", e => editCue({ memo: e.target.value.slice(0, 1000) }));
-    $("#cue-music-action").addEventListener("change", e => {
-        const c = cues()[selectedCue];
-        const music = e.target.value === "play" ? clone(c.music) : { action: e.target.value, path: "", name: "" };
-        music.action = e.target.value;
-        if (music.action === "play" && !music.path) {
-            // 曲を選ぶまでは保存しない（曲のない「鳴らす」は保存できないため）
-            $("#cue-music-path").classList.remove("hidden");
-            return showInfo("鳴らす曲を選んでください");
-        }
-        editCue({ music });
-    });
-    $("#cue-music-path").addEventListener("change", e => {
-        const sel = e.target;
-        if (!sel.value) return;
-        editCue({ music: { action: "play", path: sel.value, name: sel.options[sel.selectedIndex].text.slice(0, 300) } });
-    });
+    // 台本
+    bindScript();
 
     // 設定
+    $("#btn-preset-moriyama").addEventListener("click", () => { setOutput({ mode: "sdi", bandY: 197, bandH: 686 }); showInfo("守山の設定（SDI 1本・帯の上端197・高さ686）にしました"); });
+    $("#btn-futa-left").addEventListener("click", () => control("futa"));
+    $("#btn-futa-full").addEventListener("click", () => control("futaFull"));
+    $("#futa-left").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { left: e.target.value }) }));
+    $("#futa-full").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { full: e.target.value }) }));
+    bindStreamDeckUi();
     $("#btn-devices").addEventListener("click", () => refreshDevices(true));
     $$("#cam1-select, #cam2-select").forEach(sel => sel.addEventListener("change", () => setCamera(sel)));
     $("#opt-monitor-cam").addEventListener("change", reloadMonitors);
@@ -1144,6 +1683,7 @@ function bindEvents() {
         const tag = document.activeElement ? document.activeElement.tagName : "";
         if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
         if (e.code === "Space") { e.preventDefault(); doTake(); }
+        else if (currentTab === "script" && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); moveReadPos(e.key === "ArrowDown" ? 1 : -1); }
     });
 
     $("#pvw-frame").addEventListener("load", postPvw);
@@ -1156,11 +1696,12 @@ function init() {
     restorePrefs();
     bindEvents();
     initMusic();
+    initStreamDeck();
     reloadMonitors();
     renderControls();
     renderOverlay();
     connect();
-    loadSlides().catch(e => showError(`${e.message}。サーバーが起動しているか確認してください`));
+    loadSlides().then(() => { renderFutaSelects(); refreshSuggestions(); }).catch(e => showError(`${e.message}。サーバーが起動しているか確認してください`));
     loadPlayerMedia().catch(e => showError(e.message));
     loadWalkups().catch(e => showError(e.message));
     loadPhotoTeams().catch(() => {});
