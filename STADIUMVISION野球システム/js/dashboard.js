@@ -372,6 +372,8 @@ function onSlotWheel(e, slot) {
 // TAKE・BLACK・切り替え方
 // --------------------------------------------------------------------------
 async function doTake() {
+    // 台本タブでは、選んでいるキューを本線へ（BGMも動く）。選択は次のキューへ進む
+    if (currentTab === "script" && script().rows.length) return scTake();
     const ok = await patch({ program: clone(pvw) });
     if (!ok) return;
     const b = $("#btn-take");
@@ -765,203 +767,270 @@ async function loadPlayerMedia() {
 }
 
 // --------------------------------------------------------------------------
-// 台本（読み込み・キューのひもづけ・本番）
-//   台本の1行 ＝ 時刻・内容・BGM・ビジョン・MIC・話者・セリフ・備考 ＋ キュー（出すもの）
+// 台本（本番＝キュー一覧／編集＝読み込み・キュー作り）
+//   本番：キューのある行だけを並べる。行を選ぶ（クリック・↑↓）とPREVIEWに自動でセット、TAKEで本線＋BGM
+//   台本の1行 ＝ 番号・場面・BGM・ビジョン…＋キュー（出すもの）。セリフなどの原文は編集画面の「台本の原文」にだけ出す
 //   旧「式次第」は「手動の式次第」セクションとして、台本の先頭に入っている
+//   script.pos ＝ 選んでいる行（次に出す行）／ script.onair ＝ いま本線に出している行
 // --------------------------------------------------------------------------
 const SC = ScriptCore;
 const SC_MODE_KEY = "stadiumvision-baseball.scmode";
+const SC_ALL_KEY = "stadiumvision-baseball.scall";
 const EMPTY_SCRIPT = { title: "", rev: 0, sections: [], rows: [], pos: -1, onair: -1 };
 const script = () => (state && state.script) || EMPTY_SCRIPT;
-let scMode = readLocal(SC_MODE_KEY, "edit") === "live" ? "live" : "edit";
+let scMode = readLocal(SC_MODE_KEY, "live") === "edit" ? "edit" : "live";
+let scShowAll = !!readLocal(SC_ALL_KEY, false);
 let currentTab = "media";
-let selectedRow = -1;
+let curSheet = 0;
 let scListKey = "";
-let scMarks = { pos: -2, onair: -2, next: -2 };
 let suggestions = {};
 let suggestKey = "";
 let importState = null;     // 読み込み中のファイル { resp, cfg:[{index, include, headerRow, roles}] }
+let view = { items: [], shown: [] };     // 一覧の組み立て結果
+let lastSel = -2;
+let lastPvwKey = "";
+let edPickAll = false;
+let edKey = "";
 
 const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
+const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
 
-function cueChips(cue) {
-    if (!cue) return [];
-    const chips = [];
-    if (cue.scene) chips.push("画面（プレビューのまま）");
-    else if (cue.band) chips.push("帯：" + SC.describeFace(cue.band));
-    else {
-        if (cue.left) chips.push("左：" + SC.describeFace(cue.left));
-        if (cue.right) chips.push("右：" + SC.describeFace(cue.right));
-    }
-    const b = cue.bgm;
-    if (b) chips.push(b.action === "play" ? `♪ ${b.name}${b.loop ? " ↻" : " ①"}` : b.action === "fade" ? "♪ フェードアウト" : "♪ 停止");
-    if (cue.duck === true) chips.push("♪ 小さく");
-    else if (cue.duck === false) chips.push("♪ 小さくを戻す");
-    return chips;
+// ---- 表示用の組み立て ----
+function faceFromSrc(src) {
+    if (!src) return null;
+    if (src.type === "slide") return { type: "slide", file: src.file };
+    if (src.type === "black") return { type: "black" };
+    return null;
 }
 
-function rowHtml(r, i, edit) {
-    // 章の行：帯の見出しにする（キューは付けられない）
-    if (r.kind === "chapter") return `<div class="sc-row sc-chap" data-i="${i}">${escapeHtml(r.title)}</div>`;
-    const sg = edit && !r.cue ? suggestions[i] : null;
-    const chips = r.cue ? cueChips(r.cue).map(c => `<span class="chip-cue">${escapeHtml(c)}</span>`).join("") : "";
-    let sgHtml = "";
-    if (sg && sg.cue) sgHtml = `<div class="sc-sg"><span class="sg-text">提案：${escapeHtml(sg.reasons.join(" ／ "))}</span><button type="button" class="btn small" data-adopt="${i}">採用</button>${sg.hints.length ? `<span class="sg-hint">${escapeHtml(sg.hints.join(" ／ "))}</span>` : ""}</div>`;
-    else if (sg && sg.hints.length) sgHtml = `<div class="sc-sg"><span class="sg-hint">${escapeHtml(sg.hints.join(" ／ "))}</span></div>`;
-    const tag = (label, v) => v ? `<span class="sc-tag"><b>${label}</b>${escapeHtml(v)}</span>` : "";
-    const tags = tag("BGM", r.bgm) + tag("左", r.vision) + tag("右", r.visionR) + tag("MIC", r.mic);
-    return `<div class="sc-row ${r.cue ? "hascue" : ""}" data-i="${i}">
-        <div class="sc-head">${r.no ? `<span class="sc-no">${escapeHtml(r.no)}</span>` : ""}<span class="sc-time">${escapeHtml(r.time)}${r.dur ? `<small> ${escapeHtml(r.dur)}</small>` : ""}</span>
-            <span class="sc-title">${escapeHtml(r.title)}</span><span class="sc-spk">${escapeHtml(r.speaker)}</span>
-            <span class="sc-badges">${chips}</span></div>
-        ${r.script ? `<div class="sc-script">${escapeHtml(r.script)}</div>` : ""}
-        ${tags ? `<div class="sc-tags">${tags}</div>` : ""}
-        ${r.note ? `<div class="sc-note">${escapeHtml(r.note)}</div>` : ""}${sgHtml}</div>`;
+function bgmShort(cue) {
+    if (!cue) return "";
+    const out = [];
+    const b = cue.bgm;
+    if (b) out.push(b.action === "play" ? `♪ ${b.name}${b.loop ? " ↻" : ""}` : b.action === "fade" ? "♪↘ フェード" : "■ 停止");
+    if (cue.duck === true) out.push("♪ 小さく");
+    else if (cue.duck === false) out.push("♪ 戻す");
+    return out.join("  ");
+}
+
+// 右面がカメラ以外のときだけ印を出す
+function rightMark(cue) {
+    if (!cue) return "";
+    const r = cue.scene ? (cue.scene.layout === "split" ? cue.scene.slots.right : null) : cue.right;
+    if (!r || r.type === "camera") return "";
+    return r.type === "black" ? "右：黒" : r.type === "futa" ? "右：ロゴ" : "右：画像";
+}
+
+// 一覧に出す内容を、台本の上から順に作る（前の行から引き継ぐ左面もここで決める）
+function computeView() {
+    const sc = script();
+    const items = [];
+    let st = { left: null }, sec = -1;
+    sc.rows.forEach((r, i) => {
+        if (r.sec !== sec) { sec = r.sec; st = { left: null }; }
+        if (r.kind === "chapter") { items.push({ i, row: r, sec, chapter: true }); return; }
+        const sug = suggestions[i];
+        const cue = r.cue;
+        const eff = cue || (scMode === "edit" && sug && sug.cue) || null;
+        if (eff) {
+            if (eff.scene) { const sl = eff.scene.slots; st.left = faceFromSrc(eff.scene.layout === "split" ? sl.left : sl.wide); }
+            else if (eff.band) st.left = eff.band;
+            else if (eff.left) st.left = eff.left;
+        }
+        const pick = sug && sug.pick && sug.pick[0] || "";
+        const warn = sug && !cue ? sug.hints.filter(h => !h.startsWith("当日に選ぶ")).join("\n") : "";
+        const shown = scMode === "edit" ? true : !!(cue || pick || scShowAll);
+        items.push({ i, row: r, sec, cue, sug, eff, left: st.left, pick, warn, bgm: bgmShort(eff), right: rightMark(eff), suggested: !cue && !!(sug && sug.cue), shown });
+    });
+    view = { items, shown: items.filter(x => !x.chapter && x.shown).map(x => x.i) };
+}
+
+// 選んでいる行（表に出ている行の中から。選んだ行が出ていなければ、その次）
+function selRow() {
+    const pos = script().pos, d = view.shown;
+    if (!d.length) return -1;
+    if (d.includes(pos)) return pos;
+    const nx = d.find(i => i > pos);
+    return nx !== undefined ? nx : d[d.length - 1];
+}
+const itemOf = i => view.items.find(x => x.i === i);
+
+function thumbSrc(face) {
+    if (!face) return "";
+    if (face.type === "slide") return face.file;
+    if (face.type === "futa") return logos().left;
+    return "";
+}
+function thumbHtml(it, big) {
+    const cls = big ? "cr-thumb big" : "cr-thumb";
+    const pickable = it.pick ? ` data-pick="${it.i}"` : "";
+    // 「当日に選ぶ」行は、選ぶまで「＋選ぶ」の枠を出す（前の行の画像を引き継いで見せない）
+    if (it.pick && !(it.cue && it.cue.left)) return `<span class="${cls} pick"${pickable}>＋選ぶ</span>`;
+    const src = thumbSrc(it.left);
+    if (!src) return `<span class="${cls} empty"${pickable}></span>`;
+    const meta = slides.find(x => x.path === src);
+    const media = meta && meta.kind === "video"
+        ? `<video src="${mediaUrl(src)}#t=0.1" preload="metadata" muted></video>`
+        : `<img src="${mediaUrl(src)}" loading="lazy" alt="" onerror="this.remove()">`;
+    return `<span class="${cls}"${pickable}>${media}</span>`;
+}
+
+function rowHtml(it, edit) {
+    const r = it.row;
+    const warn = it.warn ? `<span class="cr-warn" title="${escapeHtml(it.warn)}">⚠</span>` : "";
+    const ok = edit && it.suggested ? `<button type="button" class="cr-ok" data-adopt="${it.i}" title="提案を採用してキューにする">✓</button>` : "";
+    return `<div class="cr ${it.cue ? "" : "nocue"} ${it.suggested ? "sug" : ""}" data-i="${it.i}">
+        <span class="cr-no">${escapeHtml(r.no)}</span>${thumbHtml(it)}
+        <span class="cr-title">${escapeHtml(oneLine(r.title))}</span>
+        <span class="cr-bgm">${escapeHtml(it.bgm)}</span><span class="cr-right">${escapeHtml(it.right)}</span>${warn}
+        <span class="cr-time">${escapeHtml(r.time.slice(0, 5))}</span>${ok}</div>`;
+}
+
+function listHtml(edit) {
+    const parts = [];
+    const items = view.items.filter(x => x.sec === curSheet);
+    items.forEach((it, k) => {
+        if (it.chapter) {
+            const nx = items[k + 1];
+            if (nx && !nx.chapter && nx.shown) parts.push(`<div class="cr-chap">${escapeHtml(oneLine(it.row.title))}</div>`);
+            return;
+        }
+        if (it.shown) parts.push(rowHtml(it, edit));
+    });
+    return parts.join("") || `<div class="empty">${edit ? "台本がありません。上から Excel を読み込んでください。" : "キューがありません。「編集」で台本を読み込み、キューを付けます。"}</div>`;
 }
 
 function renderScript() {
     const sc = script();
+    computeView();
+    const sel = selRow();
+    // 選んだ行が別のシートなら、シートのタブも合わせる
+    if (sel !== lastSel) {
+        lastSel = sel;
+        const r = sc.rows[sel];
+        if (r) curSheet = r.sec;
+    }
+    if (curSheet >= sc.sections.length) curSheet = 0;
     const edit = scMode === "edit";
-    document.body.classList.toggle("sc-live", scMode === "live");
-    $$("#sc-mode button").forEach(b => b.classList.toggle("on", b.dataset.scmode === scMode));
-    // 編集の部品は本番では隠す（本番中の誤操作を防ぐ）
-    $$(".sc-edit-only").forEach(el => { if (!edit) el.classList.add("hidden"); else if (el.id !== "sc-editor" && el.id !== "sc-lost") el.classList.remove("hidden"); });
-    if (!edit) $("#sc-import").classList.add("hidden");
+    $("#sc-live-view").classList.toggle("hidden", edit);
+    $("#sc-edit-view").classList.toggle("hidden", !edit);
+    $("#sc-edit-toggle").textContent = edit ? "本番へ" : "編集";
+    $("#sc-edit-toggle").classList.toggle("on", edit);
+    $("#sc-showall").checked = scShowAll;
+    $("#sc-showall").parentElement.classList.toggle("hidden", edit);
+    $("#sc-sheets").innerHTML = sc.sections.map((s, k) => `<button type="button" data-sheet="${k}" class="${k === curSheet ? "on" : ""}">${escapeHtml(s.name)}</button>`).join("");
 
-    const key = [sc.rev, scMode, Object.keys(suggestions).length, suggestKey].join("|");
+    const key = [sc.rev, scMode, scShowAll, curSheet, Object.keys(suggestions).length, suggestKey, state ? JSON.stringify(state.futa) : "", slides.length].join("|");
     if (key !== scListKey) {
         scListKey = key;
-        const list = $("#sc-list");
-        if (sc.rows.length === 0) {
-            list.innerHTML = `<div class="empty">台本がありません。<br>「編集」で Excel の台本（.xlsx）を読み込むか、「＋ いまのプレビューを手動の式次第に追加」を使います。</div>`;
-        } else {
-            let lastSec = -1;
-            const parts = [];
-            sc.rows.forEach((r, i) => {
-                if (r.sec !== lastSec) {
-                    lastSec = r.sec;
-                    parts.push(`<div class="sc-sec" data-sec="${r.sec}" data-first="${i}">▼ ${escapeHtml(sc.sections[r.sec].name)}</div>`);
-                }
-                parts.push(rowHtml(r, i, edit));
-            });
-            list.innerHTML = parts.join("");
-        }
-        scMarks = { pos: -2, onair: -2, next: -2 };
-        const jumps = [];
-        let jSec = -1;
-        sc.rows.forEach((r, k) => {
-            if (r.sec !== jSec) { jSec = r.sec; jumps.push(`<option value="${k}">${escapeHtml(sc.sections[r.sec].name)}</option>`); }
-            if (r.kind === "chapter") jumps.push(`<option value="${k}">${escapeHtml(sc.sections[r.sec].name)} › ${escapeHtml(r.title.slice(0, 40))}</option>`);
-        });
-        $("#sc-jump").innerHTML = `<option value="">セクション・章へ…</option>` + jumps.join("");
-        $("#sc-summary").textContent = sc.rows.length ? `${sc.title ? sc.title + "：" : ""}${sc.sections.length}セクション・${sc.rows.length}行・キュー ${SC.cueRows(sc).length}個` : "";
-        if (selectedRow >= sc.rows.length) selectedRow = -1;
+        const list = edit ? $("#sc-elist") : $("#sc-list");
+        const top = list.scrollTop;
+        list.innerHTML = listHtml(edit);
+        list.scrollTop = top;
+        $("#sc-summary").textContent = sc.rows.length ? `${sc.title ? sc.title + "：" : ""}キュー ${SC.cueRows(sc).length}個` : "";
+        edKey = "";
     }
-    renderScriptMarks();
-    renderCueEditor();
-}
-
-// 読み位置（青）・ON AIR（赤）・次のキュー（黄）の色だけを付け替える（行は作り直さない）
-function renderScriptMarks(opts = {}) {
-    const sc = script();
-    const next = SC.nextCueRow(sc);
-    const list = $("#sc-list");
-    const set = (cls, from, to) => {
-        if (from === to && !opts.force) return;
-        const a = from >= 0 ? list.querySelector(`.sc-row[data-i="${from}"]`) : null;
-        if (a) a.classList.remove(cls);
-        const b = to >= 0 ? list.querySelector(`.sc-row[data-i="${to}"]`) : null;
-        if (b) b.classList.add(cls);
-    };
-    const posChanged = scMarks.pos !== sc.pos;
-    set("pos", scMarks.pos, sc.pos);
-    set("onair", scMarks.onair, sc.onair);
-    set("next", scMarks.next, next);
-    const changed = posChanged || scMarks.onair !== sc.onair || scMarks.next !== next;
-    scMarks = { pos: sc.pos, onair: sc.onair, next };
-    if (posChanged || opts.scroll) scrollToPos();
-    if (changed || opts.force) followNextInPreview();
-    $("#sc-jump").value = "";
+    renderMarks();
+    if (edit) renderEditor();
     sdRefresh();
 }
 
-// 読み位置が、一覧の上から1/3の位置に来るようにする
-function scrollToPos() {
+// 選んでいる行（黄）・本線に出ている行（赤）・上のカード
+function renderMarks(opts = {}) {
     const sc = script();
-    const list = $("#sc-list");
-    if (sc.pos < 0 || list.offsetParent === null) return;
-    const el = list.querySelector(`.sc-row[data-i="${sc.pos}"]`);
-    if (!el) return;
-    const top = el.offsetTop - list.offsetTop - list.clientHeight / 3;
-    list.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const sel = selRow();
+    $$(".cr.sel, .cr.onair").forEach(el => el.classList.remove("sel", "onair"));
+    const root = scMode === "edit" ? $("#sc-elist") : $("#sc-list");
+    const a = sel >= 0 ? root.querySelector(`.cr[data-i="${sel}"]`) : null;
+    if (a) a.classList.add("sel");
+    const b = sc.onair >= 0 ? root.querySelector(`.cr[data-i="${sc.onair}"]`) : null;
+    if (b) b.classList.add("onair");
+    if (a && (opts.scroll || sel !== renderMarks.lastScrolled)) {
+        renderMarks.lastScrolled = sel;
+        const top = a.offsetTop - root.offsetTop - root.clientHeight / 3;
+        root.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    }
+    renderCard(sel);
+    const key = `${sel}|${sc.rev}|${scMode}|${state ? JSON.stringify(state.program) : ""}`;
+    if (currentTab === "script" && key !== lastPvwKey) { lastPvwKey = key; previewRow(sel); }
 }
 
-// 本番モードでは、PREVIEWにいつも「次のキュー」の画面を出す
-function followNextInPreview() {
-    if (scMode !== "live" || currentTab !== "script" || !state) return;
-    const sc = script();
-    const i = SC.nextCueRow(sc);
-    if (i < 0) return;
-    pvw = SC.buildScene(sc.rows[i].cue, state.program, logos());
+function renderCard(sel) {
+    const it = itemOf(sel);
+    const body = $("#sc-card-body");
+    if (!it) { body.innerHTML = `<span class="sc-card-none">出すキューがありません</span>`; return; }
+    const r = it.row;
+    body.innerHTML = `<span class="sc-card-label">次に出す</span>${thumbHtml(it, true)}
+        <span class="sc-card-text"><b class="sc-card-title">${escapeHtml(r.no)} ${escapeHtml(oneLine(r.title))}</b>
+        <span class="sc-card-bgm">${escapeHtml(it.bgm)} ${escapeHtml(it.right)}</span></span>`;
+}
+
+// ---- 選ぶ（クリック・↑↓）＝PREVIEWに自動でセット（BGMは鳴らさない） ----
+function previewRow(i) {
+    const r = script().rows[i];
+    if (!r || r.kind === "chapter" || !state) return;
+    const cue = r.cue || (scMode === "edit" && suggestions[i] && suggestions[i].cue) || null;
+    if (!cue) return;
+    pvw = SC.buildScene(cue, state.program, logos());
     if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
     pvwChanged({ noAuto: true });
 }
+const followNextInPreview = () => { lastPvwKey = ""; renderMarks(); };
+const scrollToPos = () => renderMarks({ scroll: true });
 
-function setScMode(mode) {
-    scMode = mode;
-    writeLocal(SC_MODE_KEY, mode);
-    scListKey = "";
-    renderScript();
-    scrollToPos();
-    followNextInPreview();
+let posTimer = null;
+function persistPos(i) {
+    clearTimeout(posTimer);
+    posTimer = setTimeout(() => { scEditQuiet([{ op: "pos", pos: i }]); }, 60);
 }
-
-// ---- 台本の編集（サーバーへ） ----
-async function scEdit(ops) {
-    try {
-        const res = await fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) });
-        const body = await res.json();
-        if (!res.ok) { showError(`反映できませんでした：${body.error}`); return false; }
-        return true;
-    } catch (e) {
-        showError(SERVER_NG);
-        return false;
-    }
-}
-
-// 読み位置を動かす（キューは出さない）。続けて押しても数えこぼさないよう、先に手元の値を変える
-function moveReadPos(d) {
-    const sc = script();
-    if (!sc.rows.length) return;
-    const n = Math.max(0, Math.min(sc.rows.length - 1, sc.pos + d));
-    if (n === sc.pos) return;
-    sc.pos = n;
-    renderScriptMarks();
-    scEdit([{ op: "pos", pos: n }]);
-}
-function jumpToRow(i) {
+function setSel(i) {
     const sc = script();
     if (!(i >= 0 && i < sc.rows.length)) return;
     sc.pos = i;
-    renderScriptMarks();
-    scEdit([{ op: "pos", pos: i }]);
+    lastSel = -2;
+    const r = sc.rows[i];
+    if (r.kind !== "chapter") curSheet = r.sec;
+    renderScript();
+    persistPos(i);
 }
-const scNext = () => control("next");
+function moveSel(d) {
+    const sel = selRow();
+    const k = view.shown.indexOf(sel);
+    if (k < 0) return;
+    const n = view.shown[Math.max(0, Math.min(view.shown.length - 1, k + d))];
+    if (n !== sel) setSel(n);
+}
+const moveReadPos = moveSel;
+function jumpToRow(i) {
+    const n = view.shown.find(x => x >= i);
+    setSel(n !== undefined ? n : i);
+}
+
+// ---- 出す ----
+async function scTake() {
+    const sc = script();
+    const i = selRow();
+    const r = sc.rows[i];
+    if (!r) return showError("出すキューがありません");
+    if (!r.cue) { if (itemOf(i) && itemOf(i).pick) openPick(i); return showError("先にスライドを選んでください"); }
+    await control("cue", SC.cueRows(sc).indexOf(i) + 1);
+}
+// NEXT：いま出している行のあとの行を選んで、すぐ出す
+function scNext() {
+    const sc = script();
+    const n = view.shown.find(i => i > sc.onair);
+    if (n === undefined) return showError("次のキューがありません");
+    setSel(n);
+    return scTake();
+}
 const scPrev = () => control("prev");
 
-// 行をダブルクリック：キューがあれば出す。無ければ読み位置だけ移す
-function fireRow(i) {
-    const sc = script();
-    const r = sc.rows[i];
-    if (!r) return;
-    if (r.cue) control("cue", SC.cueRows(sc).indexOf(i) + 1);
-    else jumpToRow(i);
-}
-
-// ---- キューが出されたとき：BGM を音楽バーで鳴らす（このPCのボタン・Stream Deck・HTTP どれでも） ----
+// キューが出されたとき（このPCのボタン・Stream Deck・HTTP どれでも）：音を動かし、選択を次の行へ進める
 function onCueFired(ev) {
     const r = script().rows[ev.index];
     if (r && r.cue && !ev.silent) runCueAudio(r.cue);
+    const n = view.shown.find(i => i > ev.index);
+    setSel(n !== undefined ? n : ev.index);
 }
 
 // キューの音：BGM（鳴らす／フェードアウト／止める）と「小さく」
@@ -981,7 +1050,24 @@ function runCueAudio(cue) {
     if (typeof cue.duck === "boolean") musicDuckSet(cue.duck);
 }
 
-// ---- 提案（BGM・ビジョン・内容の文字から） ----
+// ---- 台本の編集（サーバーへ） ----
+async function scEdit(ops) {
+    try {
+        const res = await fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) });
+        const body = await res.json();
+        if (!res.ok) { showError(`反映できませんでした：${body.error}`); return false; }
+        return true;
+    } catch (e) {
+        showError(SERVER_NG);
+        return false;
+    }
+}
+// 選択位置の保存のように、失敗しても知らせなくてよいもの
+function scEditQuiet(ops) {
+    fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) }).catch(() => {});
+}
+
+// ---- 提案（BGM・ビジョン・内容の文字から。前の行との差分だけ） ----
 function refreshSuggestions() {
     if (!state) return;
     const sc = script();
@@ -1072,7 +1158,6 @@ async function commitAssign() {
         if (!res.ok) return showError(`取り込めませんでした：${j.error}`);
         importState = null;
         renderAssign();
-        selectedRow = -1;
         showInfo(`${j.sections}セクション・${j.rows}行を取り込みました${j.carried ? `（キューを${j.carried}個引き継ぎ）` : ""}`);
         renderLost(j.lost || []);
     } catch (e) { showError(SERVER_NG); }
@@ -1087,144 +1172,175 @@ function renderLost(lost) {
     box.classList.remove("hidden");
 }
 
-// ---- 選んだ行のキューの編集 ----
-// folder を渡すと、そのフォルダの中のスライドだけに絞る（例：選手/テストチームA/）
-function fillFileSelect(sel, value, folder) {
-    const nf = folder ? SC.normPath(folder) : "";
-    const opts = slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && (!nf || SC.normPath(s.path).includes(nf))).map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides\//, ""))}</option>`).join("");
-    sel.innerHTML = `<option value="">（スライドを選ぶ）</option>` + opts;
-    sel.value = value || "";
-}
-function fillSongSelect(sel, value) {
-    const all = musicList.map(m => ({ path: m.path, name: m.name }));
-    if (value && !all.some(s => s.path === value)) all.push({ path: value, name: "（見つからない）" + value });
-    sel.innerHTML = `<option value="">（曲を選ぶ）</option>` + all.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.name)}</option>`).join("");
-    sel.value = value || "";
+
+// ---- 編集画面：行を選ぶと右に編集パネル（クリックするたびに保存） ----
+const slideThumbs = (folder, on) => slides
+    .filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && (!folder || SC.normPath(s.path).includes(SC.normPath(folder))))
+    .map(s => `<button type="button" class="pick-item ${s.path === on ? "on" : ""}" data-ed="leftfile" data-v="${escapeHtml(s.path)}" title="${escapeHtml(s.name)}">${s.kind === "video"
+        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}</button>`).join("")
+    || `<div class="empty">画像がありません</div>`;
+
+function edCue() {
+    const it = itemOf(selRow());
+    const c = it && (it.cue || (it.sug && it.sug.cue));
+    return Object.assign({ left: null, right: null, band: null, bgm: null, memo: "" }, c ? clone(c) : {});
 }
 
-let editorRow = -2, editorRev = -1, editorPick = "";
-function showPickNote() {
-    const n = $("#cue-pick-note");
-    n.classList.toggle("hidden", !editorPick);
-    n.innerHTML = editorPick ? `「${escapeHtml(editorPick)}」の中だけを表示中 <button type="button" class="btn small" id="btn-pick-all">すべて表示</button>` : "";
+async function edMutate(fn, touchesPicture) {
+    const i = selRow();
+    const r = script().rows[i];
+    if (!r || r.kind === "chapter") return;
+    const c = edCue();
+    fn(c);
+    if (touchesPicture) delete c.scene;
+    const empty = !c.left && !c.right && !c.band && !c.bgm && typeof c.duck !== "boolean" && !c.scene;
+    r.cue = empty ? null : c;                 // 先に手元を変える（画面がすぐ変わるように）
+    scListKey = "";
+    lastPvwKey = "";
+    renderScript();
+    await scEdit([{ op: "cue", row: i, cue: r.cue }]);
 }
-function renderCueEditor() {
-    const sc = script();
-    const r = sc.rows[selectedRow];
+
+function renderEditor() {
     const box = $("#sc-editor");
-    $$(".sc-list .sc-row.sel").forEach(el => el.classList.remove("sel"));
-    if (!r || r.kind === "chapter" || scMode !== "edit") { box.classList.add("hidden"); editorRow = -2; return; }
-    const el = $(`#sc-list .sc-row[data-i="${selectedRow}"]`);
-    if (el) el.classList.add("sel");
-    box.classList.remove("hidden");
-    if (editorRow === selectedRow && editorRev === sc.rev) return;     // 入力中の内容を消さない
-    editorRow = selectedRow; editorRev = sc.rev;
-    const c = r.cue || (suggestions[selectedRow] && suggestions[selectedRow].cue) || {};
-    $("#sc-editor-title").textContent = `${selectedRow + 1}行目 ${r.title ? "「" + r.title.slice(0, 30) + "」" : ""}${r.cue ? "" : "（キューなし" + (suggestions[selectedRow] ? "・提案を入れています" : "") + "）"}`;
-    const face = (sel, fileSel, f) => {
-        sel.value = f ? (f.type === "camera" ? f.cam : f.type) : "";
-        fillFileSelect(fileSel, f && f.type === "slide" ? f.file : "");
-        fileSel.classList.toggle("hidden", sel.value !== "slide");
-    };
-    face($("#cue-left"), $("#cue-left-file"), c.left);
-    // 「当日に選ぶ」行：スライドの選択を、そのフォルダの中だけに絞って開く
-    const pick = !r.cue && suggestions[selectedRow] && suggestions[selectedRow].pick && suggestions[selectedRow].pick[0] || "";
-    editorPick = pick;
-    if (pick) {
-        $("#cue-left").value = "slide";
-        fillFileSelect($("#cue-left-file"), "", pick);
-        $("#cue-left-file").classList.remove("hidden");
+    const i = selRow();
+    const it = itemOf(i);
+    if (!it) { box.innerHTML = `<div class="empty">行を選びます</div>`; edKey = ""; return; }
+    const folder = edPickAll ? "" : it.pick;
+    const key = [i, edPickAll, slides.length, musicList.length].join("|");
+    if (key !== edKey) {
+        edKey = key;
+        const r = it.row;
+        const manual = script().sections[r.sec].manual;
+        const raw = [["番号", r.no], ["時刻", r.time], ["所要", r.dur], ["場面", r.title], ["話者", r.speaker], ["セリフ", r.script], ["BGM列", r.bgm], ["ビジョン左", r.vision], ["ビジョン右", r.visionR], ["マイク", r.mic], ["備考", r.note]]
+            .filter(x => x[1]).map(x => `<div class="raw-row"><b>${x[0]}</b><span>${escapeHtml(x[1])}</span></div>`).join("");
+        const sg = it.sug ? [...it.sug.reasons, ...it.sug.hints].map(t => `<div class="raw-row"><b>提案</b><span>${escapeHtml(t)}</span></div>`).join("") : "";
+        box.innerHTML = `<div class="ed-head"><b>${escapeHtml(r.no)}</b> ${escapeHtml(oneLine(r.title))}</div>
+            <div class="ed-sec"><h3>左</h3><div class="ed-btns">
+                <button type="button" data-ed="left" data-v="">変えない</button><button type="button" data-ed="left" data-v="futa">ロゴ</button><button type="button" data-ed="left" data-v="black">黒</button>
+                ${folder ? `<span class="ed-chip">${escapeHtml(folder)} <button type="button" class="btn small" data-ed="pickall">すべて</button></span>` : ""}</div>
+                <div class="pick-grid" id="ed-grid">${slideThumbs(folder, "")}</div></div>
+            <div class="ed-sec"><h3>右</h3><div class="ed-btns">
+                <button type="button" data-ed="right" data-v="">変えない</button><button type="button" data-ed="right" data-v="cam1">カメラ1</button><button type="button" data-ed="right" data-v="cam2">カメラ2</button>
+                <button type="button" data-ed="right" data-v="futa">ロゴ</button><button type="button" data-ed="right" data-v="black">黒</button>
+                <label class="toggle" id="ed-fit-wrap"><input type="checkbox" id="ed-fit"> 16:9のまま</label></div></div>
+            <div class="ed-sec"><h3>BGM</h3><div class="ed-btns">
+                <button type="button" data-ed="bgm" data-v="">変えない</button><button type="button" data-ed="bgm" data-v="fade">フェード</button><button type="button" data-ed="bgm" data-v="stop">停止</button>
+                <label class="toggle"><input type="checkbox" id="ed-loop"> くり返し</label>
+                <span class="ed-sep"></span>
+                <button type="button" data-ed="duck" data-v="">音量そのまま</button><button type="button" data-ed="duck" data-v="on">小さく</button><button type="button" data-ed="duck" data-v="off">戻す</button></div>
+                <div class="ed-btns ed-songs">${musicList.map(m => `<button type="button" data-ed="song" data-v="${escapeHtml(m.path)}" data-name="${escapeHtml(m.name)}">♪ ${escapeHtml(m.name)}</button>`).join("")}</div></div>
+            <div class="ed-foot"><button type="button" class="btn small danger" data-ed="del">キューを外す</button>
+                <button type="button" class="btn small" data-ed="scene" title="左右の指定のかわりに、いまのPREVIEWの画面をそのまま使います">PREVIEWの画面を使う</button>
+                ${manual ? `<button type="button" class="btn small" data-ed="mv" data-v="-1">▲</button><button type="button" class="btn small" data-ed="mv" data-v="1">▼</button><button type="button" class="btn small danger" data-ed="rowdel">行を消す</button>` : ""}</div>
+            <details class="ed-raw"><summary>台本の原文</summary>${raw}${sg}</details>`;
     }
-    showPickNote();
-    face($("#cue-right"), $("#cue-right-file"), c.right);
-    $("#cue-right-fit").value = c.right && c.right.type === "camera" && c.right.fit === "contain" ? "contain" : "cover";
-    $("#cue-right-fit").classList.toggle("hidden", !c.right || c.right.type !== "camera");
-    face($("#cue-band"), $("#cue-band-file"), c.band);
-    const b = c.bgm;
-    $("#cue-bgm").value = b ? b.action : "";
-    $("#cue-duck").value = c.duck === true ? "on" : c.duck === false ? "off" : "";
-    fillSongSelect($("#cue-bgm-song"), b && b.action === "play" ? b.path : "");
-    $("#cue-bgm-song").classList.toggle("hidden", !b || b.action !== "play");
-    $("#cue-bgm-loop-wrap").classList.toggle("hidden", !b || b.action !== "play");
-    $("#cue-bgm-loop").checked = !!(b && b.loop);
-    $("#cue-memo").value = c.memo || "";
-    const manual = sc.sections[r.sec].manual;
-    $$("[data-row-move], #btn-row-del").forEach(x => x.classList.toggle("hidden", !manual));
+    // 選んでいる内容の印
+    const c = edCue();
+    const lt = c.left ? c.left.type : "";
+    const on = (sel, v) => box.querySelectorAll(sel).forEach(b => b.classList.toggle("on", b.dataset.v === v));
+    on('[data-ed="left"]', lt === "slide" ? "__" : lt);
+    box.querySelectorAll(".pick-item").forEach(b => b.classList.toggle("on", lt === "slide" && b.dataset.v === c.left.file));
+    const rt = c.right ? (c.right.type === "camera" ? c.right.cam : c.right.type) : "";
+    on('[data-ed="right"]', rt);
+    $("#ed-fit-wrap").classList.toggle("hidden", !(c.right && c.right.type === "camera"));
+    $("#ed-fit").checked = !!(c.right && c.right.fit === "contain");
+    on('[data-ed="bgm"]', c.bgm && c.bgm.action !== "play" ? c.bgm.action : (c.bgm ? "__" : ""));
+    box.querySelectorAll('[data-ed="song"]').forEach(b => b.classList.toggle("on", !!c.bgm && c.bgm.action === "play" && b.dataset.v === c.bgm.path));
+    $("#ed-loop").checked = !!(c.bgm && c.bgm.action === "play" && c.bgm.loop);
+    on('[data-ed="duck"]', c.duck === true ? "on" : c.duck === false ? "off" : "");
 }
 
-function readCueForm() {
-    const faceOf = (sel, fileSel, isRight) => {
-        const v = sel.value;
-        if (!v) return null;
-        if (v === "slide") { if (!fileSel.value) throw new Error("スライドを選んでください"); return { type: "slide", file: fileSel.value }; }
-        if (v === "cam1" || v === "cam2") return isRight && $("#cue-right-fit").value === "contain" ? { type: "camera", cam: v, fit: "contain" } : { type: "camera", cam: v };
-        return { type: v };
-    };
-    const cue = { left: faceOf($("#cue-left"), $("#cue-left-file")), right: faceOf($("#cue-right"), $("#cue-right-file"), true), band: faceOf($("#cue-band"), $("#cue-band-file")), bgm: null, memo: $("#cue-memo").value.slice(0, 1000) };
-    const a = $("#cue-bgm").value;
-    if (a === "play") {
-        const sel = $("#cue-bgm-song");
-        if (!sel.value) throw new Error("鳴らす曲を選んでください");
-        cue.bgm = { action: "play", path: sel.value, name: sel.options[sel.selectedIndex].text.slice(0, 300), loop: $("#cue-bgm-loop").checked };
-    } else if (a) cue.bgm = { action: a };
-    if ($("#cue-duck").value) cue.duck = $("#cue-duck").value === "on";
-    const old = script().rows[selectedRow].cue;
-    // 左右・帯を指定せず、前から「プレビューの画面」を持っているキューは、その画面を残す
-    if (old && old.scene && !cue.left && !cue.right && !cue.band) cue.scene = old.scene;
-    return cue;
+function onEditorClick(e) {
+    const b = e.target.closest("[data-ed]");
+    if (!b) return;
+    const v = b.dataset.v;
+    switch (b.dataset.ed) {
+        case "left": edMutate(c => { c.left = v ? { type: v } : null; }, true); break;
+        case "leftfile": edMutate(c => { c.left = { type: "slide", file: v }; }, true); break;
+        case "right": edMutate(c => {
+            c.right = !v ? null : /^cam/.test(v) ? ($("#ed-fit").checked ? { type: "camera", cam: v, fit: "contain" } : { type: "camera", cam: v }) : { type: v };
+        }, true); break;
+        case "bgm": edMutate(c => { c.bgm = v ? { action: v } : null; }); break;
+        case "song": edMutate(c => { c.bgm = { action: "play", path: v, name: b.dataset.name.slice(0, 300), loop: $("#ed-loop").checked }; }); break;
+        case "duck": edMutate(c => { if (v) c.duck = v === "on"; else delete c.duck; }); break;
+        case "pickall": edPickAll = true; edKey = ""; renderEditor(); break;
+        case "del": edMutate(c => { c.left = c.right = c.band = c.bgm = null; delete c.scene; delete c.duck; }); break;
+        case "scene": edMutate(c => { c.scene = clone(pvw); }); break;
+        case "mv": moveManual(Number(v)); break;
+        case "rowdel": deleteManual(); break;
+    }
 }
 
-async function saveCue() {
-    let cue;
-    try { cue = readCueForm(); } catch (e) { return showError(e.message); }
-    if (!(await scEdit([{ op: "cue", row: selectedRow, cue }]))) return;
-    editorRow = -2;
-    showInfo("キューを付けました");
+async function moveManual(d) {
+    const i = selRow();
+    if (await scEdit([{ op: "moveRow", row: i, dir: d }])) { script().pos = Math.max(0, i + d); lastSel = -2; scEditQuiet([{ op: "pos", pos: script().pos }]); }
+}
+async function deleteManual() {
+    const i = selRow();
+    const r = script().rows[i];
+    if (!r || !confirm(`「${r.title}」の行を消しますか？`)) return;
+    await scEdit([{ op: "deleteRow", row: i }]);
 }
 
-async function cueFromPreview() {
-    const r = script().rows[selectedRow];
+// ---- 「当日に選ぶ」：サムネイルのグリッドから1クリック ----
+let pickRowIndex = -1;
+function openPick(i) {
+    const it = itemOf(i);
+    if (!it || !it.pick) return;
+    pickRowIndex = i;
+    if (selRow() !== i) setSel(i);
+    $("#pick-grid").innerHTML = slideThumbs(it.pick, it.cue && it.cue.left && it.cue.left.type === "slide" ? it.cue.left.file : "").replace(/data-ed="leftfile" data-v=/g, 'data-pickfile=');
+    $("#sc-pick").classList.remove("hidden");
+}
+function closePick() { $("#sc-pick").classList.add("hidden"); pickRowIndex = -1; }
+async function applyPick(file) {
+    const i = pickRowIndex;
+    closePick();
+    const r = script().rows[i];
     if (!r) return;
-    const cue = { scene: clone(pvw), bgm: r.cue ? r.cue.bgm || null : null, memo: r.cue ? r.cue.memo || "" : "" };
-    try { const f = readCueForm(); if (f.bgm) cue.bgm = f.bgm; } catch (e) { /* 曲の選び途中などは、前のBGMのまま */ }
-    if (await scEdit([{ op: "cue", row: selectedRow, cue }])) { editorRow = -2; showInfo("いまのプレビューの画面を、キューにしました"); }
+    if (selRow() !== i) setSel(i);
+    await edMutate(c => { c.left = { type: "slide", file }; }, true);
 }
 
-function testCueInPreview() {
-    const r = script().rows[selectedRow];
-    let cue = r && r.cue;
-    if (!cue) { try { cue = readCueForm(); } catch (e) { return showError(e.message); } }
-    pvw = SC.buildScene(cue, state.program, logos());
-    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
-    pvwChanged({ noAuto: true });
+async function clearSectionCues() {
+    const sc = script();
+    const sec = sc.sections[curSheet];
+    if (!sec) return showError("シートを選んでください");
+    if (!confirm(`「${sec.name}」のキューを全部消しますか？（台本の文字は消えません）`)) return;
+    if (await scEdit([{ op: "clearSection", sec: curSheet }])) showInfo(`「${sec.name}」のキューを消しました`);
 }
 
 async function addManualCue() {
     const name = prompt("手動の式次第に足すキューの名前（いまのプレビューの画面を使います）", "");
     if (name === null) return;
     if (!name.trim()) return showError("名前を入れてください");
-    if (await scEdit([{ op: "addManual", title: name.trim().slice(0, 300), cue: { scene: clone(pvw), bgm: null, memo: "" } }])) {
-        selectedRow = script().rows.findIndex((r, i) => script().sections[r.sec].manual && r.title === name.trim() && i >= 0) ;
-        showInfo("手動の式次第に追加しました");
-    }
+    if (await scEdit([{ op: "addManual", title: name.trim().slice(0, 300), cue: { scene: clone(pvw), bgm: null, memo: "" } }])) showInfo("手動の式次第に追加しました");
 }
 
-async function clearSectionCues() {
-    const sc = script();
-    const ref = sc.rows[selectedRow >= 0 ? selectedRow : sc.pos];
-    if (!ref) return showError("セクションの中の行を選んでください（読み位置か、クリックした行のセクションが対象です）");
-    const name = sc.sections[ref.sec].name;
-    if (!confirm(`「${name}」のキューを全部消しますか？（台本の文字は消えません）`)) return;
-    if (await scEdit([{ op: "clearSection", sec: ref.sec }])) showInfo(`「${name}」のキューを消しました`);
+function setScMode(mode) {
+    scMode = mode;
+    writeLocal(SC_MODE_KEY, mode);
+    scListKey = "";
+    lastPvwKey = "";
+    renderScript();
+    renderMarks({ scroll: true });
 }
 
 function bindScript() {
-    $$("#sc-mode button").forEach(b => b.addEventListener("click", () => setScMode(b.dataset.scmode)));
+    $("#sc-edit-toggle").addEventListener("click", () => setScMode(scMode === "edit" ? "live" : "edit"));
+    $("#sc-showall").addEventListener("change", e => { scShowAll = e.target.checked; writeLocal(SC_ALL_KEY, scShowAll); scListKey = ""; renderScript(); });
+    $("#sc-sheets").addEventListener("click", e => {
+        const b = e.target.closest("[data-sheet]");
+        if (!b) return;
+        curSheet = Number(b.dataset.sheet);
+        const first = view.items.find(x => !x.chapter && x.shown && x.sec === curSheet);
+        if (first) setSel(first.i); else { scListKey = ""; renderScript(); }
+    });
+    $("#btn-sc-take").addEventListener("click", scTake);
     $("#btn-sc-next").addEventListener("click", scNext);
     $("#btn-sc-prev").addEventListener("click", scPrev);
-    $("#btn-read-up").addEventListener("click", () => moveReadPos(-1));
-    $("#btn-read-down").addEventListener("click", () => moveReadPos(1));
-    $("#sc-jump").addEventListener("change", e => { if (e.target.value !== "") jumpToRow(Number(e.target.value)); });
+    $("#sc-card-body").addEventListener("click", e => { const p = e.target.closest("[data-pick]"); if (p) openPick(Number(p.dataset.pick)); });
 
     $("#btn-sc-file").addEventListener("click", () => $("#sc-file").click());
     $("#sc-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; uploadScript(f); });
@@ -1259,61 +1375,29 @@ function bindScript() {
     $("#btn-sc-clear-sec").addEventListener("click", clearSectionCues);
     $("#btn-sc-add-manual").addEventListener("click", addManualCue);
 
-    const list = $("#sc-list");
-    list.addEventListener("click", e => {
+    // 一覧：クリック＝選ぶ（PREVIEWに即セット）、ダブルクリック＝すぐ出す
+    const onList = e => {
         const ad = e.target.closest("[data-adopt]");
         if (ad) return adoptSuggestions([Number(ad.dataset.adopt)]);
-        const sec = e.target.closest(".sc-sec");
-        if (sec) return jumpToRow(Number(sec.dataset.first));
-        const row = e.target.closest(".sc-row");
-        if (row && scMode === "edit") {
-            selectedRow = Number(row.dataset.i);
-            editorRow = -2;
-            const r = script().rows[selectedRow];
-            if (r.cue && state) { pvw = SC.buildScene(r.cue, state.program, logos()); pvwChanged({ noAuto: true }); }
-            renderCueEditor();
-        }
+        const p = e.target.closest("[data-pick]");
+        const row = e.target.closest(".cr");
+        if (!row) return;
+        setSel(Number(row.dataset.i));
+        if (p && scMode === "live") openPick(Number(row.dataset.i));
+    };
+    $("#sc-list").addEventListener("click", onList);
+    $("#sc-elist").addEventListener("click", onList);
+    $("#sc-list").addEventListener("dblclick", e => {
+        if (e.target.closest("[data-pick]")) return;
+        if (e.target.closest(".cr")) scTake();
     });
-    list.addEventListener("dblclick", e => {
-        if (e.target.closest("[data-adopt]") || e.target.closest(".sc-sec")) return;
-        const row = e.target.closest(".sc-row");
-        if (row) fireRow(Number(row.dataset.i));
+    $("#sc-editor").addEventListener("click", onEditorClick);
+    $("#sc-editor").addEventListener("change", e => {
+        if (e.target.id === "ed-fit") edMutate(c => { if (c.right && c.right.type === "camera") { if (e.target.checked) c.right.fit = "contain"; else delete c.right.fit; } }, true);
+        else if (e.target.id === "ed-loop") edMutate(c => { if (c.bgm && c.bgm.action === "play") c.bgm.loop = e.target.checked; });
     });
-
-    // キューの編集
-    ["left", "right", "band"].forEach(k => $(`#cue-${k}`).addEventListener("change", e => {
-        $(`#cue-${k}-file`).classList.toggle("hidden", e.target.value !== "slide");
-        if (k === "right") $("#cue-right-fit").classList.toggle("hidden", !/^cam/.test(e.target.value));
-    }));
-    $("#cue-bgm").addEventListener("change", e => {
-        $("#cue-bgm-song").classList.toggle("hidden", e.target.value !== "play");
-        $("#cue-bgm-loop-wrap").classList.toggle("hidden", e.target.value !== "play");
-        if (e.target.value === "play" && $("#cue-bgm-song").options.length <= 1) fillSongSelect($("#cue-bgm-song"), "");
-    });
-    $("#btn-cue-save").addEventListener("click", saveCue);
-    $("#cue-pick-note").addEventListener("click", e => {
-        if (!e.target.closest("#btn-pick-all")) return;
-        const cur = $("#cue-left-file").value;
-        editorPick = "";
-        fillFileSelect($("#cue-left-file"), cur, "");
-        showPickNote();
-    });
-    $("#btn-cue-from-pvw").addEventListener("click", cueFromPreview);
-    $("#btn-cue-test").addEventListener("click", testCueInPreview);
-    $("#btn-cue-del").addEventListener("click", async () => {
-        if (selectedRow < 0) return;
-        if (await scEdit([{ op: "cue", row: selectedRow, cue: null }])) { editorRow = -2; showInfo("キューを外しました"); }
-    });
-    $$("[data-row-move]").forEach(b => b.addEventListener("click", async () => {
-        const d = Number(b.dataset.rowMove);
-        if (selectedRow < 0) return;
-        if (await scEdit([{ op: "moveRow", row: selectedRow, dir: d }])) { selectedRow = Math.max(0, selectedRow + d); editorRow = -2; scListKey = ""; renderScript(); }
-    }));
-    $("#btn-row-del").addEventListener("click", async () => {
-        const r = script().rows[selectedRow];
-        if (!r || !confirm(`「${r.title}」の行を消しますか？`)) return;
-        if (await scEdit([{ op: "deleteRow", row: selectedRow }])) { selectedRow = -1; editorRow = -2; }
-    });
+    $("#btn-pick-close").addEventListener("click", closePick);
+    $("#pick-grid").addEventListener("click", e => { const b = e.target.closest("[data-pickfile]"); if (b) applyPick(b.dataset.pickfile); });
 }
 
 // --------------------------------------------------------------------------
@@ -1725,8 +1809,15 @@ function bindEvents() {
     document.addEventListener("keydown", e => {
         const tag = document.activeElement ? document.activeElement.tagName : "";
         if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
-        if (e.code === "Space") { e.preventDefault(); doTake(); }
-        else if (currentTab === "script" && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); moveReadPos(e.key === "ArrowDown" ? 1 : -1); }
+        if (e.code === "Space" || (e.key === "Enter" && currentTab === "script")) { e.preventDefault(); doTake(); }
+        else if (currentTab === "script") {
+            const k = e.key;
+            if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); moveSel(k === "ArrowDown" ? 1 : -1); }
+            else if (k === "ArrowRight") { e.preventDefault(); scNext(); }
+            else if (k === "ArrowLeft") { e.preventDefault(); scPrev(); }
+            else if (k === "b" || k === "B") control("black");
+            else if (k === "l" || k === "L") control("futa");
+        }
     });
 
     $("#pvw-frame").addEventListener("load", postPvw);

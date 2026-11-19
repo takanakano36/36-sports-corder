@@ -13,12 +13,10 @@
     <span class="conn" id="conn">接続中…</span>
     <div class="top-actions">
         <div class="obs-box" title="OBSに表示画面を入れるときに使います（最初の1回だけ）。OBSのキャンバスは 3840×1080（SDI 1本のときは 1920×1080）にします">
-            <span class="obs-label">OBSに入れる</span>
             <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
             <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
         </div>
         <div class="obs-box" title="確認用に表示画面をこのPCで開きます。本番のHDMI出力はデスクトップの「野球ビジョン HDMI出力」を使います">
-            <span class="obs-label">表示画面を開く</span>
             <button type="button" class="btn small" data-open="all">全体</button>
             <button type="button" class="btn small" data-open="left">左</button>
             <button type="button" class="btn small" data-open="right">右</button>
@@ -268,85 +266,53 @@
             </div>
         </div>
 
-        <!-- 台本（読み込み・キューのひもづけ・本番） -->
+        <!-- 台本：本番（キュー一覧）と編集 -->
         <div class="tab-body hidden" id="tab-script">
-            <div class="sc-bar">
-                <div class="seg seg-sm" id="sc-mode">
-                    <button type="button" data-scmode="edit" title="台本を読み込み、各行にキュー（出すもの）をひもづけます">編集</button>
-                    <button type="button" data-scmode="live" title="台本を読み上げながら、NEXT でスライドとBGMを出します（編集の画面は隠れます）">本番</button>
-                </div>
-                <button type="button" class="btn next sc-big" id="btn-sc-prev" title="1つ前のキューを出し直します（BGMは鳴らし直しません）">◀ PREV</button>
-                <button type="button" class="btn next sc-big" id="btn-sc-next" title="読み位置より後で最初のキューを、本線に出します">NEXT ▶</button>
-                <button type="button" class="btn sc-big" id="btn-read-up" title="読み位置を1行上へ（キーボード ↑）">読み位置 ↑</button>
-                <button type="button" class="btn sc-big" id="btn-read-down" title="読み位置を1行下へ（キーボード ↓）">読み位置 ↓</button>
-                <select id="sc-jump" class="text-input sc-jump" title="セクションの先頭へ読み位置を移します"></select>
+            <div class="sc-top">
+                <div class="sc-sheets" id="sc-sheets"></div>
+                <label class="sc-allrows" title="キューの無い行も一覧に出します"><input type="checkbox" id="sc-showall"> 全行</label>
+                <button type="button" class="btn small" id="sc-edit-toggle" title="台本の読み込み・キューの編集と、本番の画面を切り替えます">編集</button>
             </div>
-            <div class="sc-edit-only" id="sc-edit-tools">
-                <div class="dropzone" id="sc-drop">
-                    台本の Excel（.xlsx）をここにドロップ、または
+
+            <!-- 本番 -->
+            <div class="sc-view" id="sc-live-view">
+                <div class="sc-card" id="sc-card">
+                    <button type="button" class="btn sc-step" id="btn-sc-prev" title="1つ前のキューを出し直します（BGMは鳴らし直しません）  ←キー">◀</button>
+                    <div class="sc-card-body" id="sc-card-body"></div>
+                    <button type="button" class="btn sc-take" id="btn-sc-take" title="選んだキューを本線に出します（BGMも動きます）  Space / Enter">TAKE</button>
+                    <button type="button" class="btn sc-step" id="btn-sc-next" title="いま出している次のキューを、すぐ本線に出します  →キー">NEXT ▶</button>
+                </div>
+                <div class="cr-list" id="sc-list"></div>
+            </div>
+
+            <!-- 編集 -->
+            <div class="sc-view hidden" id="sc-edit-view">
+                <div class="dropzone sc-drop" id="sc-drop" title="台本の Excel（.xlsx）をドロップ。.csv / .tsv と、貼り付けも使えます">
+                    台本の Excel をここにドロップ
                     <button type="button" class="btn small go" id="btn-sc-file">ファイルを選ぶ</button>
-                    <button type="button" class="btn small" id="btn-sc-paste-toggle">貼り付けで読み込む</button>
+                    <button type="button" class="btn small" id="btn-sc-paste-toggle">貼り付け</button>
                     <input type="file" id="sc-file" accept=".xlsx,.csv,.tsv,.txt" hidden>
+                    <button type="button" class="btn small go" id="btn-sc-adopt-all" title="薄く出ている提案を、すべて採用します">✓ 提案をすべて採用</button>
+                    <button type="button" class="btn small danger" id="btn-sc-clear-sec" title="このシートのキューを全部消します（台本の文字は消えません）">キューを全部消す</button>
+                    <button type="button" class="btn small" id="btn-sc-add-manual" title="いまのPREVIEWの画面を、「手動の式次第」に1行足します">＋ 手動の行</button>
+                    <span class="note" id="sc-summary"></span>
                     <div class="sub-box hidden" id="sc-paste-box">
-                        <textarea id="sc-paste" class="text-input" rows="5" placeholder="Excel でセルをコピーして貼り付け（タブ区切り。1行目は見出し）"></textarea>
-                        <button type="button" class="btn small go" id="btn-sc-paste">この内容を読み込む</button>
+                        <textarea id="sc-paste" class="text-input" rows="4" placeholder="Excel でセルをコピーして貼り付け（1行目は見出し）"></textarea>
+                        <button type="button" class="btn small go" id="btn-sc-paste">読み込む</button>
                     </div>
                 </div>
-                <div class="ctrl-row wrap">
-                    <button type="button" class="btn small go" id="btn-sc-adopt-all" title="薄く出ている提案を、キューのない行すべてに採用します">提案をすべて採用</button>
-                    <button type="button" class="btn small danger" id="btn-sc-clear-sec" title="読み位置のあるセクションのキューを全部消します">このセクションのキューを全部消す</button>
-                    <button type="button" class="btn small" id="btn-sc-add-manual" title="いまのPREVIEWの画面を、「手動の式次第」に1行足します">＋ いまのプレビューを手動の式次第に追加</button>
-                    <span class="note" id="sc-summary"></span>
-                </div>
+                <div class="panel hidden" id="sc-import"></div>
                 <div class="panel sc-lost hidden" id="sc-lost"></div>
+                <div class="sc-edit-grid">
+                    <div class="cr-list" id="sc-elist"></div>
+                    <div class="panel sc-editor" id="sc-editor"></div>
+                </div>
             </div>
-            <div class="panel hidden" id="sc-import"></div>
-            <div class="sc-list" id="sc-list"></div>
-            <div class="panel sc-edit-only hidden" id="sc-editor">
-                <h2>選んだ行のキュー <small id="sc-editor-title"></small></h2>
-                <div class="sc-grid">
-                    <label>左面
-                        <select id="cue-left" class="text-input">
-                            <option value="">変えない</option><option value="slide">スライド</option><option value="futa">左フタ</option><option value="black">黒</option>
-                        </select>
-                        <select id="cue-left-file" class="text-input hidden"></select>
-                        <span class="note hidden" id="cue-pick-note"></span>
-                    </label>
-                    <label>右面
-                        <select id="cue-right" class="text-input">
-                            <option value="">変えない</option><option value="cam1">カメラ1</option><option value="cam2">カメラ2</option><option value="slide">スライド</option><option value="black">黒</option>
-                        </select>
-                        <select id="cue-right-file" class="text-input hidden"></select>
-                        <select id="cue-right-fit" class="text-input hidden" title="960×686 の面に 16:9 のカメラを入れるときの収め方"><option value="cover">切り取って全面</option><option value="contain">16:9のまま（上下黒）</option></select>
-                    </label>
-                    <label>帯全体（左右より優先）
-                        <select id="cue-band" class="text-input">
-                            <option value="">使わない</option><option value="futa">全面フタ</option><option value="slide">スライド（1920×帯）</option>
-                        </select>
-                        <select id="cue-band-file" class="text-input hidden"></select>
-                    </label>
-                    <label>BGMの音量
-                        <select id="cue-duck" class="text-input"><option value="">変えない</option><option value="on">小さく</option><option value="off">小さくを戻す</option></select>
-                    </label>
-                    <label>BGM
-                        <select id="cue-bgm" class="text-input">
-                            <option value="">変えない</option><option value="play">曲を鳴らす</option><option value="fade">フェードアウト</option><option value="stop">すぐ止める</option>
-                        </select>
-                        <select id="cue-bgm-song" class="text-input hidden"></select>
-                        <label class="toggle hidden" id="cue-bgm-loop-wrap"><input type="checkbox" id="cue-bgm-loop"> くり返し</label>
-                    </label>
-                </div>
-                <label class="field">メモ <input type="text" id="cue-memo" class="text-input" maxlength="1000" placeholder="きっかけなど（任意）"></label>
-                <div class="ctrl-row wrap">
-                    <button type="button" class="btn small go" id="btn-cue-save">この内容でキューを付ける</button>
-                    <button type="button" class="btn small" id="btn-cue-from-pvw" title="左右・帯の指定のかわりに、いまのPREVIEWの画面をそのまま使います（選手スライドや文字なども可）">いまのプレビューの画面を使う</button>
-                    <button type="button" class="btn small" id="btn-cue-test" title="この行のキューの画面をPREVIEWに出します">プレビューで確かめる</button>
-                    <button type="button" class="btn small danger" id="btn-cue-del">キューを外す</button>
-                    <span class="spacer"></span>
-                    <button type="button" class="btn small" data-row-move="-1" title="手動の式次第の行だけ">▲</button>
-                    <button type="button" class="btn small" data-row-move="1">▼</button>
-                    <button type="button" class="btn small danger" id="btn-row-del">行を消す</button>
-                </div>
+
+            <!-- 「当日に選ぶ」：サムネイルから1クリック -->
+            <div class="sc-pick hidden" id="sc-pick">
+                <button type="button" class="btn small sc-pick-close" id="btn-pick-close" title="閉じる">✕</button>
+                <div class="pick-grid" id="pick-grid"></div>
             </div>
         </div>
 
