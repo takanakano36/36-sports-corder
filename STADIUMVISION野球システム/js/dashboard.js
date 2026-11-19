@@ -1088,7 +1088,7 @@ function renderLost(lost) {
 }
 
 // ---- 選んだ行のキューの編集 ----
-// folder を渡すと、そのフォルダの中のスライドだけに絞る（例：選手/ガッツ・黒潮連合チーム/）
+// folder を渡すと、そのフォルダの中のスライドだけに絞る（例：選手/テストチームA/）
 function fillFileSelect(sel, value, folder) {
     const nf = folder ? SC.normPath(folder) : "";
     const opts = slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && (!nf || SC.normPath(s.path).includes(nf))).map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides\//, ""))}</option>`).join("");
