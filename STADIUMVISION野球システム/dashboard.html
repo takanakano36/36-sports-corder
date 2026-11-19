@@ -9,28 +9,18 @@
 </head>
 <body>
 <header class="topbar">
-    <h1>スタジアムビジョン野球 <small id="hdr-sub">32:9（FHD×2）管理画面</small></h1>
+    <h1>スタジアムビジョン野球 <small id="hdr-sub">1920×686（守山）</small></h1>
     <span class="conn" id="conn">接続中…</span>
     <div class="top-actions">
-        <div class="obs-box" title="OBSに表示画面を入れるときに使います（最初の1回だけ）。OBSのキャンバスは 3840×1080（SDI 1本のときは 1920×1080）にします">
-            <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
-            <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
-        </div>
-        <div class="obs-box" title="確認用に表示画面をこのPCで開きます。本番のHDMI出力はデスクトップの「野球ビジョン HDMI出力」を使います">
-            <button type="button" class="btn small" data-open="all">全体</button>
-            <button type="button" class="btn small" data-open="left">左</button>
-            <button type="button" class="btn small" data-open="right">右</button>
-        </div>
-        <label class="toggle small-toggle" title="ビジョンの左右2画面の境目に赤い線を出します（設置・調整用）"><input type="checkbox" id="opt-guide"> 境目の線</label>
-        <button type="button" id="sd-badge" class="btn small sd-badge" title="Stream Deck の接続（設定タブ）">SD 未接続</button>
-        <button type="button" id="btn-futa-left" class="btn btn-futa" title="左面だけロゴ（フタ）を本線に出します。もう一度押すと直前の画面に戻ります">左フタ</button>
+        <button type="button" id="sd-badge" class="btn small sd-badge" title="Stream Deck の接続（⚙の設定）">SD 未接続</button>
+        <button type="button" id="btn-futa-left" class="btn btn-futa" title="左面だけロゴ（フタ）を本線に出します。もう一度押すと直前の画面に戻ります（Lキー）">左フタ</button>
         <button type="button" id="btn-futa-full" class="btn btn-futa" title="帯全体にロゴ（全面フタ）を本線に出します。もう一度押すと直前の画面に戻ります">全面フタ</button>
-        <button type="button" id="btn-black" class="btn btn-black" title="ビジョンを黒にします。もう一度押すと元に戻ります">BLACK</button>
+        <button type="button" id="btn-black" class="btn btn-black" title="ビジョンを黒にします。もう一度押すと元に戻ります（Bキー）">BLACK</button>
+        <button type="button" id="btn-settings" class="btn btn-gear" title="設定（出力の形・カメラ・フタの画像・Stream Deck など）">⚙</button>
     </div>
 </header>
 
-
-<!-- 音楽バー：このPCで曲を鳴らす（どのタブを開いていても、下にスクロールしても、画面の一番上に残る） -->
+<!-- 音楽バー：このPCで曲を鳴らす -->
 <div class="musicbar" id="musicbar">
     <div class="mb-ctrl">
         <span class="mb-title">♪ 音楽</span>
@@ -64,265 +54,104 @@
 <div class="toast" id="toast"></div>
 
 <main class="layout">
-    <!-- ===== 左列：プレビュー・本線と画面の組み立て ===== -->
-    <section class="col">
-        <div class="panel mon-panel">
-            <h2><span class="tally pvw">PREVIEW</span> 次に出す画面 <small id="pvw-desc"></small></h2>
-            <div class="monitor-wrap">
-                <div class="monitor pvw" id="pvw-monitor" title="枠をクリックで選択。選んだ枠はドラッグでトリミング位置、マウスホイールで拡大・縮小">
-                    <iframe id="pvw-frame" title="プレビュー" tabindex="-1"></iframe>
-                    <div class="slot-overlay" id="slot-overlay"></div>
-                </div>
-            </div>
-        </div>
-
-        <div class="panel ctrl-panel">
-            <div class="ctrl-row">
-                <span class="lbl">レイアウト</span>
-                <div class="seg" id="layout-seg">
-                    <button type="button" data-layout="wide">32:9 一枚</button>
-                    <button type="button" data-layout="split">16:9 左右2枚</button>
-                    <button type="button" data-layout="single">16:9 1枚（位置指定）</button>
-                </div>
-            </div>
-            <div class="ctrl-row" id="single-pos">
-                <span class="lbl">16:9の位置</span>
-                <div class="seg seg-sm">
-                    <button type="button" data-singlex="0">左</button>
-                    <button type="button" data-singlex="50">中央</button>
-                    <button type="button" data-singlex="100">右</button>
-                </div>
-                <input type="range" id="single-x" min="0" max="100" step="1" class="range">
-                <span id="single-x-val" class="ow"></span>
-            </div>
-            <div class="ctrl-row">
-                <span class="lbl">出す枠</span>
-                <div class="seg seg-sm" id="slot-seg"></div>
-                <button type="button" class="btn small" id="btn-swap" title="左と右の中身（トリミング位置も）を入れ替えます。例：左カメラ・右スライド ⇄ 左スライド・右カメラ">⇄ 左右入れ替え</button>
-                <span class="slot-src" id="slot-src"></span>
-            </div>
-            <div class="ctrl-row crop-row" id="crop-row">
-                <span class="lbl">トリミング</span>
-                <div class="seg seg-sm" id="fit-seg">
-                    <button type="button" data-fit="cover" title="枠いっぱいに出し、はみ出た所を切り取る">枠いっぱい</button>
-                    <button type="button" data-fit="contain" title="素材の全体を出す（すき間は黒）">全体を出す</button>
-                </div>
-                <span class="crop-field">上下
-                    <span class="seg seg-xs"><button type="button" data-posy="0">上</button><button type="button" data-posy="50">中</button><button type="button" data-posy="100">下</button></span>
-                    <input type="range" id="crop-posY" min="0" max="100" step="0.5" class="range">
-                    <input type="number" id="crop-posY-num" class="num-input sm" min="0" max="100" step="0.5">
-                </span>
-                <span class="crop-field">左右
-                    <input type="range" id="crop-posX" min="0" max="100" step="0.5" class="range">
-                    <input type="number" id="crop-posX-num" class="num-input sm" min="0" max="100" step="0.5">
-                </span>
-                <span class="crop-field">拡大
-                    <input type="range" id="crop-zoom" min="100" max="300" step="1" class="range">
-                    <input type="number" id="crop-zoom-num" class="num-input sm" min="100" max="400" step="1">%
-                </span>
-                <button type="button" class="btn small" id="btn-crop-reset">元に戻す</button>
-                <label class="toggle" title="プレビューと本線に同じ素材が出ているとき、位置の調整をそのまま本線にも反映します"><input type="checkbox" id="opt-live-crop"> 本線にもすぐ反映</label>
-            </div>
-        </div>
-
-        <div class="panel take-bar">
-            <div class="seg seg-sm" id="trans-seg">
-                <button type="button" data-trans="cut">CUT</button>
-                <button type="button" data-trans="fade">FADE</button>
-            </div>
-            <label class="toggle">時間 <input type="number" id="trans-ms" class="num-input sm" min="0" max="5000" step="100"> ミリ秒</label>
-            <button type="button" class="btn" id="btn-pgm-to-pvw" title="いま本線に出ている画面をプレビューに読み込みます">本線をプレビューへ</button>
-            <label class="toggle" title="プレビューを使わず、操作したらすぐビジョンに出します"><input type="checkbox" id="opt-auto-take"> 操作したらすぐ本線へ</label>
-            <button type="button" class="btn take" id="btn-take">TAKE <small>Space</small></button>
-        </div>
-
-        <div class="panel mon-panel">
-            <h2><span class="tally pgm">ON AIR</span> いまビジョンに出ている画面 <span class="black-flag" id="pgm-black-flag">BLACK中</span> <small id="pgm-desc"></small></h2>
-            <div class="monitor-wrap">
-                <div class="monitor pgm"><iframe id="pgm-frame" title="本線" tabindex="-1"></iframe></div>
-            </div>
+    <!-- ===== 左：シーン ===== -->
+    <section class="panel sc-panel">
+        <div class="ph">シーン <small>クリック＝PREVIEW　ダブルクリック＝出す</small></div>
+        <div class="sc-list" id="sc-list"></div>
+        <div class="sc-foot">
+            <button type="button" class="ib" id="btn-sc-add" title="新しいシーンを足します（レイヤーは空）">＋</button>
+            <button type="button" class="ib" id="btn-sc-dup" title="選んでいるシーンを複製します">複製</button>
+            <button type="button" class="ib" id="btn-sc-del" title="選んでいるシーンを消します">－</button>
+            <button type="button" class="ib wide" id="btn-sc-script" title="台本（Excel）を読み込んで、シーンを作ります">台本から作る</button>
         </div>
     </section>
 
-    <!-- ===== 右列：素材・選手・式次第・設定 ===== -->
-    <section class="col">
-        <nav class="tabs side-tabs" id="tabs">
-            <button type="button" data-tab="media" class="on">素材</button>
-            <button type="button" data-tab="players">選手</button>
-            <button type="button" data-tab="script">台本</button>
-            <button type="button" data-tab="settings">設定</button>
-        </nav>
-
-        <!-- 素材 -->
-        <div class="tab-body" id="tab-media">
-            <div class="panel">
-                <h2>カメラ・その他 <small>押すと「出す枠」に入ります</small></h2>
-                <div class="quick-sources">
-                    <button type="button" data-src='{"type":"camera","cam":"cam1"}'>📹 カメラ1</button>
-                    <button type="button" data-src='{"type":"camera","cam":"cam2"}'>📹 カメラ2</button>
-                    <button type="button" data-src='{"type":"black"}'>■ 黒</button>
-                    <button type="button" data-src='{"type":"test"}'>▦ テスト画面</button>
-                    <button type="button" data-box="text-box">Ｔ 文字</button>
-                    <button type="button" data-box="url-box">🔗 URL</button>
-                </div>
-                <div class="sub-box hidden" id="text-box">
-                    <input type="text" id="text-title" class="text-input" maxlength="200" placeholder="タイトル（例：開会式）">
-                    <input type="text" id="text-sub" class="text-input" maxlength="300" placeholder="サブタイトル（なくてもよい）">
-                    <div class="ctrl-row">
-                        <label class="toggle">背景 <input type="color" id="text-bg" value="#0b1220"></label>
-                        <label class="toggle">文字 <input type="color" id="text-fg" value="#ffffff"></label>
-                        <button type="button" class="btn small go" id="btn-text">枠に入れる</button>
-                    </div>
-                </div>
-                <div class="sub-box hidden" id="url-box">
-                    <input type="text" id="url-input" class="text-input" placeholder="画像のURL、または GoogleスライドのURL">
-                    <button type="button" class="btn small go" id="btn-url">枠に入れる</button>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>スライド <small>クリックで「出す枠」へ／ダブルクリックでそのままTAKE</small></h2>
-                <div class="dropzone" id="slide-drop">
-                    画像・動画をここにドロップすると slides フォルダに登録します
-                    <div class="ctrl-row">
-                        <input type="text" id="upload-folder" class="text-input" maxlength="40" placeholder="分類（例：開会式）。空なら slides の直下" list="slide-folders">
-                        <datalist id="slide-folders"></datalist>
-                        <button type="button" class="btn small" id="btn-slide-file">ファイルを選ぶ</button>
-                        <input type="file" id="slide-file" accept="image/*,video/mp4,video/webm,.m4v" multiple hidden>
-                    </div>
-                </div>
-                <div class="lib-toolbar">
-                    <div class="chips" id="slide-folder-chips"></div>
-                    <input type="search" id="slide-search" class="text-input sm" placeholder="さがす">
-                    <button type="button" class="btn small" id="btn-slide-reload" title="slides フォルダにファイルを足したときに押します">⟳ 読み直す</button>
-                </div>
-                <label class="toggle"><input type="checkbox" id="opt-auto-layout" checked> 横長（32:9・帯の形）のスライドは自動で「一枚」にする</label>
-                <div class="library" id="slide-library"></div>
+    <!-- ===== 中央：PREVIEW／TAKE／PROGRAM ===== -->
+    <section class="center">
+        <div class="mon-head"><span class="tally pvw">PREVIEW</span><b id="pvw-name"></b><small>枠をドラッグで移動・角で大きさ</small></div>
+        <div class="monitor-wrap">
+            <div class="monitor pvw" id="pvw-monitor" title="選んでいるレイヤーの枠をドラッグで移動・角で大きさ（左半分・右半分・全面・中央16:9に吸着します）">
+                <iframe id="pvw-frame" title="プレビュー" tabindex="-1"></iframe>
+                <div class="ov" id="ov"></div>
             </div>
         </div>
+        <div class="take-row">
+            <button type="button" class="pill" id="btn-cut" title="切り替えをすぐ切り替えにします">CUT</button>
+            <span class="pill fade" id="btn-fade" title="切り替えをフェードにします（数字は秒）"><span id="fade-label">FADE</span> <input type="number" id="fade-sec" min="0" max="5" step="0.1">秒</span>
+            <button type="button" class="take" id="btn-take" title="PREVIEW のシーンを本線に出します（Space／Enter）">TAKE ▶</button>
+            <button type="button" class="pill" id="btn-nextsc" title="いま出しているシーンの次を PREVIEW に入れます（↓キー）">次のシーン ▼</button>
+        </div>
+        <div class="mon-head"><span class="tally pgm">PROGRAM</span><b id="pgm-name"></b><span class="black-flag" id="pgm-black-flag">BLACK中</span></div>
+        <div class="monitor-wrap">
+            <div class="monitor pgm"><iframe id="pgm-frame" title="本線" tabindex="-1"></iframe></div>
+        </div>
+    </section>
 
-        <!-- 選手 -->
-        <div class="tab-body hidden" id="tab-players">
-            <div class="panel">
-                <div class="ctrl-row">
-                    <div class="seg seg-sm" id="team-filter">
-                        <button type="button" data-team="HOME" class="on">HOME</button>
-                        <button type="button" data-team="AWAY">AWAY</button>
-                        <button type="button" data-team="">全員</button>
-                    </div>
-                    <input type="search" id="player-search" class="text-input sm" placeholder="背番号・名前でさがす">
-                    <button type="button" class="btn small" id="btn-roster">名簿CSVを読み込む</button>
-                    <input type="file" id="roster-file" accept=".csv,.txt" hidden>
-                </div>
-                <div class="player-list" id="player-list"></div>
-            </div>
+    <!-- ===== 右：レイヤー ===== -->
+    <section class="panel ly-panel">
+        <div class="ph">レイヤー <small id="ly-scene">—</small></div>
+        <div class="ly-list" id="ly-list"></div>
+        <div class="ly-detail" id="ly-detail"></div>
+        <div class="sec">選んだレイヤーの置き場所</div>
+        <div class="grid2" id="ly-preset">
+            <button type="button" data-preset="left">左半分</button><button type="button" data-preset="right">右半分</button>
+            <button type="button" data-preset="full">全面</button><button type="button" data-preset="center">中央 16:9</button>
+        </div>
+        <div class="sec">レイヤーを足す</div>
+        <div class="grid3" id="ly-add">
+            <button type="button" data-add="image">🖼 画像</button><button type="button" data-add="camera">📹 カメラ</button><button type="button" data-add="color">■ 色</button>
+            <button type="button" data-add="text">Ａ 文字</button><button type="button" data-add="logo">ロゴ</button><button type="button" data-add="video">動画</button>
+        </div>
+        <div class="sec">このシーンの音 <small id="sn-now"></small></div>
+        <div class="grid3" id="sn-sound">
+            <button type="button" data-snd="none">変えない</button><button type="button" data-snd="song">♪ 曲を選ぶ</button><button type="button" data-snd="fade">フェード</button>
+            <button type="button" data-snd="stop">停止</button><button type="button" data-snd="duck">小さく</button><button type="button" data-snd="unduck">戻す</button>
+        </div>
+        <div class="sn-songs hidden" id="sn-songs"></div>
+        <label class="sn-loop hidden" id="sn-loop-wrap"><input type="checkbox" id="sn-loop"> くり返し</label>
+    </section>
+</main>
 
-            <div class="panel">
-                <div class="pa-player" id="pa-player">選手を選んでください</div>
-                <div class="pa-grid">
-                    <button type="button" class="btn big go" data-card="atbat">打席（NOW BATTING）</button>
-                    <button type="button" class="btn big hr" data-card="hr">HR競争</button>
-                    <button type="button" class="btn big sub" data-card="sub" data-label="代打">代打</button>
-                    <button type="button" class="btn big sub" data-card="sub" data-label="代走">代走</button>
-                    <button type="button" class="btn big sub" data-card="sub" data-label="守備交代">守備交代</button>
-                    <button type="button" class="btn big sub" data-card="sub" data-label="投手交代">投手交代</button>
-                </div>
-                <label class="field">交代で退く選手
-                    <select id="pa-out" class="text-input"><option value="">（出さない）</option></select>
-                </label>
-                <label class="field">見出しを変える
-                    <input type="text" id="pa-label" class="text-input" maxlength="60" placeholder="空なら自動（例：NOW BATTING）">
-                </label>
-                <div class="ctrl-row wrap">
-                    <label class="toggle"><input type="checkbox" id="opt-player-take" checked> すぐTAKE</label>
-                    <label class="toggle"><input type="checkbox" id="opt-player-music" checked> 登場曲を鳴らす</label>
-                    <label class="toggle"><input type="checkbox" id="opt-player-slide" checked> 作ったスライドがあれば使う</label>
-                    <label class="toggle"><input type="checkbox" id="opt-player-stats" checked> 成績を出す</label>
-                    <label class="toggle"><input type="checkbox" id="opt-player-comment"> コメントを出す</label>
-                </div>
-            </div>
+<!-- 右クリックのメニュー -->
+<div class="ctx hidden" id="ctx"></div>
 
-            <div class="panel">
-                <h2>HR競争カウンター <small>ビジョンに出したまま数字だけ変わります</small></h2>
-                <div class="derby">
-                    <b class="derby-count" id="derby-count">0</b>
-                    <button type="button" class="btn big hr" data-derby="1">＋1本</button>
-                    <button type="button" class="btn" data-derby="-1">−1</button>
-                    <span class="derby-outs">アウト
-                        <button type="button" class="btn small" data-derby-out="-1">−</button>
-                        <b class="ow" id="derby-outs">0</b>
-                        <button type="button" class="btn small" data-derby-out="1">＋</button>
-                    </span>
-                    <button type="button" class="btn small danger" data-derby="reset">リセット</button>
-                </div>
-            </div>
+<!-- 画像・動画を選ぶ -->
+<dialog class="dlg dlg-picker" id="dlg-picker">
+    <div class="dlg-head"><b id="pick-title">画像を選ぶ</b><span class="spacer"></span>
+        <button type="button" class="btn small" id="pick-upload" title="画像・動画を slides フォルダに足します">ファイルを足す</button>
+        <input type="file" id="pick-file" accept="image/*,video/mp4,video/webm,.m4v" multiple hidden>
+        <button type="button" class="btn small" id="pick-reload" title="slides フォルダにファイルを足したときに押します">⟳ 読み直す</button>
+        <button type="button" class="btn" id="pick-close" autofocus>閉じる</button></div>
+    <div class="pick-tabs" id="pick-tabs"></div>
+    <div class="pick-grid" id="pick-grid"></div>
+</dialog>
 
-            <div class="panel">
-                <h2>スタメン <small>打順の入った選手を一覧で出します</small></h2>
-                <div class="ctrl-row">
-                    <button type="button" class="btn" data-lineup="HOME">HOME を枠に入れる</button>
-                    <button type="button" class="btn" data-lineup="AWAY">AWAY を枠に入れる</button>
-                </div>
+<!-- 台本から作る -->
+<dialog class="dlg dlg-script" id="dlg-script">
+    <div class="dlg-head"><b>台本から作る</b><span class="spacer"></span><button type="button" class="btn" id="script-close">閉じる</button></div>
+    <div class="dlg-body">
+        <div class="dropzone" id="sc-drop" title="台本の Excel（.xlsx）をドロップ。.csv / .tsv と、貼り付けも使えます">
+            台本の Excel をここにドロップ
+            <button type="button" class="btn small go" id="btn-sc-file">ファイルを選ぶ</button>
+            <button type="button" class="btn small" id="btn-sc-paste-toggle">貼り付け</button>
+            <input type="file" id="sc-file" accept=".xlsx,.csv,.tsv,.txt" hidden>
+            <div class="sub-box hidden" id="sc-paste-box">
+                <textarea id="sc-paste" class="text-input" rows="4" placeholder="Excel でセルをコピーして貼り付け（1行目は見出し）"></textarea>
+                <button type="button" class="btn small go" id="btn-sc-paste">読み込む</button>
             </div>
         </div>
+        <p class="note">キューの付く行（スライド・曲・カメラが変わる行）ごとに、シーンを作ります。読み直すと、番号が同じシーンのうち、手で直していないものだけ更新します。</p>
+        <label class="toggle" title="「当日に選ぶ」の行（選手のスライドなど）が、同じフォルダのまま続くときは、1つのシーンにまとめます（例：打者1の「呼び込み」「競技」「終了」）"><input type="checkbox" id="opt-merge-picks" checked> 「当日に選ぶ」の行は、同じフォルダが続くとき1つのシーンにまとめる</label>
+        <div class="panel hidden" id="sc-import"></div>
+        <div class="panel hidden" id="sc-result"></div>
+    </div>
+</dialog>
 
-        <!-- 台本：本番（キュー一覧）と編集 -->
-        <div class="tab-body hidden" id="tab-script">
-            <div class="sc-top">
-                <div class="sc-sheets" id="sc-sheets"></div>
-                <button type="button" class="btn small" id="sc-adhoc" title="キューは変えずに、画像を選んで PREVIEW にだけ入れます（その場の差し込み用）。TAKE で出せます">素材から出す</button>
-                <button type="button" class="sc-missing hidden" id="sc-missing"></button>
-                <label class="sc-allrows" title="キューの無い行も一覧に出します"><input type="checkbox" id="sc-showall"> 全行</label>
-                <button type="button" class="btn small" id="sc-edit-toggle" title="台本の読み込み・キューの編集と、本番の画面を切り替えます">編集</button>
-            </div>
-
-            <!-- 本番 -->
-            <div class="sc-view" id="sc-live-view">
-                <div class="sc-banner hidden" id="sc-banner"></div>
-                <div class="sc-card" id="sc-card">
-                    <button type="button" class="btn sc-step" id="btn-sc-prev" title="1つ前のキューを出し直します（BGMは鳴らし直しません）  ←キー">◀</button>
-                    <div class="sc-card-body" id="sc-card-body"></div>
-                    <button type="button" class="btn sc-step" id="btn-sc-next" title="いま出している次のキューを、すぐ本線に出します  →キー">NEXT ▶</button>
-                </div>
-                <div class="cr-list" id="sc-list"></div>
-                <div class="sc-guide">クリック＝選ぶ（PREVIEWに入る）　スペース／TAKE＝ビジョンに出す　→＝次を出す</div>
-            </div>
-
-            <!-- 編集 -->
-            <div class="sc-missing-pop hidden" id="sc-missing-pop"></div>
-            <div class="sc-view hidden" id="sc-edit-view">
-                <div class="dropzone sc-drop" id="sc-drop" title="台本の Excel（.xlsx）をドロップ。.csv / .tsv と、貼り付けも使えます">
-                    台本の Excel をここにドロップ
-                    <button type="button" class="btn small go" id="btn-sc-file">ファイルを選ぶ</button>
-                    <button type="button" class="btn small" id="btn-sc-paste-toggle">貼り付け</button>
-                    <input type="file" id="sc-file" accept=".xlsx,.csv,.tsv,.txt" hidden>
-                    <button type="button" class="btn small go" id="btn-sc-adopt-all" title="薄く出ている提案を、すべて採用します">✓ 提案をすべて採用</button>
-                    <button type="button" class="btn small danger" id="btn-sc-clear-sec" title="このシートのキューを全部消します（台本の文字は消えません）">キューを全部消す</button>
-                    <button type="button" class="btn small" id="btn-sc-add-manual" title="いまのPREVIEWの画面を、「手動の式次第」に1行足します">＋ 手動の行</button>
-                    <span class="note" id="sc-summary"></span>
-                    <div class="sub-box hidden" id="sc-paste-box">
-                        <textarea id="sc-paste" class="text-input" rows="4" placeholder="Excel でセルをコピーして貼り付け（1行目は見出し）"></textarea>
-                        <button type="button" class="btn small go" id="btn-sc-paste">読み込む</button>
-                    </div>
-                </div>
-                <div class="panel hidden" id="sc-import"></div>
-                <div class="panel sc-lost hidden" id="sc-lost"></div>
-                <div class="sc-edit-grid">
-                    <div class="cr-list" id="sc-elist"></div>
-                    <div class="panel sc-editor" id="sc-editor"></div>
-                </div>
-            </div>
-                <!-- 左を選ぶ・当日に選ぶ・素材から出す：一覧の位置に入れ替えて出す -->
-            <div class="panel sc-pick hidden" id="sc-pick">
-                <div class="sc-pick-head"><b id="sc-pick-title"></b><button type="button" class="btn big" id="btn-pick-close" title="閉じる（Escキー）">閉じる</button></div>
-                <div class="pick-quick" id="pick-quick"></div>
-                <div class="pick-tabs" id="pick-tabs"></div>
-                <div class="pick-grid big" id="pick-grid"></div>
-            </div>
-        </div>
-
-        <!-- 設定 -->
-        <div class="tab-body hidden" id="tab-settings">
+<!-- 設定 -->
+<dialog class="dlg dlg-settings" id="dlg-settings">
+    <div class="dlg-head"><b>設定</b><span class="spacer"></span><button type="button" class="btn" id="settings-close">閉じる</button></div>
+    <div class="dlg-body set-cols">
+        <div class="set-col">
             <div class="panel">
                 <h2>出力の形</h2>
                 <div class="seg" id="out-mode-seg">
@@ -331,7 +160,6 @@
                     <button type="button" id="btn-preset-moriyama" title="SDI 1本・帯の上端 197・高さ 686（1920×686＝14:5）にします">守山（197／686）</button>
                 </div>
                 <div id="out-sdi-box" class="hidden">
-                    <p class="note">ビジョン側のスケーラーが「横100%・上下トリミング」のとき用です。1920×1080 の中で、ビジョンに映る帯（下の上端・高さ）だけに素材を並べます。帯の外は黒になります。</p>
                     <div class="ctrl-row">
                         <span class="lbl">LEDの大きさ</span>
                         <input type="number" id="out-led-w" class="num-input sm" value="488" min="1"> ×
@@ -346,47 +174,57 @@
                         <button type="button" class="btn small" id="btn-band-center">上下の中央に置く</button>
                     </div>
                     <p class="note" id="out-band-info"></p>
-                    <p class="note">合わせ方：素材タブの「▦ テスト画面」をビジョンに出し、緑の枠がビジョンの四辺にぴったり合うように上端・高さを直します。
-                        PCの解像度は 1920×1080、コンバーター（CRO-H2SC）は EDID「0（SDI OUT）」か「5（1920×1080）」にします。</p>
+                </div>
+                <div class="ctrl-row">
+                    <button type="button" class="btn small" id="btn-test-pattern" title="テスト画面を本線に出します。緑の枠がビジョンの四辺にぴったり合うように、帯の上端・高さを直します。もう一度押すと元の画面に戻ります">▦ テスト画面を本線に出す／戻す</button>
+                    <label class="toggle" title="ビジョンの左右2画面の境目に赤い線を出します（設置・調整用）"><input type="checkbox" id="opt-guide"> 境目の線</label>
                 </div>
             </div>
             <div class="panel">
                 <h2>カメラ（キャプチャーボード）</h2>
                 <button type="button" class="btn small" id="btn-devices">カメラの一覧を出す（最初の1回は許可が必要）</button>
-                <label class="field">カメラ1 <select id="cam1-select" class="text-input" data-cam="cam1"></select></label>
+                <label class="field">カメラ1（遊撃） <select id="cam1-select" class="text-input" data-cam="cam1"></select></label>
                 <label class="field">カメラ2 <select id="cam2-select" class="text-input" data-cam="cam2"></select></label>
                 <label class="toggle"><input type="checkbox" id="opt-monitor-cam"> 管理画面のプレビューにもカメラを映す</label>
-                <p class="note">I-O DATA などのUSBキャプチャーボードは、別々のブラウザ（管理画面とビジョン出力）から同時に開けないことがあります。
-                    そのため、初めはプレビューにカメラを映さない設定にしています（プレビューには「📹 カメラ1」とだけ出ます）。
-                    同時に開けることを確かめてから、チェックを入れてください。</p>
+                <p class="note">USBキャプチャーボードは、別々のブラウザ（管理画面とビジョン出力）から同時に開けないことがあります。同時に開けることを確かめてからチェックを入れてください。</p>
             </div>
             <div class="panel">
-                <h2>チーム</h2>
-                <div class="team-row" data-team="HOME">
-                    <b>HOME</b>
-                    <input type="text" class="text-input" data-k="name" maxlength="60" placeholder="表示名">
-                    <input type="color" data-k="color">
-                    <input type="text" class="text-input" data-k="photoTeam" maxlength="100" placeholder="写真フォルダ名" list="photo-teams">
-                </div>
-                <div class="team-row" data-team="AWAY">
-                    <b>AWAY</b>
-                    <input type="text" class="text-input" data-k="name" maxlength="60" placeholder="表示名">
-                    <input type="color" data-k="color">
-                    <input type="text" class="text-input" data-k="photoTeam" maxlength="100" placeholder="写真フォルダ名" list="photo-teams">
-                </div>
-                <datalist id="photo-teams"></datalist>
-                <p class="note">
-                    顔写真：<code>photos/写真フォルダ名/player/背番号.jpg</code><br>
-                    作った選手スライド：<code>players/写真フォルダ名/背番号.png</code><br>
-                    登場曲：<code>music/登場曲/写真フォルダ名/背番号.mp3</code>（名簿CSVの「登場曲」列で指定も可）<br>
-                    写真フォルダ名が空のときは、表示名 → HOME/AWAY の順で探します。
-                </p>
-            </div>
-            <div class="panel">
-                <h2>フタ（ロゴ画面） <small>上の「左フタ」「全面フタ」ボタンで本線に出します</small></h2>
+                <h2>フタ（ロゴ画面）</h2>
                 <label class="field">左フタの画像（960×686） <select id="futa-left" class="text-input"></select></label>
                 <label class="field">全面フタの画像（1920×686） <select id="futa-full" class="text-input"></select></label>
                 <p class="note" id="futa-info"></p>
+            </div>
+            <div class="panel">
+                <h2>操作</h2>
+                <label class="toggle" title="PREVIEW と本線に同じシーンが出ているとき、シーンを直したらそのまま本線にも反映します（ふだんは TAKE で反映）"><input type="checkbox" id="opt-live-program"> 本線に出ているシーンを直したら、すぐ本線にも反映する</label>
+                <div class="ctrl-row">
+                    <span class="lbl">HR競争カウンター</span>
+                    <b class="derby-count" id="derby-count">0</b>
+                    <button type="button" class="btn hr" data-derby="1">＋1本</button>
+                    <button type="button" class="btn small" data-derby="-1">−1</button>
+                    <span class="derby-outs">アウト
+                        <button type="button" class="btn small" data-derby-out="-1">−</button>
+                        <b class="ow" id="derby-outs">0</b>
+                        <button type="button" class="btn small" data-derby-out="1">＋</button>
+                    </span>
+                    <button type="button" class="btn small danger" data-derby="reset">リセット</button>
+                </div>
+                <p class="note">文字のレイヤーに <code>{HR}</code> と書くと、この本数の数字に置き換わります。</p>
+            </div>
+        </div>
+        <div class="set-col">
+            <div class="panel">
+                <h2>OBS・確認用の表示</h2>
+                <div class="ctrl-row" title="OBSに表示画面を入れるときに使います（最初の1回だけ）">
+                    <a id="obs-drag" class="btn obs-drag" draggable="true">⠿ OBSへドラッグ</a>
+                    <button type="button" id="btn-copy-url" class="btn">アドレスをコピー</button>
+                </div>
+                <div class="ctrl-row" title="確認用に表示画面をこのPCで開きます。本番のHDMI出力はデスクトップの「野球ビジョン HDMI出力」を使います">
+                    <span class="lbl">確認用に開く</span>
+                    <button type="button" class="btn small" data-open="all">全体</button>
+                    <button type="button" class="btn small" data-open="left">左</button>
+                    <button type="button" class="btn small" data-open="right">右</button>
+                </div>
             </div>
             <div class="panel" id="sd-panel">
                 <h2>Stream Deck（USBで直接つなぐ） <small id="sd-state">未接続</small></h2>
@@ -398,7 +236,7 @@
                     <button type="button" class="btn small" data-sd-shift="1">位置ずれ ＋</button>
                     <label class="toggle">明るさ <input type="range" id="sd-bright" min="10" max="100" step="5" class="range"></label>
                 </div>
-                <p class="note" id="sd-info">Chrome か Edge で開くと、Stream Deck をUSBでつなぐだけで使えます（Elgato のアプリは閉じておきます）。初めてのときは「接続」ボタンを押して機器を選びます。</p>
+                <p class="note" id="sd-info">Chrome か Edge で開くと、Stream Deck をUSBでつなぐだけで使えます（Elgato のアプリは閉じておきます）。</p>
                 <div class="ctrl-row">
                     <span class="lbl">キー配置の見本</span>
                     <select id="sd-preview-count" class="text-input sm">
@@ -406,33 +244,34 @@
                     </select>
                 </div>
                 <div class="sd-keys" id="sd-keys"></div>
-                <h2 class="sd-sub">BGMキューに割り当てる曲 <small>空欄は音楽バーの並び順どおり</small></h2>
+                <h2 class="sd-sub">BGMキーに割り当てる曲 <small>空欄は音楽バーの並び順どおり</small></h2>
                 <div class="sd-bgm" id="sd-bgm"></div>
             </div>
             <div class="panel">
                 <h2>Stream Deck などから操作（HTTP）</h2>
                 <pre class="api-list">http://localhost:3007/api/control?action=操作名&amp;val=値
 
-take            プレビューを本線へ（管理画面を開いておく）
-swap            左右2分割の左と右を入れ替え（プレビュー）
-next / prev     台本の次のキューへ／前のキューへ
-cue&amp;val=3      キュー付きの行の3番目
-futa            左フタ（ロゴ）のオン・オフ
-futaFull        全面フタのオン・オフ
-readNext / readPrev  台本の読み位置を1行下／上（管理画面を開いておく）
+take            PREVIEW のシーンを本線へ（管理画面を開いておく）
+next / prev     台本の流れの次のシーンを出す／前のシーンを出し直す
+cue&amp;val=3      流れの3番目のシーン
+swap            PREVIEW のシーンの左と右を入れ替え
+futa / futaFull 左フタ／全面フタのオン・オフ
+readNext / readPrev  PREVIEW を1つ下／上のシーンへ（管理画面を開いておく）
 black           BLACK（val=on / off、省略で切り替え）
 cut / fade      切り替え方
 derby&amp;val=1    HR +1（-1 / reset）
 derbyOut&amp;val=1 HR競争のアウト +1（-1）
 musicPlay&amp;val=01_入場曲.mp3   曲を鳴らす（music/ からの場所）
 musicStop       音楽を止める（音楽バーのフェード秒数で）
-musicFade       音楽をフェードアウト</pre>
+musicFade       音楽をフェードアウト
+musicDuck       BGMを小さく／戻す（val=on / off）</pre>
             </div>
         </div>
-    </section>
-</main>
+    </div>
+</dialog>
 
 <script src="lib/script_core.js"></script>
+<script src="lib/scene_core.js"></script>
 <script src="js/common_admin.js"></script>
 <script src="js/streamdeck.js"></script>
 <script src="js/music_admin.js"></script>

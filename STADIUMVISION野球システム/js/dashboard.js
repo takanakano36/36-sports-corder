@@ -1,53 +1,29 @@
 /* ==========================================================================
-   スタジアムビジョン野球システム - 管理画面
-   - プレビュー（次に出す画面）を組み立てて、TAKE で本線（ビジョン）へ出す
-   - 素材（スライド・カメラ・文字）／選手紹介／式次第／設定
-   - 音楽は music_admin.js の音楽バー（得点板システムと同じもの）で鳴らす
-     登場曲・式次第の曲も、音楽バーの音量・フェード・出力先で鳴る
-   - 画面の表示は、サーバーから届いた状態(/events)をもとに更新する
+   スタジアムビジョン野球システム - 管理画面（OBS型：シーン＋レイヤー）
+   - 左：シーン（クリック＝PREVIEW、ダブルクリック＝本線へ）／中央：PREVIEW・TAKE・PROGRAM／右：レイヤー
+   - シーン ＝ レイヤー（画像・カメラ・色・文字・ロゴ・動画）を下から重ねたもの。位置・大きさは帯に対する割合
+   - PREVIEW で直したシーンは、すぐ保存される。TAKE で本線（PROGRAM）に出す（本線はシーンのコピー）
+   - 音楽は music_admin.js の音楽バーで鳴らす。シーンの「音」（曲・フェード・停止・小さく）は TAKE のときに動く
+   - 台本（Excel）は［台本から作る］でシーンにする。設定は ⚙ のダイアログ
    ========================================================================== */
 
-const LAYOUT_SLOTS = { wide: ["wide"], split: ["left", "right"], single: ["single", "bg"] };
-const SLOT_NAMES_WIDE = { wide: "全面 32:9", left: "左 16:9", right: "右 16:9", single: "16:9の枠", bg: "背景 32:9" };
-const SLOT_NAMES_SDI = { wide: "全面（帯）", left: "左半分", right: "右半分", single: "16:9の枠", bg: "背景（帯）" };
-const LAYOUT_NAMES_WIDE = { wide: "32:9 一枚", split: "16:9 左右2枚", single: "16:9 1枚（位置指定）" };
-const LAYOUT_NAMES_SDI = { wide: "帯 一枚", split: "左右に2分割", single: "16:9 1枚（位置指定）" };
-// 出力の形（設定タブ）。sdi = 1920×1080 で出し、ビジョンに映る帯だけを使う
-function isSdi() { return !!(state && state.output && state.output.mode === "sdi"); }
-function slotNames() { return isSdi() ? SLOT_NAMES_SDI : SLOT_NAMES_WIDE; }
-function layoutNames() { return isSdi() ? LAYOUT_NAMES_SDI : LAYOUT_NAMES_WIDE; }
-// ステージ（素材を並べる面）の大きさ
-function stageSize() { return isSdi() ? { w: 1920, h: state.output.bandH } : { w: 3840, h: 1080 }; }
-const CROP_KEYS = ["fit", "posX", "posY", "zoom"];
-const MEDIA_TYPES = ["slide", "url", "camera"];   // トリミングできる素材
-const TEAMS = ["HOME", "AWAY"];
+const SCN = SceneCore;
+const SC = ScriptCore;
+const ALWAYS = SCN.ALWAYS_GROUP;
 const PREF_KEY = "stadiumvision-baseball.prefs";
+const PREF_CHECKS = ["opt-live-program", "opt-monitor-cam"];
 // OBSに入れる表示画面のアドレス（layer-width / layer-height は、OBSにドラッグしたときのブラウザソースの大きさ）
 // camera=obs：カメラの枠を透明にする（キャプチャーボードはOBSの「映像キャプチャデバイス」で下に敷く）
 function obsUrl() { return `${location.origin}/vision.html?camera=obs&layer-width=${isSdi() ? 1920 : 3840}&layer-height=1080`; }
-const PVW_KEY = "stadiumvision-baseball.preview";
 
 let state = null;
-let pvw = readLocal(PVW_KEY, null) || emptyScene();
-let selectedSlot = LAYOUT_SLOTS[pvw.layout] ? LAYOUT_SLOTS[pvw.layout][0] : "wide";
 let slides = [];
-let slideFolder = "";
-const aspectMap = {};      // スライドの場所 → 横÷縦
-let playerMedia = [];
-let walkups = [];
-let teamFilter = "HOME";
-let selectedPlayer = -1;
+let slidesVer = 0;
+const aspectMap = {};          // スライドの場所 → 横÷縦
 let videoDevices = [];
-let lastRosterKey = "";
-
-function emptyScene() {
-    // 守山の既定：左右2分割で、右面は遊撃カメラ（cam1）
-    return {
-        layout: "split",
-        slots: { wide: { type: "black" }, left: { type: "black" }, right: { type: "camera", cam: "cam1" }, single: { type: "black" }, bg: { type: "black" } },
-        singleX: 50
-    };
-}
+const layerSel = {};           // シーンの番号 → 選んでいるレイヤーの番号
+let renaming = "";             // 名前を直しているシーンの番号
+let pvwKey = "";
 
 // --------------------------------------------------------------------------
 // このPCに覚えさせる設定（チェックボックスなど）
@@ -58,7 +34,6 @@ function readLocal(key, def) {
 function writeLocal(key, v) {
     try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { console.warn("設定を保存できませんでした", e); }
 }
-const PREF_CHECKS = ["opt-live-crop", "opt-auto-take", "opt-auto-layout", "opt-player-take", "opt-player-music", "opt-player-slide", "opt-player-stats", "opt-player-comment", "opt-monitor-cam"];
 function savePrefs() {
     const p = {};
     PREF_CHECKS.forEach(id => { p[id] = $("#" + id).checked; });
@@ -96,72 +71,69 @@ async function patch(changes) {
         const body = await res.json();
         if (!res.ok) {
             showError(`反映できませんでした：${body.error}`);
-            renderFromState();
+            return false;
         }
-        return res.ok;
+        return true;
     } catch (e) {
         showError(SERVER_NG);
         return false;
     }
 }
 
-// ドラッグ中など連続で変わるときは、本線への送信を間引く
-let pendingProgram = null;
-let programTimer = null;
-function patchProgramThrottled(program) {
-    pendingProgram = program;
-    if (programTimer) return;
-    programTimer = setTimeout(() => {
-        programTimer = null;
-        const p = pendingProgram;
-        pendingProgram = null;
-        if (p) patch({ program: p });
-    }, 80);
+// シーンの編集は、手元の state をすぐ変えて画面を更新し、少しまとめてからサーバーへ保存する（ドラッグ中も間引く）
+let saveTimer = null;
+let savePending = 0;
+let saveChain = Promise.resolve(true);
+const saveKeys = new Set();
+const saving = () => !!saveTimer || savePending > 0 || saveKeys.size > 0;
+
+function queueSave(keys, delay) {
+    keys.forEach(k => saveKeys.add(k));
+    if (saveTimer) return;
+    saveTimer = setTimeout(flushSave, delay === undefined ? 90 : delay);
+}
+function flushSave() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (!saveKeys.size || !state) return saveChain;
+    const body = {};
+    saveKeys.forEach(k => { body[k] = state[k]; });
+    saveKeys.clear();
+    // 本線に出ているシーンを直したら、設定によっては本線にもすぐ反映
+    const cur = body.scenes && byId(state.preview);
+    if (cur && $("#opt-live-program").checked && state.program.sceneId === cur.id && !state.futa.active) {
+        body.program = SCN.programFromScene(cur, logos());
+    }
+    savePending++;
+    saveChain = saveChain.then(() => patch(body)).finally(() => { savePending--; });
+    return saveChain;
 }
 
 // --------------------------------------------------------------------------
-// 説明の文字
+// 状態の読み出し
 // --------------------------------------------------------------------------
+const scenes = () => (state ? state.scenes : []);
+const byId = id => scenes().find(s => s.id === id) || null;
+const curScene = () => (state ? byId(state.preview) : null);
+const stage = () => SCN.stageOf(state && state.output);
+const isSdi = () => !!(state && state.output && state.output.mode === "sdi");
+const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
 const baseName = p => String(p || "").split("/").pop();
 const mediaUrl = p => String(p).split("/").map(encodeURIComponent).join("/");
+const thumbUrl = p => `${mediaUrl(p)}?v=${slidesVer}`;
+const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
+const orderIds = () => (state ? state.sceneOrder : []);
+const flowIndexOf = id => SCN.flowIds(state).indexOf(id);
 
-function contentKey(src) {
-    if (!src) return "none";
-    const o = {};
-    Object.keys(src).sort().forEach(k => { if (!CROP_KEYS.includes(k)) o[k] = src[k]; });
-    return JSON.stringify(o);
-}
-
-function describeSrc(src) {
-    if (!src) return "—";
-    switch (src.type) {
-        case "slide": return "🖼 " + baseName(src.file);
-        case "url": return "🔗 URL";
-        case "camera": return "📹 カメラ" + (src.cam === "cam2" ? "2" : "1");
-        case "player": {
-            const p = src.player || {};
-            const kind = { atbat: "打席", sub: src.label || "交代", hr: "HR競争" }[src.card] || "選手";
-            return `👤 ${kind} #${p.number || ""} ${p.name || ""}`;
-        }
-        case "lineup": return "📋 スタメン " + (src.team || "");
-        case "text": return "Ｔ " + (src.title || "");
-        case "test": return "▦ テスト画面";
-        case "color": return "■ " + src.color;
-        default: return "■ 黒";
-    }
-}
-
-function describeScene(scene) {
-    if (!scene) return "";
-    const s = scene.slots || {};
-    const n = layoutNames();
-    if (scene.layout === "split") return `${n.split} ／ 左：${describeSrc(s.left)} ／ 右：${describeSrc(s.right)}`;
-    if (scene.layout === "single") return `16:9 1枚（位置 ${Math.round(scene.singleX)}）／ ${describeSrc(s.single)} ／ 背景：${describeSrc(s.bg)}`;
-    return `${n.wide} ／ ${describeSrc(s.wide)}`;
+function curLayer() {
+    const sc = curScene();
+    if (!sc || !sc.layers.length) return null;
+    const id = layerSel[sc.id];
+    return sc.layers.find(l => l.id === id) || sc.layers[sc.layers.length - 1];
 }
 
 // --------------------------------------------------------------------------
-// プレビュー（次に出す画面）
+// モニター（PREVIEW は管理画面から送る／PROGRAM は表示画面が自分でサーバーから受け取る）
 // --------------------------------------------------------------------------
 function monitorUrl(mode) {
     return `vision.html?monitor=${mode}${$("#opt-monitor-cam").checked ? "" : "&nocam=1"}`;
@@ -172,363 +144,865 @@ function reloadMonitors() {
 }
 function postPvw() {
     const f = $("#pvw-frame");
-    if (f.contentWindow) f.contentWindow.postMessage({ type: "preview-scene", scene: pvw }, location.origin);
+    const sc = curScene();
+    const scene = sc ? SCN.programFromScene(sc, logos()) : { sceneId: "", name: "", layers: [] };
+    if (f.contentWindow) f.contentWindow.postMessage({ type: "preview-scene", scene }, location.origin);
 }
 
-let autoTakeTimer = null;
-function pvwChanged(opts = {}) {
-    writeLocal(PVW_KEY, pvw);
-    postPvw();
-    renderControls();
-    renderOverlay();
-    renderLibraryMarks();
-    if ($("#opt-auto-take").checked && !opts.noAuto) {
-        clearTimeout(autoTakeTimer);
-        autoTakeTimer = setTimeout(doTake, 60);
-    }
-}
-
-function setLayout(layout) {
-    pvw.layout = layout;
-    if (!LAYOUT_SLOTS[layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[layout][0];
-    pvwChanged();
-}
-
-function setSingleX(x) {
-    pvw.singleX = Math.max(0, Math.min(100, Number(x)));
-    pvw.layout = "single";
-    if (!LAYOUT_SLOTS.single.includes(selectedSlot)) selectedSlot = "single";
-    liveAdjust(prog => { prog.singleX = pvw.singleX; }, false);
-    pvwChanged();
-}
-
-// 左右2分割の左と右を入れ替える（素材とトリミング位置をそのまま交換。選んでいる枠は同じ素材を追いかける）
-function swapSides() {
-    if (pvw.layout !== "split") return;
-    const l = pvw.slots.left;
-    pvw.slots.left = pvw.slots.right;
-    pvw.slots.right = l;
-    if (selectedSlot === "left" || selectedSlot === "right") selectedSlot = selectedSlot === "left" ? "right" : "left";
-    pvwChanged();
-}
-
-function selectSlot(slot) {
-    selectedSlot = slot;
-    renderControls();
-    renderOverlay();
-}
-
-const curSrc = () => pvw.slots[selectedSlot] || { type: "black" };
-
-function pickCrop(src) {
-    const o = {};
-    CROP_KEYS.forEach(k => { if (src[k] !== undefined) o[k] = src[k]; });
-    return o;
-}
-
-function setCrop(key, val) {
-    const src = curSrc();
-    if (!MEDIA_TYPES.includes(src.type)) return;
-    if (key !== "fit") {
-        val = Number(val);
-        if (!isFinite(val)) return;
-        val = key === "zoom" ? Math.max(100, Math.min(400, val)) : Math.max(0, Math.min(100, val));
-    }
-    src[key] = val;
-    liveAdjust(prog => { Object.assign(prog.slots[selectedSlot], pickCrop(src)); }, true);
-    pvwChanged();
-}
-
-function resetCrop() {
-    const src = curSrc();
-    CROP_KEYS.forEach(k => delete src[k]);
-    liveAdjust(prog => { CROP_KEYS.forEach(k => delete prog.slots[selectedSlot][k]); }, true);
-    pvwChanged();
-}
-
-// 「本線にもすぐ反映」：プレビューと本線に同じ素材が出ているときだけ、位置の調整を本線にも送る
-function liveAdjust(mutate, slotOnly) {
-    if (!$("#opt-live-crop").checked || $("#opt-auto-take").checked || !state) return;
-    const prog = clone(state.program);
-    if (prog.layout !== pvw.layout) return;
-    const slots = slotOnly ? [selectedSlot] : LAYOUT_SLOTS[pvw.layout];
-    if (slots.some(s => contentKey(prog.slots[s]) !== contentKey(pvw.slots[s]))) return;
-    mutate(prog);
-    state.program = prog;
-    patchProgramThrottled(prog);
-}
-
-function assignSource(src, opts = {}) {
-    src = clone(src);
-    // 横長（32:9・ビジョンの帯の形など）のスライドは「一枚」に自動で切り替える
-    if (!opts.keepLayout && $("#opt-auto-layout").checked && src.type === "slide") {
-        const r = aspectMap[src.file];
-        if (r && r > 2.4 && pvw.layout !== "wide") {
-            pvw.layout = "wide";
-            selectedSlot = "wide";
+// --------------------------------------------------------------------------
+// シーンのサムネイル（帯の形に、レイヤーを重ねて小さく描く）
+// --------------------------------------------------------------------------
+function thumbHtml(sc) {
+    const lg = logos();
+    const parts = [];
+    (sc.layers || []).forEach(l => {
+        if (!l.visible) return;
+        const st = `left:${l.x * 100}%;top:${l.y * 100}%;width:${l.w * 100}%;height:${l.h * 100}%;${l.opacity < 1 ? `opacity:${l.opacity};` : ""}`;
+        switch (l.type) {
+            case "image":
+            case "logo": {
+                const src = l.type === "logo" && !l.src ? (l.logo === "full" ? lg.full : lg.left) : l.src;
+                parts.push(src
+                    ? `<div class="tl" style="${st}"><img src="${thumbUrl(src)}" loading="lazy" alt="" style="object-fit:${l.fit}" onerror="this.remove()"></div>`
+                    : `<div class="tl" style="${st}background:#222"></div>`);
+                break;
+            }
+            case "video": parts.push(`<div class="tl" style="${st}background:#2b1b4e;color:#c4b5fd;font-size:12px">動画</div>`); break;
+            case "camera": parts.push(`<div class="tl tl-camera" style="${st}">CAM</div>`); break;
+            case "color": parts.push(`<div class="tl" style="${st}background:${escapeHtml(l.color)}"></div>`); break;
+            case "text": parts.push(`<div class="tl tl-text" style="${st}">${escapeHtml(oneLine(l.text).slice(0, 24))}</div>`); break;
+            case "test": parts.push(`<div class="tl tl-test" style="${st}"></div>`); break;
         }
-    }
-    // 同じカメラを入れ直したときは、トリミング位置を引き継ぐ
-    const prev = pvw.slots[selectedSlot];
-    if (prev && prev.type === "camera" && src.type === "camera" && prev.cam === src.cam) Object.assign(src, pickCrop(prev));
-    pvw.slots[selectedSlot] = src;
-    pvwChanged();
-}
-
-// --------------------------------------------------------------------------
-// 画面の組み立ての表示
-// --------------------------------------------------------------------------
-function renderControls() {
-    const ln = layoutNames();
-    $$("#layout-seg button").forEach(b => { b.classList.toggle("on", b.dataset.layout === pvw.layout); b.textContent = ln[b.dataset.layout]; });
-    $("#single-pos").classList.toggle("hidden", pvw.layout !== "single");
-    $("#btn-swap").classList.toggle("hidden", pvw.layout !== "split");
-    $("#single-x").value = pvw.singleX;
-    $("#single-x-val").textContent = Math.round(pvw.singleX);
-
-    $("#slot-seg").innerHTML = LAYOUT_SLOTS[pvw.layout]
-        .map(s => `<button type="button" data-slot="${s}" class="${s === selectedSlot ? "on" : ""}">${slotNames()[s]}</button>`).join("");
-    const src = curSrc();
-    $("#slot-src").textContent = describeSrc(src);
-
-    $("#crop-row").classList.toggle("disabled", !MEDIA_TYPES.includes(src.type));
-    const fit = src.fit || "cover";
-    $$("#fit-seg button").forEach(b => b.classList.toggle("on", b.dataset.fit === fit));
-    const vals = { posX: src.posX !== undefined ? src.posX : 50, posY: src.posY !== undefined ? src.posY : 50, zoom: src.zoom || 100 };
-    Object.entries(vals).forEach(([k, v]) => {
-        $(`#crop-${k}`).value = v;
-        if (document.activeElement !== $(`#crop-${k}-num`)) $(`#crop-${k}-num`).value = v;
     });
-    renderMonitorDesc();
-}
-
-function slotRect(scene, slot) {
-    // ステージの幅に対する %
-    if (slot === "left") return { left: 0, width: 50 };
-    if (slot === "right") return { left: 50, width: 50 };
-    if (slot === "single") {
-        // 16:9 の枠（高さいっぱい）。32:9 では半分、SDIの帯では 帯の高さ×16/9
-        const st = stageSize();
-        const w = Math.min(100, st.h * 16 / 9 / st.w * 100);
-        return { left: (100 - w) * scene.singleX / 100, width: w };
+    // 「当日に選ぶ」シーンは、まだ画像を選んでいない間、サムネイルの位置に「＋選ぶ」
+    if (sc.pick && !(sc.layers || []).some(l => l.visible && (l.type === "image" || l.type === "video"))) {
+        parts.push(`<div class="pickmark" data-pick="${escapeHtml(sc.id)}">＋選ぶ</div>`);
     }
-    return { left: 0, width: 100 };
+    return parts.join("");
 }
 
-function renderOverlay() {
-    const ov = $("#slot-overlay");
-    ov.innerHTML = "";
-    // 背景は16:9の枠の下に敷く
-    const order = pvw.layout === "single" ? ["bg", "single"] : LAYOUT_SLOTS[pvw.layout];
-    order.forEach(s => {
-        const r = slotRect(pvw, s);
-        const box = document.createElement("div");
-        box.className = "slot-box" + (s === selectedSlot ? " selected" : "");
-        box.style.left = r.left + "%";
-        box.style.width = r.width + "%";
-        if (s === "bg") box.style.borderStyle = "dotted";
-        box.innerHTML = `<span class="slot-name">${slotNames()[s]}</span>`;
-        box.addEventListener("mousedown", e => onSlotMouseDown(e, s, box));
-        box.addEventListener("wheel", e => onSlotWheel(e, s), { passive: false });
-        ov.appendChild(box);
+function soundBadge(sc) {
+    const b = sc.bgm;
+    const out = [];
+    if (b) out.push(b.action === "play" ? `<span class="badge" title="曲：${escapeHtml(b.name)}${b.loop ? "（くり返し）" : ""}">♪</span>` : b.action === "fade" ? `<span class="badge" title="BGMをフェードアウト">♪↘</span>` : `<span class="badge" title="BGMを止める">■</span>`);
+    if (sc.duck === true) out.push(`<span class="badge" title="BGMを小さくする">小</span>`);
+    else if (sc.duck === false) out.push(`<span class="badge" title="BGMの音量を戻す">戻</span>`);
+    if (sc.warn) out.push(`<span class="badge warn" title="${escapeHtml(sc.warn)}">⚠</span>`);
+    return out.join("");
+}
+
+// --------------------------------------------------------------------------
+// シーンの一覧（左）
+// --------------------------------------------------------------------------
+const sceneEls = new Map();     // シーンの番号 → { el, sig }
+const groupEls = new Map();     // グループ名 → 見出しの要素
+
+function sceneInner(sc) {
+    return `<div class="th">${thumbHtml(sc)}</div>` +
+        (renaming === sc.id
+            ? `<input class="nm-edit" type="text" maxlength="100" value="${escapeHtml(sc.name)}">`
+            : `<div class="nm" title="${escapeHtml(sc.name)}">${escapeHtml(sc.name)}</div>`) +
+        `<div class="badges">${soundBadge(sc)}</div>`;
+}
+
+function renderSceneList() {
+    if (!state) return;
+    const box = $("#sc-list");
+    const lgSig = JSON.stringify(logos()) + "|" + slidesVer + "|" + JSON.stringify(state.output);
+    const nodes = [];
+    let lastGroup = null;
+    const live = new Set();
+    orderIds().forEach(id => {
+        const sc = byId(id);
+        if (!sc) return;
+        live.add(id);
+        if (sc.group !== lastGroup) {
+            lastGroup = sc.group;
+            let g = groupEls.get(sc.group);
+            if (!g) { g = document.createElement("div"); g.className = "grp"; g.textContent = sc.group || "（グループなし）"; g.dataset.group = sc.group; groupEls.set(sc.group, g); }
+            nodes.push(g);
+        }
+        let rec = sceneEls.get(id);
+        if (!rec) {
+            const el = document.createElement("div");
+            el.className = "scene";
+            el.dataset.id = id;
+            el.draggable = true;
+            rec = { el, sig: "" };
+            sceneEls.set(id, rec);
+        }
+        const sig = JSON.stringify([sc.name, sc.layers, sc.bgm, sc.duck, sc.pick, sc.warn]) + lgSig + (renaming === id ? "R" : "");
+        if (rec.sig !== sig) {
+            rec.sig = sig;
+            rec.el.innerHTML = sceneInner(sc);
+            if (renaming === id) { const inp = rec.el.querySelector(".nm-edit"); if (inp) { inp.focus(); inp.select(); } }
+        }
+        nodes.push(rec.el);
+    });
+    [...sceneEls.keys()].forEach(id => { if (!live.has(id)) sceneEls.delete(id); });
+    const used = new Set(nodes.filter(n => n.dataset.group !== undefined).map(n => n.dataset.group));
+    [...groupEls.keys()].forEach(g => { if (!used.has(g)) groupEls.delete(g); });
+    const cur = [...box.children];
+    if (cur.length !== nodes.length || cur.some((c, i) => c !== nodes[i])) {
+        const top = box.scrollTop;
+        box.replaceChildren(...nodes);
+        box.scrollTop = top;
+    }
+    renderSceneMarks();
+}
+
+// 本線＝赤枠、PREVIEW＝緑枠
+function renderSceneMarks() {
+    const pv = state.preview, pg = state.program.sceneId;
+    sceneEls.forEach((rec, id) => {
+        rec.el.classList.toggle("pvw", id === pv);
+        rec.el.classList.toggle("pgm", id === pg);
     });
 }
 
-// プレビューの上でドラッグ ＝ トリミング位置を動かす（素材をつかんで動かす向き）
-function onSlotMouseDown(e, slot, box) {
-    e.preventDefault();
-    if (slot !== selectedSlot) return selectSlot(slot);
-    const src = curSrc();
-    if (!MEDIA_TYPES.includes(src.type)) return;
-    const rect = box.getBoundingClientRect();
-    const sx = e.clientX, sy = e.clientY;
-    const px = src.posX !== undefined ? src.posX : 50;
-    const py = src.posY !== undefined ? src.posY : 50;
-    box.classList.add("dragging");
-    const move = ev => {
-        const dx = (ev.clientX - sx) / rect.width * 100;
-        const dy = (ev.clientY - sy) / rect.height * 100;
-        src.posX = Math.max(0, Math.min(100, Math.round((px - dx * 1.5) * 2) / 2));
-        src.posY = Math.max(0, Math.min(100, Math.round((py - dy * 1.5) * 2) / 2));
-        liveAdjust(prog => { Object.assign(prog.slots[selectedSlot], pickCrop(src)); }, true);
-        pvwChanged();
-    };
-    const up = () => {
-        box.classList.remove("dragging");
-        window.removeEventListener("mousemove", move);
-        window.removeEventListener("mouseup", up);
-    };
-    window.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", up);
+function scrollSceneIntoView() {
+    const rec = sceneEls.get(state.preview);
+    if (rec) rec.el.scrollIntoView({ block: "nearest" });
 }
 
-function onSlotWheel(e, slot) {
-    if (slot !== selectedSlot || !MEDIA_TYPES.includes(curSrc().type)) return;
-    e.preventDefault();
-    setCrop("zoom", (curSrc().zoom || 100) + (e.deltaY < 0 ? 5 : -5));
+// ---- 選ぶ・出す ----
+function selectScene(id, opts = {}) {
+    if (!state || !byId(id)) return;
+    if (state.preview !== id) {
+        state.preview = id;
+        queueSave(["preview"], 120);
+    }
+    renderAll();
+    if (opts.scroll) scrollSceneIntoView();
 }
 
-// --------------------------------------------------------------------------
-// TAKE・BLACK・切り替え方
-// --------------------------------------------------------------------------
+function moveSel(d) {
+    const ids = orderIds();
+    if (!ids.length) return;
+    const i = ids.indexOf(state.preview);
+    const n = ids[Math.max(0, Math.min(ids.length - 1, (i < 0 ? 0 : i + d)))];
+    if (n !== state.preview) selectScene(n, { scroll: true });
+}
+
+// TAKE：PREVIEW のシーンを本線へ（直した内容を保存してから）。BGM などの「音」は、出たときの合図（CUE_FIRED）で動く
 async function doTake() {
-    // 台本タブでは、選んでいるキューを本線へ（BGMも動く）。選択は次のキューへ進む
-    if (adhocActive) { adhocActive = false; lastPvwKey = ""; }      // 「素材から出す」で入れた PREVIEW は、そのまま本線へ
-    else if (currentTab === "script" && script().rows.length) return scTake();
-    const ok = await patch({ program: clone(pvw) });
+    const sc = curScene();
+    if (!sc) return showError("出すシーンがありません。左のシーンを選んでください");
+    await flushSave();
+    const ok = await control("scene", sc.id);
     if (!ok) return;
     const b = $("#btn-take");
     b.classList.remove("flash");
     void b.offsetWidth;
     b.classList.add("flash");
 }
-
-function pgmToPvw() {
-    if (!state) return;
-    pvw = clone(state.program);
-    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
-    pvwChanged({ noAuto: true });
+const scNext = () => control("next");
+const scPrev = () => control("prev");
+function nextSceneToPreview() {
+    const ids = orderIds();
+    const base = state.program.sceneId && ids.includes(state.program.sceneId) ? state.program.sceneId : state.preview;
+    const i = ids.indexOf(base);
+    const n = ids[i + 1];
+    if (!n) return showError("次のシーンがありません");
+    selectScene(n, { scroll: true });
 }
 
-function setTransition(type) {
-    const ms = Math.max(0, Math.min(5000, parseInt($("#trans-ms").value, 10) || 0));
-    patch({ transition: { type, ms } });
+// シーンが出されたとき（このPCのボタン・Stream Deck・HTTP どれでも）：音を動かす
+function onSceneFired(ev) {
+    const sc = byId(ev.sceneId);
+    if (sc && !ev.silent) runSceneAudio(sc);
 }
 
-function openOutput(view) {
-    if (isSdi() && view !== "all") return showError("SDI 1本（1920×1080）で出す設定のため、左右に分けて開けません。「全体」を使ってください");
-    const w = view === "all" ? 1280 : 960;
-    const h = view === "all" ? (isSdi() ? 720 : 360) : 540;
-    window.open(`vision.html?view=${view}`, `sv_baseball_${view}`, `popup=yes,width=${w},height=${h}`);
-    showInfo("確認用の表示画面を開きました。本番は「野球ビジョン HDMI出力」を使ってください（ダブルクリックかFキーで全画面）");
-}
-
-// --------------------------------------------------------------------------
-// サーバーとの接続
-// --------------------------------------------------------------------------
-function connect() {
-    const es = new EventSource("/events");
-    const conn = $("#conn");
-    es.addEventListener("UPDATE_STATE", e => {
-        state = JSON.parse(e.data);
-        conn.textContent = "接続中";
-        conn.className = "conn ok";
-        renderFromState();
-    });
-    es.addEventListener("COMMAND", e => handleCommand(JSON.parse(e.data)));
-    es.addEventListener("CUE_FIRED", e => onCueFired(JSON.parse(e.data)));
-    es.addEventListener("NOTICE", e => showError(JSON.parse(e.data).message));
-    // design_tools で slides が入れ替わった：スライド一覧を読み直す（提案・⚠も追従する）
-    es.addEventListener("SLIDES_CHANGED", () => loadSlides().then(() => showInfo("スライドが入れ替わりました。一覧を読み直しました")).catch(() => {}));
-    es.onerror = () => {
-        conn.textContent = "サーバーにつながっていません";
-        conn.className = "conn ng";
-    };
-}
-
-function handleCommand(cmd) {
-    if (cmd.action === "take") doTake();
-    else if (cmd.action === "swap") swapSides();
-    else if (cmd.action === "musicStop") musicStop();
-    else if (cmd.action === "musicFade") musicFade();
-    else if (cmd.action === "musicDuck") musicDuck(cmd.val);
-    else if (cmd.action === "readNext") moveReadPos(1);
-    else if (cmd.action === "readPrev") moveReadPos(-1);
-    else if (cmd.action === "musicPlay") playMusicPath(cmd.val);
-}
-
-function renderFromState() {
-    if (!state) return;
-    $("#btn-black").classList.toggle("on", state.black);
-    $("#pgm-black-flag").classList.toggle("on", state.black);
-    renderMonitorDesc();
-    $("#opt-guide").checked = state.guide;
-    renderOutput();
-    $$("#trans-seg button").forEach(b => b.classList.toggle("on", b.dataset.trans === state.transition.type));
-    if (document.activeElement !== $("#trans-ms")) $("#trans-ms").value = state.transition.ms;
-    $("#derby-count").textContent = state.derby.count;
-    $("#derby-outs").textContent = state.derby.outs;
-    renderTeams();
-    renderCameraSelects();
-    const rk = JSON.stringify([state.roster, state.teams]);
-    if (rk !== lastRosterKey) { lastRosterKey = rk; renderPlayers(); }
-    renderFuta();
-    refreshSuggestions();
-    renderScript();
-    renderLibraryMarks();
-}
-
-// --------------------------------------------------------------------------
-// スライド（slides フォルダ）
-// --------------------------------------------------------------------------
-async function loadSlides() {
-    const res = await fetch("/api/slides");
-    if (!res.ok) throw new Error("スライドの一覧を取得できません");
-    slides = await res.json();
-    const folders = [...new Set(slides.map(s => s.folder))].filter(Boolean);
-    $("#slide-folders").innerHTML = folders.map(f => `<option value="${escapeHtml(f)}">`).join("");
-    if (slideFolder && !folders.some(f => f === slideFolder || f.startsWith(slideFolder + "/"))) slideFolder = "";
-    $("#slide-folder-chips").innerHTML = ["", ...folders]
-        .map(f => `<button type="button" class="chip ${f === slideFolder ? "on" : ""}" data-folder="${escapeHtml(f)}">${escapeHtml(f || "すべて")}</button>`).join("");
-    renderLibrary();
-    if (state) { renderFuta(); refreshSuggestions(); }
-}
-
-function aspectLabel(r) {
-    if (!r) return "";
-    if (Math.abs(r - 32 / 9) < 0.08) return "32:9";
-    if (Math.abs(r - 16 / 9) < 0.05) return "16:9";
-    return r.toFixed(2) + ":1";
-}
-
-function renderLibrary() {
-    const q = $("#slide-search").value.trim().toLowerCase();
-    const list = slides
-        .filter(s => !slideFolder || s.folder === slideFolder || s.folder.startsWith(slideFolder + "/"))
-        .filter(s => !q || s.path.toLowerCase().includes(q));
-    const lib = $("#slide-library");
-    if (list.length === 0) {
-        lib.innerHTML = `<div class="empty">スライドがありません。<br>画像・動画を上の枠にドロップするか、slides フォルダに入れて「⟳ 読み直す」を押します。</div>`;
+// シーンの音：BGM（鳴らす／フェードアウト／止める）と「小さく」
+function runSceneAudio(sc) {
+    const b = sc.bgm;
+    if (b && b.action === "play") {
+        if (musicCur && musicCur.item.path === b.path) {      // すでに同じ曲が鳴っていれば、二重に鳴らさない
+            if (typeof sc.duck === "boolean") musicDuckSet(sc.duck);
+            return;
+        }
+        musicDuckSet(sc.duck === true, true);                 // 曲を新しく鳴らすときは、小さく指定が無ければふつうの音量
+        playMusicPath(b.path, b.name, { loop: b.loop });
         return;
     }
-    lib.innerHTML = list.map(s => {
-        const thumb = s.kind === "video"
-            ? `<video class="lib-thumb" src="${mediaUrl(s.path)}#t=0.5" preload="metadata" muted></video>`
-            : `<img class="lib-thumb" src="${mediaUrl(s.path)}" loading="lazy" alt="">`;
-        const r = aspectMap[s.path];
-        return `<div class="lib-item" data-path="${escapeHtml(s.path)}" title="${escapeHtml(s.path)}">${thumb}
-            <span class="lib-badge ${aspectLabel(r) === "32:9" ? "r329" : ""}">${aspectLabel(r)}</span>
-            ${s.kind === "video" ? '<span class="lib-badge vid">動画</span>' : ""}
-            <button type="button" class="lib-del" title="slides フォルダから消す">✕</button>
-            <div class="lib-name">${escapeHtml(s.name)}</div></div>`;
-    }).join("");
-    $$("#slide-library .lib-item").forEach(item => {
-        const media = item.querySelector(".lib-thumb");
-        const onDim = (w, h) => {
-            if (!w || !h) return;
-            aspectMap[item.dataset.path] = w / h;
-            const badge = item.querySelector(".lib-badge");
-            badge.textContent = aspectLabel(w / h);
-            badge.classList.toggle("r329", aspectLabel(w / h) === "32:9");
-        };
-        if (media.tagName === "VIDEO") media.addEventListener("loadedmetadata", () => onDim(media.videoWidth, media.videoHeight));
-        else media.addEventListener("load", () => onDim(media.naturalWidth, media.naturalHeight));
-    });
-    renderLibraryMarks();
+    if (b && b.action === "fade") musicFade();
+    else if (b && b.action === "stop") musicHalt();
+    if (typeof sc.duck === "boolean") musicDuckSet(sc.duck);
 }
 
-function renderLibraryMarks() {
-    const inScene = (scene, p) => !!scene && LAYOUT_SLOTS[scene.layout].some(s => scene.slots[s].type === "slide" && scene.slots[s].file === p);
-    $$("#slide-library .lib-item").forEach(el => {
-        const onPgm = inScene(state && state.program, el.dataset.path);
-        el.classList.toggle("on-pgm", onPgm);
-        el.classList.toggle("on-pvw", !onPgm && inScene(pvw, el.dataset.path));
+// 曲は場所で探し、見つからなければ名前で探す（曲のフォルダを選び直したときのため）
+function playMusicPath(p, label, opts) {
+    const found = typeof musicList !== "undefined" && (musicList.find(m => m.path === p) || (label && musicList.find(m => SC.norm(m.name) === SC.norm(label))));
+    // 別フォルダの曲（local:）は、そのフォルダを選んでいないと鳴らせない
+    if (!found && /^local:/.test(p)) return showError(`曲が見つかりません（${label || p}）。音楽バーの「曲のフォルダ」で、この曲の入ったフォルダを選んでください`);
+    musicPlay(found || { path: p, no: null, name: label || baseName(p).replace(/\.[^.]+$/, "") }, opts);
+}
+
+// --------------------------------------------------------------------------
+// シーンを足す・複製・消す・名前・並べ替え
+// --------------------------------------------------------------------------
+function newSceneObj(name, group, layers) {
+    return { id: SCN.uid("s"), name, group, layers: layers || [], bgm: null, duck: null, pick: null, script: null, warn: "" };
+}
+function insertSceneAfter(sc, afterId) {
+    state.scenes.push(sc);
+    const i = state.sceneOrder.indexOf(afterId);
+    state.sceneOrder.splice(i >= 0 ? i + 1 : state.sceneOrder.length, 0, sc.id);
+}
+function addScene() {
+    const cur = curScene();
+    const sc = newSceneObj(`シーン${state.scenes.length + 1}`, cur ? cur.group : "シーン", []);
+    insertSceneAfter(sc, cur ? cur.id : "");
+    state.preview = sc.id;
+    queueSave(["scenes", "sceneOrder", "preview"], 0);
+    renderAll();
+    scrollSceneIntoView();
+}
+function duplicateScene() {
+    const cur = curScene();
+    if (!cur) return;
+    const sc = clone(cur);
+    sc.id = SCN.uid("s");
+    sc.name = `${cur.name} コピー`.slice(0, 100);
+    sc.script = null;
+    sc.layers.forEach(l => { l.id = SCN.uid("l"); });
+    insertSceneAfter(sc, cur.id);
+    state.preview = sc.id;
+    queueSave(["scenes", "sceneOrder", "preview"], 0);
+    renderAll();
+    scrollSceneIntoView();
+}
+function deleteScene() {
+    const cur = curScene();
+    if (!cur) return;
+    if (!confirm(`シーン「${cur.name}」を消しますか？（元に戻せません）`)) return;
+    const ids = orderIds();
+    const i = ids.indexOf(cur.id);
+    state.scenes = state.scenes.filter(s => s.id !== cur.id);
+    state.sceneOrder = ids.filter(x => x !== cur.id);
+    state.preview = state.sceneOrder[Math.min(i, state.sceneOrder.length - 1)] || "";
+    if (state.cursor === cur.id) state.cursor = "";
+    queueSave(["scenes", "sceneOrder", "preview", "cursor"], 0);
+    renderAll();
+}
+
+function startRename(id) {
+    if (!byId(id)) return;
+    renaming = id;
+    renderSceneList();
+}
+function finishRename(commitIt, value) {
+    const id = renaming;
+    renaming = "";
+    const sc = byId(id);
+    if (sc && commitIt) {
+        const v = String(value || "").trim().slice(0, 100);
+        if (v && v !== sc.name) { sc.name = v; queueSave(["scenes"]); }
+    }
+    renderAll();
+}
+
+function renameGroup(id) {
+    const sc = byId(id);
+    if (!sc) return;
+    const v = prompt("このシーンのグループ名（同じ名前のシーンが1つにまとまります）", sc.group);
+    if (v === null) return;
+    sc.group = v.trim().slice(0, 60);
+    queueSave(["scenes"], 0);
+    renderAll();
+}
+
+// ドラッグで並べ替え（別のグループの上に落とすと、そのグループに移る）
+let dragSceneId = "";
+function moveScene(id, targetId, after, group) {
+    const order = state.sceneOrder.filter(x => x !== id);
+    let at = order.indexOf(targetId);
+    if (at < 0) at = order.length; else if (after) at++;
+    order.splice(at, 0, id);
+    state.sceneOrder = order;
+    const sc = byId(id);
+    if (sc && group !== undefined) sc.group = group;
+    queueSave(["scenes", "sceneOrder"], 0);
+    renderAll();
+}
+
+// 右クリックのメニュー
+function showCtx(x, y, items) {
+    const m = $("#ctx");
+    m.innerHTML = items.map((it, i) => `<button type="button" data-i="${i}" class="${it.danger ? "danger" : ""}">${escapeHtml(it.label)}</button>`).join("");
+    m.classList.remove("hidden");
+    m.style.left = Math.min(x, window.innerWidth - 210) + "px";
+    m.style.top = Math.min(y, window.innerHeight - items.length * 40 - 10) + "px";
+    m._items = items;
+}
+const hideCtx = () => $("#ctx").classList.add("hidden");
+
+function bindScenes() {
+    const box = $("#sc-list");
+    box.addEventListener("click", e => {
+        const pm = e.target.closest("[data-pick]");
+        const el = e.target.closest(".scene");
+        if (!el || e.target.closest(".nm-edit")) return;
+        selectScene(el.dataset.id);
+        if (pm) openPickerForPick(el.dataset.id);
     });
+    box.addEventListener("dblclick", e => {
+        const el = e.target.closest(".scene");
+        if (!el || e.target.closest(".nm-edit") || e.target.closest("[data-pick]")) return;
+        selectScene(el.dataset.id);
+        doTake();
+    });
+    box.addEventListener("contextmenu", e => {
+        const el = e.target.closest(".scene");
+        if (!el) return;
+        e.preventDefault();
+        selectScene(el.dataset.id);
+        showCtx(e.clientX, e.clientY, [
+            { label: "名前を変える（F2）", run: () => startRename(el.dataset.id) },
+            { label: "グループを変える…", run: () => renameGroup(el.dataset.id) },
+            { label: "複製", run: duplicateScene },
+            { label: "消す", danger: true, run: deleteScene }
+        ]);
+    });
+    box.addEventListener("keydown", e => {
+        if (!e.target.classList.contains("nm-edit")) return;
+        if (e.key === "Enter") { e.preventDefault(); finishRename(true, e.target.value); }
+        else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finishRename(false); }
+    });
+    box.addEventListener("focusout", e => {
+        if (e.target.classList.contains("nm-edit") && renaming) finishRename(true, e.target.value);
+    });
+    // 並べ替え
+    box.addEventListener("dragstart", e => {
+        const el = e.target.closest(".scene");
+        if (!el) return;
+        dragSceneId = el.dataset.id;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragSceneId);
+    });
+    const clearMarks = () => $$(".scene.dragover-top, .scene.dragover-bottom").forEach(x => x.classList.remove("dragover-top", "dragover-bottom"));
+    box.addEventListener("dragover", e => {
+        if (!dragSceneId) return;
+        const el = e.target.closest(".scene");
+        const g = e.target.closest(".grp");
+        if (!el && !g) return;
+        e.preventDefault();
+        clearMarks();
+        if (el) {
+            const r = el.getBoundingClientRect();
+            el.classList.add(e.clientY < r.top + r.height / 2 ? "dragover-top" : "dragover-bottom");
+        }
+    });
+    box.addEventListener("dragleave", e => { if (!box.contains(e.relatedTarget)) clearMarks(); });
+    box.addEventListener("drop", e => {
+        if (!dragSceneId) return;
+        e.preventDefault();
+        clearMarks();
+        const el = e.target.closest(".scene");
+        const g = e.target.closest(".grp");
+        const id = dragSceneId;
+        dragSceneId = "";
+        if (el && el.dataset.id !== id) {
+            const r = el.getBoundingClientRect();
+            const t = byId(el.dataset.id);
+            moveScene(id, el.dataset.id, e.clientY >= r.top + r.height / 2, t ? t.group : undefined);
+        } else if (g) {
+            const first = state.sceneOrder.find(x => { const s = byId(x); return s && s.group === g.dataset.group && x !== id; });
+            moveScene(id, first || "", false, g.dataset.group);
+        }
+    });
+    box.addEventListener("dragend", () => { dragSceneId = ""; clearMarks(); });
+
+    $("#ctx").addEventListener("click", e => {
+        const b = e.target.closest("[data-i]");
+        if (!b) return;
+        const it = $("#ctx")._items[Number(b.dataset.i)];
+        hideCtx();
+        if (it) it.run();
+    });
+    document.addEventListener("mousedown", e => { if (!e.target.closest("#ctx")) hideCtx(); });
+    $("#btn-sc-add").addEventListener("click", addScene);
+    $("#btn-sc-dup").addEventListener("click", duplicateScene);
+    $("#btn-sc-del").addEventListener("click", deleteScene);
+    $("#btn-sc-script").addEventListener("click", openScriptDialog);
+}
+
+// --------------------------------------------------------------------------
+// レイヤー（右）
+// --------------------------------------------------------------------------
+// シーンの中身を直したあとの再描画（手元の state はもう変えてある。保存は少しまとめてから）
+function edited(keys) {
+    queueSave(keys || ["scenes"]);
+    renderSceneList();
+    renderLayers();
+    renderOverlay();
+    postPvw();
+}
+function mutLayer(fn) {
+    const l = curLayer();
+    if (!l) return;
+    fn(l);
+    edited();
+}
+
+function renderLayers() {
+    const sc = curScene();
+    $("#ly-scene").textContent = sc ? sc.name : "—";
+    const list = $("#ly-list");
+    const sel = curLayer();
+    if (!sc) {
+        list.innerHTML = `<div class="empty">シーンがありません。左の［＋］で作ります</div>`;
+    } else if (!sc.layers.length) {
+        list.innerHTML = `<div class="empty">レイヤーがありません。下の「レイヤーを足す」から入れます</div>`;
+    } else {
+        // 上が手前（配列は下から順なので、逆に並べる）
+        list.innerHTML = sc.layers.slice().reverse().map(l => `
+            <div class="layer ${l.id === (sel && sel.id) ? "on" : ""} ${l.visible ? "" : "hid"}" data-lid="${escapeHtml(l.id)}" draggable="true">
+                <span class="eye" data-eye="1" title="${l.visible ? "隠す" : "表示する"}">${l.visible ? "👁" : "－"}</span>
+                <span class="lb">${SCN.LAYER_ICONS[l.type] || ""} ${escapeHtml(SCN.layerLabel(l))}</span>
+                <span class="grip" title="ドラッグで重なり順を変える">⋮⋮</span>
+            </div>`).join("");
+    }
+    renderDetail(sc, sel);
+    // 置き場所
+    const pre = sel ? SCN.presetOf(sel, stage()) : "";
+    $$("#ly-preset button").forEach(b => { b.disabled = !sel; b.classList.toggle("on", b.dataset.preset === pre); });
+    $$("#ly-add button").forEach(b => { b.disabled = !sc; });
+    renderSound();
+}
+
+function renderDetail(sc, l) {
+    const box = $("#ly-detail");
+    if (!l) { box.innerHTML = `<span class="dl">レイヤーを選ぶと、細かい設定が出ます</span>`; box._lid = ""; box._html = ""; return; }
+    // 入力欄・スライダーを操作している最中は、作り直さない（入力が途切れないように）
+    if (box.contains(document.activeElement) && box._lid === l.id && box._type === l.type) return;
+    box._lid = l.id;
+    box._type = l.type;
+    const fitable = ["image", "video", "camera", "logo"].includes(l.type);
+    let h = "";
+    if (l.type === "camera") h += `<button type="button" data-d="cam1" class="${l.cam === "cam1" ? "on" : ""}">カメラ1</button><button type="button" data-d="cam2" class="${l.cam === "cam2" ? "on" : ""}">カメラ2</button>`;
+    if (l.type === "image" || l.type === "video") h += `<button type="button" data-d="replace">差し替え</button>`;
+    if (l.type === "logo") h += `<button type="button" data-d="logo-left" class="${l.logo === "left" ? "on" : ""}" title="左フタの画像">左用</button><button type="button" data-d="logo-full" class="${l.logo === "full" ? "on" : ""}" title="全面フタの画像">全面用</button>`;
+    if (l.type === "color") h += `<span class="dl">色</span><input type="color" data-d="color" value="${escapeHtml(l.color)}">`;
+    if (l.type === "text") h += `<input type="text" data-d="text" maxlength="300" value="${escapeHtml(l.text)}" placeholder="文字（{HR} はHR競争の本数）"><span class="dl">色</span><input type="color" data-d="textcolor" value="${escapeHtml(l.color || "#ffffff")}">`;
+    if (fitable) h += `<button type="button" data-d="fit-cover" class="${l.fit === "cover" ? "on" : ""}" title="枠いっぱいに出し、はみ出た所を切り取る">枠いっぱい</button><button type="button" data-d="fit-contain" class="${l.fit === "contain" ? "on" : ""}" title="素材の全体を出す（すき間は透明）">全体を出す</button>`;
+    h += `<span class="dl">不透明度</span><input type="range" data-d="opacity" min="0" max="100" step="5" value="${Math.round(l.opacity * 100)}">`;
+    h += `<button type="button" data-d="del" class="del" title="このレイヤーを消します（Deleteキー）">削除</button>`;
+    if (box._html !== h) { box._html = h; box.innerHTML = h; }
+}
+
+function setPreset(name) {
+    const l = curLayer();
+    if (!l) return;
+    const r = SCN.presets(stage())[name];
+    Object.assign(l, { x: r.x, y: r.y, w: r.w, h: r.h });
+    edited();
+}
+
+function addLayer(type, opts, rectOverride) {
+    const sc = curScene();
+    if (!sc) return showError("先にシーンを作ってください（左の［＋］）");
+    if (sc.layers.length >= 40) return showError("レイヤーは40個までです");
+    const rect = rectOverride || SCN.defaultRect(sc.layers, type, stage());
+    const l = SCN.newLayer(type, opts, rect);
+    sc.layers.push(l);
+    layerSel[sc.id] = l.id;
+    edited();
+}
+
+async function deleteLayer() {
+    const sc = curScene(), l = curLayer();
+    if (!sc || !l) return;
+    if (!confirm(`レイヤー「${SCN.layerLabel(l)}」を消しますか？`)) return;
+    sc.layers = sc.layers.filter(x => x.id !== l.id);
+    delete layerSel[sc.id];
+    edited();
+}
+
+// 左と右を入れ替える（すべてのレイヤーを左右反転）
+function swapSides() {
+    const sc = curScene();
+    if (!sc) return;
+    sc.layers.forEach(l => { l.x = Math.max(-1, Math.min(2, 1 - l.x - l.w)); });
+    edited();
+}
+
+function onAddClick(kind) {
+    switch (kind) {
+        case "image": return openPicker({ kinds: ["image"], title: "画像を選ぶ", onPick: (p, img) => addPickedMedia("image", p, img) });
+        case "video": return openPicker({ kinds: ["video"], title: "動画を選ぶ", onPick: p => addPickedMedia("video", p) });
+        case "camera": return addLayer("camera", { cam: "cam1" });
+        case "color": return addLayer("color", { color: "#1e3a8a" });
+        case "logo": {
+            const sc = curScene();
+            const rect = sc ? SCN.defaultRect(sc.layers, "logo", stage()) : null;
+            return addLayer("logo", { src: "", logo: rect && rect.w > 0.75 ? "full" : "left" });
+        }
+        case "text": {
+            addLayer("text", { text: "文字を入れてください", color: "#ffffff" });
+            const inp = $('#ly-detail [data-d="text"]');
+            if (inp) { inp.focus(); inp.select(); }
+        }
+    }
+}
+
+// 選んだ画像・動画をレイヤーにする（全面（14:5）の画像は全面に、そうでなければ空いている半分に）
+function addPickedMedia(type, path, img) {
+    const rect = type === "image" && isWideSlide(path, img) ? SCN.presets(stage()).full : null;
+    addLayer(type, { src: path }, rect || undefined);
+}
+
+function bindLayers() {
+    const list = $("#ly-list");
+    list.addEventListener("click", e => {
+        const row = e.target.closest(".layer");
+        const sc = curScene();
+        if (!row || !sc) return;
+        if (e.target.closest("[data-eye]")) {
+            const l = sc.layers.find(x => x.id === row.dataset.lid);
+            if (l) { l.visible = !l.visible; edited(); }
+            return;
+        }
+        layerSel[sc.id] = row.dataset.lid;
+        renderLayers();
+        renderOverlay();
+    });
+    // 重なり順のドラッグ
+    let dragId = "";
+    const clearMarks = () => $$(".layer.dragover-top, .layer.dragover-bottom").forEach(x => x.classList.remove("dragover-top", "dragover-bottom"));
+    list.addEventListener("dragstart", e => {
+        const row = e.target.closest(".layer");
+        if (!row) return;
+        dragId = row.dataset.lid;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragId);
+    });
+    list.addEventListener("dragover", e => {
+        const row = e.target.closest(".layer");
+        if (!dragId || !row) return;
+        e.preventDefault();
+        clearMarks();
+        const r = row.getBoundingClientRect();
+        row.classList.add(e.clientY < r.top + r.height / 2 ? "dragover-top" : "dragover-bottom");
+    });
+    list.addEventListener("dragleave", e => { if (!list.contains(e.relatedTarget)) clearMarks(); });
+    list.addEventListener("drop", e => {
+        const row = e.target.closest(".layer");
+        const sc = curScene();
+        if (!dragId || !row || !sc) return;
+        e.preventDefault();
+        clearMarks();
+        const id = dragId;
+        dragId = "";
+        if (row.dataset.lid === id) return;
+        const r = row.getBoundingClientRect();
+        const topHalf = e.clientY < r.top + r.height / 2;       // 表示の上（手前）に入れるか
+        const moving = sc.layers.find(l => l.id === id);
+        const rest = sc.layers.filter(l => l.id !== id);
+        const t = rest.findIndex(l => l.id === row.dataset.lid);
+        rest.splice(topHalf ? t + 1 : t, 0, moving);
+        sc.layers = rest;
+        layerSel[sc.id] = id;
+        edited();
+    });
+    list.addEventListener("dragend", () => { dragId = ""; clearMarks(); });
+
+    $("#ly-preset").addEventListener("click", e => { const b = e.target.closest("[data-preset]"); if (b) setPreset(b.dataset.preset); });
+    $("#ly-add").addEventListener("click", e => { const b = e.target.closest("[data-add]"); if (b) onAddClick(b.dataset.add); });
+
+    const det = $("#ly-detail");
+    det.addEventListener("click", e => {
+        const b = e.target.closest("button[data-d]");
+        if (!b) return;
+        const k = b.dataset.d;
+        if (k === "del") return deleteLayer();
+        if (k === "replace") {
+            const l = curLayer();
+            return openPicker({ kinds: [l.type], title: "差し替える素材を選ぶ", onPick: p => mutLayer(x => { x.src = p; }) });
+        }
+        mutLayer(l => {
+            if (k === "cam1" || k === "cam2") l.cam = k;
+            else if (k === "fit-cover") l.fit = "cover";
+            else if (k === "fit-contain") l.fit = "contain";
+            else if (k === "logo-left") { l.logo = "left"; l.src = ""; }
+            else if (k === "logo-full") { l.logo = "full"; l.src = ""; }
+        });
+    });
+    det.addEventListener("input", e => {
+        const t = e.target;
+        const k = t.dataset.d;
+        const l = curLayer();
+        if (!l) return;
+        // 入力中は、詳細欄を作り直さない（入力欄を閉じないため）
+        const quiet = fn => { fn(l); queueSave(["scenes"]); renderSceneList(); renderOverlay(); postPvw(); };
+        if (k === "opacity") quiet(x => { x.opacity = Number(t.value) / 100; });
+        else if (k === "color") quiet(x => { x.color = t.value; });
+        else if (k === "textcolor") quiet(x => { x.color = t.value; });
+        else if (k === "text") { const v = t.value.slice(0, 300); if (v) quiet(x => { x.text = v; }); }
+    });
+    $("#ly-scene").addEventListener("dblclick", () => { const sc = curScene(); if (sc) startRename(sc.id); });
+}
+
+// --------------------------------------------------------------------------
+// このシーンの音（変えない／曲を選ぶ／フェード／停止／小さく／戻す）
+// --------------------------------------------------------------------------
+let soundKey = "";
+function renderSound() {
+    const sc = curScene();
+    const b = sc && sc.bgm;
+    const on = {
+        none: !!sc && !b && sc.duck === null,
+        song: !!b && b.action === "play",
+        fade: !!b && b.action === "fade",
+        stop: !!b && b.action === "stop",
+        duck: !!sc && sc.duck === true,
+        unduck: !!sc && sc.duck === false
+    };
+    $$("#sn-sound button").forEach(btn => { btn.disabled = !sc; btn.classList.toggle("on", !!on[btn.dataset.snd]); });
+    $("#sn-now").textContent = b && b.action === "play" ? b.name : "";
+    const loopWrap = $("#sn-loop-wrap");
+    loopWrap.classList.toggle("hidden", !(b && b.action === "play"));
+    $("#sn-loop").checked = !!(b && b.action === "play" && b.loop);
+    const songs = $("#sn-songs");
+    if (!songs.classList.contains("hidden")) {
+        const key = musicList.map(m => m.path).join("|") + "|" + (b && b.path);
+        if (key !== soundKey) {
+            soundKey = key;
+            songs.innerHTML = musicList.length
+                ? musicList.map(m => `<button type="button" data-song="${escapeHtml(m.path)}" class="${b && b.path === m.path ? "on" : ""}">♪ ${escapeHtml(m.name)}</button>`).join("")
+                : `<div class="empty">曲がありません（音楽バーの「曲のフォルダ」で選びます）</div>`;
+        }
+    }
+}
+
+function bindSound() {
+    $("#sn-sound").addEventListener("click", e => {
+        const btn = e.target.closest("[data-snd]");
+        const sc = curScene();
+        if (!btn || !sc) return;
+        const k = btn.dataset.snd;
+        if (k === "song") { soundKey = ""; $("#sn-songs").classList.toggle("hidden"); renderSound(); return; }
+        $("#sn-songs").classList.add("hidden");
+        if (k === "none") { sc.bgm = null; sc.duck = null; }
+        else if (k === "fade") sc.bgm = { action: "fade" };
+        else if (k === "stop") sc.bgm = { action: "stop" };
+        else if (k === "duck") sc.duck = sc.duck === true ? null : true;
+        else if (k === "unduck") sc.duck = sc.duck === false ? null : false;
+        edited();
+    });
+    $("#sn-songs").addEventListener("click", e => {
+        const btn = e.target.closest("[data-song]");
+        const sc = curScene();
+        if (!btn || !sc) return;
+        const m = musicList.find(x => x.path === btn.dataset.song);
+        if (!m) return;
+        sc.bgm = { action: "play", path: m.path, name: String(m.name).slice(0, 300), loop: $("#sn-loop").checked || musicPrefs.loop };
+        $("#sn-songs").classList.add("hidden");
+        edited();
+    });
+    $("#sn-loop").addEventListener("change", e => {
+        const sc = curScene();
+        if (sc && sc.bgm && sc.bgm.action === "play") { sc.bgm.loop = e.target.checked; edited(); }
+    });
+}
+
+// --------------------------------------------------------------------------
+// PREVIEW の上の枠：選んだレイヤーをドラッグで動かす・角で大きさを変える（左半分・右半分・全面・中央16:9に吸着）
+// --------------------------------------------------------------------------
+let dragging = false;
+
+function renderOverlay() {
+    const ov = $("#ov");
+    const sc = curScene();
+    if (!sc) { ov.innerHTML = ""; return; }
+    if (dragging) return;
+    const sel = curLayer();
+    ov.innerHTML = sc.layers.filter(l => l.visible).map(l => {
+        const s = sel && l.id === sel.id;
+        return `<div class="ov-box ${s ? "sel" : ""}" data-lid="${escapeHtml(l.id)}" style="left:${l.x * 100}%;top:${l.y * 100}%;width:${l.w * 100}%;height:${l.h * 100}%">` +
+            (s ? `<i class="hd nw" data-h="nw"></i><i class="hd ne" data-h="ne"></i><i class="hd sw" data-h="sw"></i><i class="hd se" data-h="se"></i>` : "") + `</div>`;
+    }).join("");
+}
+
+// 端を、候補の線（0・半分・中央16:9の端・1）に吸着させる
+function snapValue(v, cands, tol) {
+    let best = v, d = tol;
+    cands.forEach(c => { const x = Math.abs(v - c); if (x < d) { d = x; best = c; } });
+    return best;
+}
+
+function startOverlayDrag(e, layer, mode) {
+    e.preventDefault();
+    e.stopPropagation();
+    const mon = $("#pvw-monitor").getBoundingClientRect();
+    const P = SCN.presets(stage());
+    const xs = [0, P.center.x, 0.5, P.center.x + P.center.w, 1];
+    const ys = [0, 1];
+    const TX = 0.014, TY = 0.03, MIN = 0.03;
+    const o = { x: layer.x, y: layer.y, w: layer.w, h: layer.h };
+    const sx = e.clientX, sy = e.clientY;
+    dragging = true;
+    let snapEl = null;
+    const move = ev => {
+        const dx = (ev.clientX - sx) / mon.width, dy = (ev.clientY - sy) / mon.height;
+        let x0 = o.x, y0 = o.y, x1 = o.x + o.w, y1 = o.y + o.h;      // 左・上・右・下
+        if (mode === "move") {
+            let nx = Math.max(0, Math.min(1 - o.w, o.x + dx)), ny = Math.max(0, Math.min(1 - o.h, o.y + dy));
+            // 左端・右端（上端・下端）のうち、近いほうの吸着を使う
+            const pickSnap = (v, size, cands, tol) => {
+                const a = snapValue(v, cands, tol), b = snapValue(v + size, cands, tol) - size;
+                const ha = a !== v, hb = b !== v;
+                if (ha && hb) return Math.abs(a - v) <= Math.abs(b - v) ? a : b;
+                return ha ? a : hb ? b : v;
+            };
+            nx = pickSnap(nx, o.w, xs, TX);
+            ny = pickSnap(ny, o.h, ys, TY);
+            x0 = nx; y0 = ny; x1 = nx + o.w; y1 = ny + o.h;
+        } else {
+            if (mode.includes("w")) x0 = snapValue(Math.max(0, Math.min(x1 - MIN, o.x + dx)), xs, TX);
+            if (mode.includes("e")) x1 = snapValue(Math.min(1, Math.max(x0 + MIN, o.x + o.w + dx)), xs, TX);
+            if (mode.includes("n")) y0 = snapValue(Math.max(0, Math.min(y1 - MIN, o.y + dy)), ys, TY);
+            if (mode.includes("s")) y1 = snapValue(Math.min(1, Math.max(y0 + MIN, o.y + o.h + dy)), ys, TY);
+        }
+        layer.x = x0; layer.y = y0; layer.w = Math.max(MIN, x1 - x0); layer.h = Math.max(MIN, y1 - y0);
+        // 吸着の目印（置き場所のプリセットに合ったとき）
+        const pre = SCN.presetOf(layer, stage());
+        if (snapEl) { snapEl.remove(); snapEl = null; }
+        if (pre) {
+            const r = P[pre];
+            snapEl = document.createElement("div");
+            snapEl.className = "ov-snap";
+            snapEl.style.cssText = `left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%`;
+            snapEl.innerHTML = `<span>${SCN.PRESET_NAMES[pre]}</span>`;
+            $("#ov").appendChild(snapEl);
+        }
+        const box = $(`#ov .ov-box[data-lid="${CSS.escape(layer.id)}"]`);
+        if (box) Object.assign(box.style, { left: layer.x * 100 + "%", top: layer.y * 100 + "%", width: layer.w * 100 + "%", height: layer.h * 100 + "%" });
+        queueSave(["scenes"]);
+        postPvw();
+        $$("#ly-preset button").forEach(b => b.classList.toggle("on", b.dataset.preset === pre));
+    };
+    const up = () => {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+        dragging = false;
+        if (snapEl) snapEl.remove();
+        edited();
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+}
+
+function bindOverlay() {
+    $("#ov").addEventListener("mousedown", e => {
+        if (e.button !== 0) return;
+        const sc = curScene();
+        const box = e.target.closest(".ov-box");
+        if (!sc || !box) return;
+        const l = sc.layers.find(x => x.id === box.dataset.lid);
+        if (!l) return;
+        const h = e.target.closest("[data-h]");
+        if (layerSel[sc.id] !== l.id) { layerSel[sc.id] = l.id; renderLayers(); renderOverlay(); }
+        startOverlayDrag(e, l, h ? h.dataset.h : "move");
+    });
+}
+
+// --------------------------------------------------------------------------
+// 画像・動画を選ぶ（フォルダのタブ付きサムネイルのグリッド）
+// --------------------------------------------------------------------------
+const GROUP_ORDER = ["全面", "ロゴ", "進行", "入場", "選手"];
+function slideGroup(s) {
+    const segs = s.folder.split("/").filter(Boolean);
+    if (segs.length && /^\d+x\d+$/.test(segs[0])) segs.shift();       // 960x686 のような大きさのフォルダは、とばす
+    return segs[0] || "（直下）";
+}
+function slideGroups(kinds) {
+    const set = new Set(slides.filter(s => kinds.includes(s.kind)).map(slideGroup));
+    return [...set].sort((a, b) => {
+        const ia = GROUP_ORDER.indexOf(a), ib = GROUP_ORDER.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, "ja");
+    });
+}
+// 全面（14:5）の画像か：縦横比 2.4 以上、または 全面/ フォルダ
+function isWideSlide(path, imgEl) {
+    const r = imgEl && imgEl.naturalWidth ? imgEl.naturalWidth / imgEl.naturalHeight : aspectMap[path];
+    if (r) return r >= 2.4;
+    return /(^|\/)全面\//.test(path);
+}
+
+let picker = null;      // { kinds, title, onPick, tab, sub }
+function openPicker(opts) {
+    const groups = slideGroups(opts.kinds);
+    let tab = groups[0] || "";
+    const sub = opts.sub || "";
+    if (sub) {
+        const f = slides.find(s => opts.kinds.includes(s.kind) && SC.normPath(s.path).includes(SC.normPath(sub)));
+        if (f) tab = slideGroup(f);
+    } else if (opts.current) {
+        const f = slides.find(s => s.path === opts.current);
+        if (f) tab = slideGroup(f);
+    } else if (groups.includes("進行")) tab = "進行";
+    picker = Object.assign({}, opts, { tab, sub });
+    renderPicker();
+    const dlg = $("#dlg-picker");
+    if (!dlg.open) dlg.showModal();
+    $("#pick-grid").scrollTop = 0;
+}
+
+// 「当日に選ぶ」シーン：そのフォルダを最初に開く。選んだ画像は、シーンの画像（無ければ足す）にする
+function openPickerForPick(sceneId) {
+    const sc = byId(sceneId);
+    if (!sc) return;
+    const existing = sc.layers.find(l => l.type === "image" || l.type === "video");
+    openPicker({
+        kinds: ["image", "video"], title: `${sc.name} に出す画像を選ぶ`, sub: sc.pick ? sc.pick.folder : "", current: existing && existing.src,
+        onPick: (p, img) => {
+            const cur = byId(sceneId);
+            if (!cur) return;
+            if (state.preview !== sceneId) { state.preview = sceneId; queueSave(["preview"], 0); }
+            const old = cur.layers.find(l => l.type === "image" || l.type === "video");
+            if (old) { old.src = p; old.type = SCN.VIDEO_RE.test(p) ? "video" : "image"; layerSel[sceneId] = old.id; edited(); }
+            else addPickedMedia(SCN.VIDEO_RE.test(p) ? "video" : "image", p, img);
+        }
+    });
+}
+
+function renderPicker() {
+    if (!picker) return;
+    const { kinds, tab, sub } = picker;
+    $("#pick-title").textContent = picker.title;
+    $("#pick-tabs").innerHTML = slideGroups(kinds).map(g => `<button type="button" data-tab="${escapeHtml(g)}" class="${g === tab ? "on" : ""}">${escapeHtml(g)}</button>`).join("")
+        + (sub ? `<span class="ed-chip">${escapeHtml(sub)}　<button type="button" class="btn small" data-tab-all="1">フォルダの絞り込みをやめる</button></span>` : "");
+    const list = slides.filter(s => kinds.includes(s.kind) && slideGroup(s) === tab && (!sub || SC.normPath(s.path).includes(SC.normPath(sub))));
+    $("#pick-grid").innerHTML = list.map(s => `<button type="button" class="pick-item ${s.path === picker.current ? "on" : ""}" data-file="${escapeHtml(s.path)}" title="${escapeHtml(s.path)}">${s.kind === "video"
+        ? `<video src="${thumbUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${thumbUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}<span class="pick-name">${escapeHtml(s.name)}</span></button>`).join("")
+        || `<div class="empty">画像がありません。「ファイルを足す」か、slides フォルダに入れて「⟳ 読み直す」を押します。</div>`;
+}
+
+function bindPicker() {
+    $("#pick-close").addEventListener("click", () => $("#dlg-picker").close());
+    $("#pick-tabs").addEventListener("click", e => {
+        const b = e.target.closest("[data-tab]");
+        if (b && picker) { picker.tab = b.dataset.tab; picker.sub = ""; renderPicker(); $("#pick-grid").scrollTop = 0; return; }
+        if (e.target.closest("[data-tab-all]") && picker) { picker.sub = ""; renderPicker(); }
+    });
+    $("#pick-grid").addEventListener("click", e => {
+        const b = e.target.closest("[data-file]");
+        if (!b || !picker) return;
+        const p = picker;
+        const img = b.querySelector("img");
+        $("#dlg-picker").close();
+        p.onPick(b.dataset.file, img);
+    });
+    $("#dlg-picker").addEventListener("close", () => { picker = null; });
+    $("#pick-upload").addEventListener("click", () => $("#pick-file").click());
+    $("#pick-file").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; uploadSlides(f); });
+    $("#pick-reload").addEventListener("click", () => loadSlides().then(() => showInfo(`スライドを読み直しました（${slides.length}件）`)).catch(e => showError(e.message)));
 }
 
 async function uploadSlides(files) {
     if (!files || files.length === 0) return;
-    const folder = $("#upload-folder").value.trim();
+    const folder = picker && picker.tab && picker.tab !== "（直下）" ? picker.tab : "";
     let ok = 0;
     for (const f of files) {
         try {
@@ -545,607 +1019,25 @@ async function uploadSlides(files) {
     await loadSlides().catch(e => showError(e.message));
 }
 
-async function deleteSlide(p) {
-    if (!confirm(`「${p}」を slides フォルダから消しますか？（元に戻せません）`)) return;
-    try {
-        const res = await fetch("/api/slides/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: p }) });
-        const body = await res.json();
-        if (!res.ok) return showError(`消せませんでした：${body.error}`);
-    } catch (e) {
-        return showError(SERVER_NG);
-    }
-    await loadSlides().catch(e => showError(e.message));
-}
-
-function assignText() {
-    const title = $("#text-title").value.trim();
-    if (!title) return showError("タイトルを入れてください");
-    const src = { type: "text", title, color: $("#text-bg").value, textColor: $("#text-fg").value };
-    const sub = $("#text-sub").value.trim();
-    if (sub) src.sub = sub;
-    assignSource(src);
-}
-
-function assignUrl() {
-    let url = $("#url-input").value.trim();
-    if (!/^https?:\/\//.test(url)) return showError("URLは http:// か https:// で始めてください");
-    // GoogleスライドのURLは、画像(PNG)として書き出すURLに直す（「リンクを知っている全員」に共有が必要）
-    const m = url.match(/\/presentation\/d\/([a-zA-Z0-9-_]+)/);
-    if (m) {
-        const page = url.match(/slide=id\.([a-zA-Z0-9-_]+)/);
-        url = `https://docs.google.com/presentation/d/${m[1]}/export/png` + (page ? `?pageid=${page[1]}` : "");
-    }
-    assignSource({ type: "url", url });
+async function loadSlides() {
+    const res = await fetch("/api/slides");
+    if (!res.ok) throw new Error("スライドの一覧を取得できません");
+    slides = await res.json();
+    slidesVer++;
+    if (state) { renderFutaSelects(); renderAll(); }
+    if (picker) renderPicker();
 }
 
 // --------------------------------------------------------------------------
-// 選手
+// 台本から作る（Excel → 列の割り当て → シーン）
 // --------------------------------------------------------------------------
-const roster = () => (state && state.roster) || [];
-
-// 写真フォルダ名 → 表示名 → HOME/AWAY の順で探す
-function teamFolders(team) {
-    const t = (state && state.teams[team]) || {};
-    return [...new Set([t.photoTeam, t.name, team].filter(Boolean))];
-}
-
-function findPlayerSlide(p) {
-    if (p.slide) return /^(players|slides)\//.test(p.slide) ? p.slide : `players/${p.slide}`;
-    for (const f of teamFolders(p.team)) {
-        const hit = playerMedia.find(m => m.folder === f && m.name === String(p.number));
-        if (hit) return hit.path;
-    }
-    return "";
-}
-
-function findWalkup(p) {
-    if (p.bgm) return /^music\//.test(p.bgm) ? p.bgm : `music/${p.bgm}`;
-    for (const f of teamFolders(p.team)) {
-        const hit = walkups.find(m => m.folder === f && m.name === String(p.number));
-        if (hit) return hit.path;
-    }
-    return "";
-}
-
-function renderPlayers() {
-    $$("#team-filter button").forEach(b => b.classList.toggle("on", b.dataset.team === teamFilter));
-    const list = $("#player-list");
-    const all = roster();
-    if (all.length === 0) {
-        list.innerHTML = `<div class="empty">選手の名簿がありません。「名簿CSVを読み込む」から読み込みます。<br><small>列：チーム, 打順, 背番号, ポジション, 名前, ふりがな, 打率, 本塁打, 打点, 防御率, コメント, 登場曲, スライド</small></div>`;
-        renderPlayerAction();
-        return;
-    }
-    const q = $("#player-search").value.trim();
-    list.innerHTML = all.map((p, i) => {
-        if (teamFilter && p.team !== teamFilter) return "";
-        if (q && !`${p.number} ${p.name} ${p.kana || ""}`.includes(q)) return "";
-        const icons = (findWalkup(p) ? "🎵" : "") + (findPlayerSlide(p) ? "🖼" : "");
-        return `<div class="player-row ${i === selectedPlayer ? "on" : ""}" data-i="${i}">
-            <span class="o">${escapeHtml(p.order || "")}</span><span class="n">#${escapeHtml(p.number || "")}</span>
-            <span class="p">${escapeHtml(p.position || "")}</span><span class="nm">${escapeHtml(p.name)}</span><span class="icons">${icons}</span></div>`;
-    }).join("");
-    renderPlayerAction();
-}
-
-function renderPlayerAction() {
-    const p = roster()[selectedPlayer];
-    $("#pa-player").textContent = p ? `${p.team}　${p.order ? p.order + "番 " : ""}#${p.number || ""} ${p.position || ""} ${p.name}` : "選手を選んでください";
-    const sel = $("#pa-out");
-    const keep = sel.value;
-    sel.innerHTML = `<option value="">（出さない）</option>` + (p ? roster().map((o, i) =>
-        o.team === p.team && i !== selectedPlayer ? `<option value="${i}">#${escapeHtml(o.number || "")} ${escapeHtml(o.position || "")} ${escapeHtml(o.name)}</option>` : "").join("") : "");
-    sel.value = keep;
-    if (sel.value !== keep) sel.value = "";
-}
-
-// 名簿のうち、画面に出す項目だけを取り出す
-function playerData(p) {
-    const o = {};
-    ["team", "order", "number", "position", "name", "kana", "avg", "hr", "rbi", "era", "comment", "photo"].forEach(k => { if (p[k]) o[k] = p[k]; });
-    return o;
-}
-
-function sendPlayer(card, subLabel) {
-    const p = roster()[selectedPlayer];
-    if (!p) return showError("選手を選んでください");
-    const label = $("#pa-label").value.trim() || subLabel || "";
-    const slide = findPlayerSlide(p);
-    let src;
-    if ($("#opt-player-slide").checked && slide && card !== "hr") {
-        src = { type: "slide", file: slide };
-        // 選手スライドは16:9。「32:9 一枚」のままだと上下が切れるため、「16:9 1枚」の枠に入れる（背景・位置はそのまま）
-        if (pvw.layout === "wide") {
-            pvw.layout = "single";
-            selectedSlot = "single";
-        }
-    } else {
-        src = { type: "player", card, player: playerData(p), showStats: $("#opt-player-stats").checked, showComment: $("#opt-player-comment").checked };
-        if (label) src.label = label;
-        if (card === "sub" && $("#pa-out").value !== "") {
-            const o = roster()[Number($("#pa-out").value)];
-            if (o) src.out = { number: o.number || "", position: o.position || "", name: o.name };
-        }
-    }
-    assignSource(src, { keepLayout: true });
-    if ($("#opt-player-take").checked && !$("#opt-auto-take").checked) doTake();
-    if ($("#opt-player-music").checked) {
-        const walk = findWalkup(p);
-        if (walk) playMusicPath(walk, `登場曲 #${p.number} ${p.name}`);
-    }
-}
-
-function sendLineup(team) {
-    const rows = roster().filter(p => p.team === team && p.order)
-        .sort((a, b) => (parseInt(a.order, 10) || 99) - (parseInt(b.order, 10) || 99))
-        .slice(0, 12)
-        .map(p => ({ order: p.order, position: p.position || "", number: p.number || "", name: p.name }));
-    if (rows.length === 0) return showError(`${team} に打順の入った選手がいません（名簿CSVの「打順」列）`);
-    assignSource({ type: "lineup", team, rows }, { keepLayout: true });
-}
-
-// 名簿CSVの読み込み（UTF-8 / Shift_JIS を自動で判別。Excelで「CSV」保存したものも読める）
-async function importRoster(file) {
-    if (!file) return;
-    const buf = await file.arrayBuffer();
-    let text;
-    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (e) { text = new TextDecoder("shift_jis").decode(buf); }
-    const rows = parseCSV(text.replace(/^﻿/, "")).filter(r => r.some(c => c.trim() !== ""));
-    if (rows.length < 2) return showError("CSVに選手がいません（1行目は列名にしてください）");
-    const header = rows[0].map(h => h.trim());
-    const COLS = {
-        team: ["チーム", "team", "TEAM", "所属"], order: ["打順", "order"], number: ["背番号", "No", "NO", "number", "#"],
-        position: ["ポジション", "守備", "守備位置", "position", "POS"], name: ["名前", "選手名", "氏名", "name"],
-        kana: ["ふりがな", "フリガナ", "カナ", "よみ", "kana"], avg: ["打率", "AVG"], hr: ["本塁打", "HR"], rbi: ["打点", "RBI"],
-        era: ["防御率", "ERA"], comment: ["コメント", "紹介コメント", "comment"], bgm: ["登場曲", "BGM", "bgm"],
-        slide: ["スライド", "slide"], photo: ["写真", "photo"]
-    };
-    const idx = {};
-    Object.entries(COLS).forEach(([k, names]) => {
-        const i = header.findIndex(h => names.includes(h));
-        if (i >= 0) idx[k] = i;
-    });
-    if (idx.name === undefined) return showError("「名前」の列が見つかりません（1行目に列名を入れてください）");
-
-    const fallback = teamFilter || "HOME";
-    const players = rows.slice(1).map(r => {
-        const p = {};
-        Object.entries(idx).forEach(([k, i]) => { const v = (r[i] || "").trim(); if (v) p[k] = v.slice(0, 300); });
-        let team = String(p.team || fallback).toUpperCase();
-        if (!TEAMS.includes(team)) {
-            // チーム列に表示名や写真フォルダ名が書かれているときは、チーム設定と照らし合わせる
-            team = TEAMS.find(t => state.teams[t].name === p.team || state.teams[t].photoTeam === p.team) || fallback;
-        }
-        p.team = team;
-        if (p.era && parseFloat(p.era) === 0) delete p.era;   // 防御率 0.00 の野手は出さない
-        return p;
-    }).filter(p => p.name);
-    const teamsIn = [...new Set(players.map(p => p.team))];
-    const kept = roster().filter(p => !teamsIn.includes(p.team));
-    selectedPlayer = -1;
-    if (await patch({ roster: kept.concat(players) })) showInfo(`${players.length}人を読み込みました（${teamsIn.join("・")}）`);
-}
-
-function parseCSV(text) {
-    const rows = [];
-    let row = [], cell = "", q = false;
-    for (let i = 0; i < text.length; i++) {
-        const c = text[i];
-        if (q) {
-            if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-            else cell += c;
-        } else if (c === '"') q = true;
-        else if (c === ",") { row.push(cell); cell = ""; }
-        else if (c === "\n" || c === "\r") {
-            if (c === "\r" && text[i + 1] === "\n") i++;
-            row.push(cell); rows.push(row); row = []; cell = "";
-        } else cell += c;
-    }
-    if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
-    return rows;
-}
-
-// --------------------------------------------------------------------------
-// 音楽（登場曲・式次第の曲は、音楽バーの仕組みで鳴らす）
-// --------------------------------------------------------------------------
-function playMusicPath(p, label, opts) {
-    // 曲は場所で探し、見つからなければ名前で探す（曲のフォルダを選び直したときのため）
-    const found = typeof musicList !== "undefined" && (musicList.find(m => m.path === p) || (label && musicList.find(m => SC.norm(m.name) === SC.norm(label))));
-    // 別フォルダの曲（local:）は、そのフォルダを選んでいないと鳴らせない
-    if (!found && /^local:/.test(p)) return showError(`曲が見つかりません（${label || p}）。音楽バーの「曲のフォルダ」で、この曲の入ったフォルダを選んでください`);
-    musicPlay(found || { path: p, no: null, name: label || baseName(p).replace(/\.[^.]+$/, "") }, opts);
-}
-
-async function loadWalkups() {
-    const res = await fetch("/api/walkup");
-    if (!res.ok) throw new Error("登場曲の一覧を取得できません");
-    walkups = await res.json();
-    renderPlayers();
-}
-
-async function loadPlayerMedia() {
-    const res = await fetch("/api/players");
-    if (!res.ok) throw new Error("選手スライドの一覧を取得できません");
-    playerMedia = await res.json();
-    renderPlayers();
-}
-
-// --------------------------------------------------------------------------
-// 台本（本番＝キュー一覧／編集＝読み込み・キュー作り）
-//   本番：キューのある行だけを並べる。行を選ぶ（クリック・↑↓）とPREVIEWに自動でセット、TAKEで本線＋BGM
-//   台本の1行 ＝ 番号・場面・BGM・ビジョン…＋キュー（出すもの）。セリフなどの原文は編集画面の「台本の原文」にだけ出す
-//   旧「式次第」は「手動の式次第」セクションとして、台本の先頭に入っている
-//   script.pos ＝ 選んでいる行（次に出す行）／ script.onair ＝ いま本線に出している行
-// --------------------------------------------------------------------------
-const SC = ScriptCore;
-const SC_MODE_KEY = "stadiumvision-baseball.scmode";
-const SC_ALL_KEY = "stadiumvision-baseball.scall";
-const EMPTY_SCRIPT = { title: "", rev: 0, sections: [], rows: [], pos: -1, onair: -1 };
-const script = () => (state && state.script) || EMPTY_SCRIPT;
-let scMode = readLocal(SC_MODE_KEY, "live") === "edit" ? "edit" : "live";
-let scShowAll = !!readLocal(SC_ALL_KEY, false);
-let currentTab = "media";
-let curSheet = 0;
-let scListKey = "";
-let suggestions = {};
-let suggestKey = "";
 let importState = null;     // 読み込み中のファイル { resp, cfg:[{index, include, headerRow, roles}] }
-let view = { items: [], shown: [] };     // 一覧の組み立て結果
-let lastSel = -2;
-let lastPvwKey = "";
-let edPickAll = false;
-let edKey = "";
 
-const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
-// モニターの見出し：台本のキューの画面のときは「O-07 場面名」だけにする
-let pvwCue = null, pgmCue = null;
-const rowLabel = r => `${r.no ? r.no + " " : ""}${oneLine(r.title)}`;
-function renderMonitorDesc() {
-    $("#pvw-desc").textContent = pvwCue && pvwCue.key === JSON.stringify(pvw) ? pvwCue.label : describeScene(pvw);
-    if (state) $("#pgm-desc").textContent = pgmCue && pgmCue.key === JSON.stringify(state.program) ? pgmCue.label : describeScene(state.program);
-}
-const oneLine = t => String(t || "").replace(/\s*\n\s*/g, " ");
-
-// ---- 表示用の組み立て ----
-function faceFromSrc(src) {
-    if (!src) return null;
-    if (src.type === "slide") return { type: "slide", file: src.file };
-    if (src.type === "black") return { type: "black" };
-    return null;
+function openScriptDialog() {
+    $("#sc-result").classList.add("hidden");
+    $("#dlg-script").showModal();
 }
 
-function bgmShort(cue) {
-    if (!cue) return "";
-    const out = [];
-    const b = cue.bgm;
-    if (b) out.push(b.action === "play" ? `♪ ${b.name}${b.loop ? " ↻" : ""}` : b.action === "fade" ? "♪↘ フェード" : "■ 停止");
-    if (cue.duck === true) out.push("♪ 小さく");
-    else if (cue.duck === false) out.push("♪ 戻す");
-    return out.join("  ");
-}
-
-// 右面がカメラ以外のときだけ印を出す
-function rightMark(cue) {
-    if (!cue) return "";
-    const r = cue.scene ? (cue.scene.layout === "split" ? cue.scene.slots.right : null) : cue.right;
-    if (!r || r.type === "camera") return "";
-    return r.type === "black" ? "右：黒" : r.type === "futa" ? "右：ロゴ" : "右：画像";
-}
-
-// 一覧に出す内容を、台本の上から順に作る（前の行から引き継ぐ左面もここで決める）
-function computeView() {
-    const sc = script();
-    const items = [];
-    let st = { left: null }, sec = -1;
-    sc.rows.forEach((r, i) => {
-        if (r.sec !== sec) { sec = r.sec; st = { left: null }; }
-        if (r.kind === "chapter") { items.push({ i, row: r, sec, chapter: true }); return; }
-        const sug = suggestions[i];
-        const cue = r.cue;
-        const eff = cue || (scMode === "edit" && sug && sug.cue) || null;
-        if (eff) {
-            if (eff.scene) { const sl = eff.scene.slots; st.left = faceFromSrc(eff.scene.layout === "split" ? sl.left : sl.wide); }
-            else if (eff.left) st.left = eff.left;
-        }
-        const pick = sug && sug.pick && sug.pick[0] || "";
-        const warn = sug && !cue ? sug.hints.filter(h => !h.startsWith("当日に選ぶ")).join("\n") : "";
-        const shown = scMode === "edit" ? true : !!(cue || pick || scShowAll);
-        items.push({ i, row: r, sec, cue, sug, eff, left: eff && eff.band ? eff.band : st.left, pick, warn, bgm: bgmShort(eff), right: rightMark(eff), suggested: !cue && !!(sug && sug.cue), shown });
-    });
-    view = { items, shown: items.filter(x => !x.chapter && x.shown).map(x => x.i) };
-}
-
-// 選んでいる行（表に出ている行の中から。選んだ行が出ていなければ、その次）
-function selRow() {
-    const pos = script().pos, d = view.shown;
-    if (!d.length) return -1;
-    if (d.includes(pos)) return pos;
-    const nx = d.find(i => i > pos);
-    return nx !== undefined ? nx : d[d.length - 1];
-}
-const itemOf = i => view.items.find(x => x.i === i);
-
-function thumbSrc(face) {
-    if (!face) return "";
-    if (face.type === "slide") return face.file;
-    if (face.type === "futa") return logos().left;
-    return "";
-}
-function thumbHtml(it, big) {
-    const cls = big ? "cr-thumb big" : "cr-thumb";
-    const pickable = ` data-pick="${it.i}"`;
-    const wide = it.cue && it.cue.band ? " wide" : "";
-    // 「当日に選ぶ」行は、選ぶまで「＋選ぶ」の枠を出す（前の行の画像を引き継いで見せない）
-    if (it.pick && !(it.cue && (it.cue.left || it.cue.band))) return `<span class="${cls} pick"${pickable}>＋選ぶ</span>`;
-    const src = thumbSrc(it.left);
-    if (!src) return `<span class="${cls}${wide} empty"${pickable}></span>`;
-    const meta = slides.find(x => x.path === src);
-    const media = meta && meta.kind === "video"
-        ? `<video src="${mediaUrl(src)}#t=0.1" preload="metadata" muted></video>`
-        : `<img src="${mediaUrl(src)}" loading="lazy" alt="" onerror="this.remove()">`;
-    return `<span class="${cls}${wide}"${pickable}>${media}</span>`;
-}
-
-function rowHtml(it, edit) {
-    const r = it.row;
-    const warn = it.warn ? `<span class="cr-warn" title="${escapeHtml(it.warn)}">⚠</span>` : "";
-    const ok = edit && it.suggested ? `<button type="button" class="cr-ok" data-adopt="${it.i}" title="提案を採用してキューにする">✓</button>` : "";
-    return `<div class="cr ${it.cue ? "" : "nocue"} ${it.suggested ? "sug" : ""}" data-i="${it.i}">
-        <span class="cr-no">${escapeHtml(r.no)}</span>${thumbHtml(it)}
-        <span class="cr-title" title="${escapeHtml(oneLine(r.title) + (r.time ? "　" + r.time.slice(0, 5) : ""))}">${escapeHtml(oneLine(r.title))}</span>
-        <span class="cr-bgm">${escapeHtml(it.bgm)}${it.right ? " " + escapeHtml(it.right) : ""}</span>${warn}${ok}</div>`;
-}
-
-function listHtml(edit) {
-    const parts = [];
-    const items = view.items.filter(x => x.sec === curSheet);
-    items.forEach((it, k) => {
-        if (it.chapter) {
-            const nx = items[k + 1];
-            if (nx && !nx.chapter && nx.shown) parts.push(`<div class="cr-chap">${escapeHtml(oneLine(it.row.title))}</div>`);
-            return;
-        }
-        if (it.shown) parts.push(rowHtml(it, edit));
-    });
-    if (parts.length) return parts.join("");
-    if (edit) return `<div class="empty">台本がありません。上から Excel を読み込んでください。</div>`;
-    if (!script().rows.length) return `<div class="sc-none"><b>台本がありません</b><button type="button" class="btn go" data-act="to-edit">編集で台本を読み込む</button></div>`;
-    // このシートにキューが1つも無い
-    const n = Object.keys(suggestions).filter(i => suggestions[i].cue && script().rows[i].sec === curSheet).length;
-    return n
-        ? `<div class="sc-none"><b>このシートにはまだ出すものが付いていません</b><button type="button" class="btn sc-none-btn" data-act="adopt-all">✓ 提案をすべて採用（${n}行）</button></div>`
-        : `<div class="sc-none"><b>このシートにはまだ出すものが付いていません</b><span>スライド・曲が見つかりません。slides フォルダ・music フォルダを確認してください</span><button type="button" class="btn go" data-act="to-edit">編集で確かめる</button></div>`;
-}
-
-// ---- 一覧の上の知らせ：提案がある／足りない素材がある ----
-function pendingSuggestionRows() { return Object.keys(suggestions).map(Number).filter(i => suggestions[i].cue && !script().rows[i].cue); }
-function missingMaterials() {
-    const sl = new Set(), mu = new Set();
-    Object.values(suggestions).forEach(sg => sg.hints.forEach(h => {
-        let m;
-        if ((m = /^スライドが見つかりません：(.+)$/.exec(h))) sl.add(m[1]);
-        else if ((m = /^曲が見つかりません：(.+)$/.exec(h))) mu.add(m[1]);
-    }));
-    return { slides: [...sl], songs: [...mu] };
-}
-function renderBanner() {
-    const edit = scMode === "edit";
-    const rows = pendingSuggestionRows();
-    const bn = $("#sc-banner");
-    bn.classList.toggle("hidden", edit || !rows.length);
-    bn.innerHTML = rows.length ? `<span>提案が ${rows.length} 行あります</span><button type="button" class="btn small sc-banner-ok" data-act="adopt-all">✓ すべて採用</button><button type="button" class="btn small" data-act="to-edit">編集で確かめる</button>` : "";
-    const ms = missingMaterials();
-    const mb = $("#sc-missing");
-    const total = ms.slides.length + ms.songs.length;
-    mb.classList.toggle("hidden", !total);
-    mb.textContent = `⚠ ${ms.slides.length ? "スライド" + ms.slides.length : ""}${ms.slides.length && ms.songs.length ? "・" : ""}${ms.songs.length ? "曲" + ms.songs.length : ""} が見つかりません`;
-    if (!total) $("#sc-missing-pop").classList.add("hidden");
-    return ms;
-}
-function adoptAllSuggestions() {
-    const rows = pendingSuggestionRows();
-    if (!rows.length) return showInfo("採用できる提案がありません");
-    if (confirm(`提案を${rows.length}行すべてに採用して、キューを付けます。よろしいですか？`)) adoptSuggestions(rows);
-}
-function toggleMissingPop() {
-    const pop = $("#sc-missing-pop");
-    const ms = missingMaterials();
-    pop.innerHTML = `<button type="button" class="btn small sc-missing-x" data-act="close-missing">閉じる</button>` +
-        (ms.slides.length ? `<h3>スライド</h3>${ms.slides.map(x => `<div>${escapeHtml(x)}</div>`).join("")}` : "") +
-        (ms.songs.length ? `<h3>曲</h3>${ms.songs.map(x => `<div>${escapeHtml(x)}</div>`).join("")}` : "");
-    pop.classList.toggle("hidden");
-}
-
-function renderScript() {
-    const sc = script();
-    computeView();
-    const sel = selRow();
-    // 選んだ行が別のシートなら、シートのタブも合わせる
-    if (sel !== lastSel) {
-        lastSel = sel;
-        const r = sc.rows[sel];
-        if (r) curSheet = r.sec;
-    }
-    if (curSheet >= sc.sections.length) curSheet = 0;
-    const edit = scMode === "edit";
-    $("#sc-live-view").classList.toggle("hidden", edit);
-    $("#sc-edit-view").classList.toggle("hidden", !edit);
-    $("#sc-edit-toggle").textContent = edit ? "本番へ" : "編集";
-    $("#sc-edit-toggle").classList.toggle("on", edit);
-    $("#sc-showall").checked = scShowAll;
-    $("#sc-showall").parentElement.classList.toggle("hidden", edit);
-    $("#sc-sheets").innerHTML = sc.sections.map((s, k) => `<button type="button" data-sheet="${k}" class="${k === curSheet ? "on" : ""}">${escapeHtml(s.name)}</button>`).join("");
-
-    const key = [sc.rev, scMode, scShowAll, curSheet, Object.keys(suggestions).length, suggestKey, state ? JSON.stringify(state.futa) : "", slides.length].join("|");
-    if (key !== scListKey) {
-        scListKey = key;
-        const list = edit ? $("#sc-elist") : $("#sc-list");
-        const top = list.scrollTop;
-        list.innerHTML = listHtml(edit);
-        list.scrollTop = top;
-        $("#sc-summary").textContent = sc.rows.length ? `${sc.title ? sc.title + "：" : ""}キュー ${SC.cueRows(sc).length}個` : "";
-        edKey = "";
-    }
-    renderBanner();
-    renderMarks();
-    if (edit) renderEditor();
-    sdRefresh();
-}
-
-// 選んでいる行（黄）・本線に出ている行（赤）・上のカード
-function renderMarks(opts = {}) {
-    const sc = script();
-    const sel = selRow();
-    $$(".cr.sel, .cr.onair").forEach(el => el.classList.remove("sel", "onair"));
-    const root = scMode === "edit" ? $("#sc-elist") : $("#sc-list");
-    const a = sel >= 0 ? root.querySelector(`.cr[data-i="${sel}"]`) : null;
-    if (a) a.classList.add("sel");
-    const b = sc.onair >= 0 ? root.querySelector(`.cr[data-i="${sc.onair}"]`) : null;
-    if (b) b.classList.add("onair");
-    if (a && (opts.scroll || sel !== renderMarks.lastScrolled)) {
-        renderMarks.lastScrolled = sel;
-        const top = a.offsetTop - root.offsetTop - root.clientHeight / 3;
-        root.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-    }
-    renderCard(sel);
-    const key = `${sel}|${sc.rev}|${scMode}|${state ? JSON.stringify(state.program) : ""}`;
-    if (currentTab === "script" && key !== lastPvwKey) { lastPvwKey = key; if (!adhocActive) previewRow(sel); }
-}
-
-function renderCard(sel) {
-    const it = itemOf(sel);
-    const body = $("#sc-card-body");
-    if (!it) { body.innerHTML = `<span class="sc-card-none">出すキューがありません</span>`; return; }
-    const r = it.row;
-    body.innerHTML = `${thumbHtml(it)}
-        <span class="sc-card-text"><b class="sc-card-title" title="次に出す">${escapeHtml(r.no)} ${escapeHtml(oneLine(r.title))}</b>
-        <span class="sc-card-bgm">${escapeHtml(it.bgm)} ${escapeHtml(it.right)}</span></span>`;
-}
-
-// ---- 選ぶ（クリック・↑↓）＝PREVIEWに自動でセット（BGMは鳴らさない） ----
-function previewRow(i) {
-    const r = script().rows[i];
-    if (!r || r.kind === "chapter" || !state) return;
-    const cue = r.cue || (scMode === "edit" && suggestions[i] && suggestions[i].cue) || null;
-    if (!cue) return;
-    pvw = SC.buildScene(cue, state.program, logos());
-    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
-    pvwCue = { key: JSON.stringify(pvw), label: rowLabel(r) };
-    pvwChanged({ noAuto: true });
-}
-const followNextInPreview = () => { lastPvwKey = ""; renderMarks(); };
-const scrollToPos = () => renderMarks({ scroll: true });
-
-let posTimer = null;
-function persistPos(i) {
-    clearTimeout(posTimer);
-    posTimer = setTimeout(() => { scEditQuiet([{ op: "pos", pos: i }]); }, 60);
-}
-function setSel(i) {
-    adhocActive = false;
-    const sc = script();
-    if (!(i >= 0 && i < sc.rows.length)) return;
-    sc.pos = i;
-    lastSel = -2;
-    const r = sc.rows[i];
-    if (r.kind !== "chapter") curSheet = r.sec;
-    renderScript();
-    persistPos(i);
-}
-function moveSel(d) {
-    const sel = selRow();
-    const k = view.shown.indexOf(sel);
-    if (k < 0) return;
-    const n = view.shown[Math.max(0, Math.min(view.shown.length - 1, k + d))];
-    if (n !== sel) setSel(n);
-}
-const moveReadPos = moveSel;
-function jumpToRow(i) {
-    const n = view.shown.find(x => x >= i);
-    setSel(n !== undefined ? n : i);
-}
-
-// ---- 出す ----
-async function scTake() {
-    const sc = script();
-    const i = selRow();
-    const r = sc.rows[i];
-    if (!r) return showError("出すキューがありません");
-    if (!r.cue) { if (itemOf(i) && itemOf(i).pick) openPick(i); return showError("先にスライドを選んでください"); }
-    await control("cue", SC.cueRows(sc).indexOf(i) + 1);
-}
-// NEXT：いま出している行のあとの行を選んで、すぐ出す
-function scNext() {
-    const sc = script();
-    const n = view.shown.find(i => i > sc.onair);
-    if (n === undefined) return showError("次のキューがありません");
-    setSel(n);
-    return scTake();
-}
-const scPrev = () => control("prev");
-
-// キューが出されたとき（このPCのボタン・Stream Deck・HTTP どれでも）：音を動かし、選択を次の行へ進める
-function onCueFired(ev) {
-    const r = script().rows[ev.index];
-    if (r) { pgmCue = { key: JSON.stringify(state.program), label: rowLabel(r) }; renderMonitorDesc(); }
-    if (r && r.cue && !ev.silent) runCueAudio(r.cue);
-    const n = view.shown.find(i => i > ev.index);
-    setSel(n !== undefined ? n : ev.index);
-}
-
-// キューの音：BGM（鳴らす／フェードアウト／止める）と「小さく」
-function runCueAudio(cue) {
-    const b = cue.bgm;
-    if (b && b.action === "play") {
-        if (musicCur && musicCur.item.path === b.path) {      // すでに同じ曲が鳴っていれば、二重に鳴らさない
-            if (typeof cue.duck === "boolean") musicDuckSet(cue.duck);
-            return;
-        }
-        musicDuckSet(cue.duck === true, true);                // 曲を新しく鳴らすときは、小さく指定が無ければふつうの音量
-        playMusicPath(b.path, b.name, { loop: b.loop });
-        return;
-    }
-    if (b && b.action === "fade") musicFade();
-    else if (b && b.action === "stop") musicHalt();
-    if (typeof cue.duck === "boolean") musicDuckSet(cue.duck);
-}
-
-// ---- 台本の編集（サーバーへ） ----
-async function scEdit(ops) {
-    try {
-        const res = await fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) });
-        const body = await res.json();
-        if (!res.ok) { showError(`反映できませんでした：${body.error}`); return false; }
-        return true;
-    } catch (e) {
-        showError(SERVER_NG);
-        return false;
-    }
-}
-// 選択位置の保存のように、失敗しても知らせなくてよいもの
-function scEditQuiet(ops) {
-    fetch("/api/script/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) }).catch(() => {});
-}
-
-// ---- 提案（BGM・ビジョン・内容の文字から。前の行との差分だけ） ----
-function refreshSuggestions() {
-    if (!state) return;
-    const sc = script();
-    const key = `${sc.rev}|${slides.map(s => s.path).join("\n")}|${musicList.map(m => m.path).join("\n")}|${state.futa.left}`;
-    if (key === suggestKey) return;
-    suggestKey = key;
-    suggestions = SC.suggestAll(sc, { music: musicList, slides, futaLeft: state.futa.left });
-    scListKey = "";
-    renderScript();
-}
-
-async function adoptSuggestions(rows) {
-    const items = rows.filter(i => suggestions[i] && suggestions[i].cue).map(i => ({ row: i, cue: suggestions[i].cue }));
-    if (!items.length) return showInfo("採用できる提案がありません");
-    if (await scEdit([{ op: "cues", items }])) showInfo(`${items.length}行にキューを付けました`);
-}
-
-// ---- 台本の読み込み ----
 async function sendScriptFile(body, query) {
     try {
         const res = await fetch(`/api/script/import?${new URLSearchParams(query)}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body });
@@ -1159,11 +1051,13 @@ async function sendScriptFile(body, query) {
 function uploadScript(file) {
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) return showError("ファイルが大きすぎます（20MBまで）");
+    $("#sc-result").classList.add("hidden");
     sendScriptFile(file, { filename: file.name });
 }
 function pasteScript() {
     const t = $("#sc-paste").value;
     if (!t.trim()) return showError("貼り付ける内容がありません");
+    $("#sc-result").classList.add("hidden");
     sendScriptFile(t, { filename: "貼り付け", format: "paste" });
 }
 
@@ -1191,7 +1085,7 @@ function renderAssign() {
                 <label class="toggle">見出しの行 <input type="number" min="0" max="999" value="${c.headerRow + 1}" data-as-header="${k}" class="num-input sm"> <small>（0＝見出しなし）</small></label></div>
                 <div class="as-cols">${cols}</div></div>`;
         }).join("") +
-        `<div class="ctrl-row"><button type="button" class="btn go" id="btn-as-ok">この内容で取り込む</button><button type="button" class="btn" id="btn-as-cancel">やめる</button></div>`;
+        `<div class="ctrl-row"><button type="button" class="btn go" id="btn-as-ok">この内容でシーンを作る</button><button type="button" class="btn" id="btn-as-cancel">やめる</button></div>`;
     box.classList.remove("hidden");
 }
 
@@ -1210,276 +1104,29 @@ async function reanalyze(k, headerRow) {
 
 async function commitAssign() {
     const { resp, cfg } = importState;
-    const hadScript = script().rows.some(r => !script().sections[r.sec].manual);
-    if (hadScript && !confirm("いまの台本を、この内容に置き換えます。ひもづけたキューは、同じ内容の行に引き継ぎます。よろしいですか？")) return;
+    const hadScript = scenes().some(s => s.script);
+    if (hadScript && !confirm("台本を読み直します。台本から作ったシーンのうち、手で直していないものだけ更新します（手で直したシーンはそのまま残ります）。よろしいですか？")) return;
     try {
-        const res = await fetch("/api/script/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importId: resp.importId, sheets: cfg.map(c => ({ index: c.index, include: c.include, headerRow: c.headerRow, roles: c.roles })) }) });
+        const res = await fetch("/api/script/commit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ importId: resp.importId, mergePicks: $("#opt-merge-picks").checked, sheets: cfg.map(c => ({ index: c.index, include: c.include, headerRow: c.headerRow, roles: c.roles })) }) });
         const j = await res.json();
-        if (!res.ok) return showError(`取り込めませんでした：${j.error}`);
+        if (!res.ok) return showError(`作れませんでした：${j.error}`);
         importState = null;
         renderAssign();
-        showInfo(`${j.sections}セクション・${j.rows}行を取り込みました${j.carried ? `（キューを${j.carried}個引き継ぎ）` : ""}`);
-        renderLost(j.lost || []);
+        showInfo(`シーンを作りました（新しく${j.created}個・更新${j.updated}個）`);
+        renderScriptResult(j);
     } catch (e) { showError(SERVER_NG); }
 }
 
-function renderLost(lost) {
-    const box = $("#sc-lost");
-    if (!lost.length) { box.classList.add("hidden"); return; }
-    box.innerHTML = `<h2>引き継げなかったキュー（${lost.length}個） <button type="button" class="btn small" id="btn-lost-close">閉じる</button></h2>
-        <div class="note">読み直した台本で、同じ内容の行が見つからなかったため外れました。必要なら、該当の行に付け直してください。</div>` +
-        lost.map(l => `<div class="lost-row">${escapeHtml(l.section)}／${escapeHtml(l.title || l.script)}</div>`).join("");
+function renderScriptResult(j) {
+    const box = $("#sc-result");
+    const list = (title, names) => names.length ? `<div class="note"><b>${title}（${names.length}個）</b><br>${names.slice(0, 30).map(escapeHtml).join("<br>")}${names.length > 30 ? "<br>…" : ""}</div>` : "";
+    box.innerHTML = `<h2>できました</h2><div>${j.sheets}シート・${j.rows}行から、シーンを <b>${j.created}</b> 個作り、<b>${j.updated}</b> 個を更新しました。</div>` +
+        list("手で直してあるため、そのまま残したシーン", j.kept || []) + list("台本に無くなったシーン（消さずに残してあります）", j.missing || []);
     box.classList.remove("hidden");
 }
 
-
-// ---- 編集画面：行を選ぶと右に編集パネル（クリックするたびに保存） ----
-const slideThumbs = (folder, on, named) => slides
-    .filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && (!folder || SC.normPath(s.path).includes(SC.normPath(folder))))
-    .map(s => `<button type="button" class="pick-item ${s.path === on ? "on" : ""}" data-ed="leftfile" data-v="${escapeHtml(s.path)}" title="${escapeHtml(s.name)}">${s.kind === "video"
-        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}${named ? `<span class="pick-name">${escapeHtml(s.name)}</span>` : ""}</button>`).join("")
-    || `<div class="empty">画像がありません</div>`;
-
-function edCue() {
-    const it = itemOf(selRow());
-    const c = it && (it.cue || (it.sug && it.sug.cue));
-    return Object.assign({ left: null, right: null, band: null, bgm: null, memo: "" }, c ? clone(c) : {});
-}
-
-async function edMutate(fn, touchesPicture) {
-    const i = selRow();
-    const r = script().rows[i];
-    if (!r || r.kind === "chapter") return;
-    const c = edCue();
-    fn(c);
-    if (touchesPicture) delete c.scene;
-    const empty = !c.left && !c.right && !c.band && !c.bgm && typeof c.duck !== "boolean" && !c.scene;
-    r.cue = empty ? null : c;                 // 先に手元を変える（画面がすぐ変わるように）
-    scListKey = "";
-    lastPvwKey = "";
-    renderScript();
-    await scEdit([{ op: "cue", row: i, cue: r.cue }]);
-}
-
-function renderEditor() {
-    const box = $("#sc-editor");
-    const i = selRow();
-    const it = itemOf(i);
-    if (!it) { box.innerHTML = `<div class="empty">行を選びます</div>`; edKey = ""; return; }
-    const folder = edPickAll ? "" : it.pick;
-    const key = [i, edPickAll, slides.length, musicList.length].join("|");
-    if (key !== edKey) {
-        edKey = key;
-        const r = it.row;
-        const manual = script().sections[r.sec].manual;
-        const raw = [["番号", r.no], ["時刻", r.time], ["所要", r.dur], ["場面", r.title], ["話者", r.speaker], ["セリフ", r.script], ["BGM列", r.bgm], ["ビジョン左", r.vision], ["ビジョン右", r.visionR], ["マイク", r.mic], ["備考", r.note]]
-            .filter(x => x[1]).map(x => `<div class="raw-row"><b>${x[0]}</b><span>${escapeHtml(x[1])}</span></div>`).join("");
-        const sg = it.sug ? [...it.sug.reasons, ...it.sug.hints].map(t => `<div class="raw-row"><b>提案</b><span>${escapeHtml(t)}</span></div>`).join("") : "";
-        box.innerHTML = `<div class="ed-head"><b>${escapeHtml(r.no)}</b> ${escapeHtml(oneLine(r.title))}</div>
-            <div class="ed-sec"><h3>左</h3><div class="ed-btns">
-                <button type="button" data-ed="left" data-v="">変えない</button><button type="button" data-ed="left" data-v="futa">ロゴ</button><button type="button" data-ed="left" data-v="black">黒</button>
-                ${folder ? `<span class="ed-chip">${escapeHtml(folder)} <button type="button" class="btn small" data-ed="pickall">すべて</button></span>` : ""}</div>
-                <div class="pick-grid" id="ed-grid">${slideThumbs(folder, "")}</div></div>
-            <div class="ed-sec"><h3>右</h3><div class="ed-btns">
-                <button type="button" data-ed="right" data-v="">変えない</button><button type="button" data-ed="right" data-v="cam1">カメラ1</button><button type="button" data-ed="right" data-v="cam2">カメラ2</button>
-                <button type="button" data-ed="right" data-v="futa">ロゴ</button><button type="button" data-ed="right" data-v="black">黒</button>
-                <label class="toggle" id="ed-fit-wrap"><input type="checkbox" id="ed-fit"> 16:9のまま</label></div></div>
-            <div class="ed-sec"><h3>BGM</h3><div class="ed-btns">
-                <button type="button" data-ed="bgm" data-v="">変えない</button><button type="button" data-ed="bgm" data-v="fade">フェード</button><button type="button" data-ed="bgm" data-v="stop">停止</button>
-                <label class="toggle"><input type="checkbox" id="ed-loop"> くり返し</label>
-                <span class="ed-sep"></span>
-                <button type="button" data-ed="duck" data-v="">音量そのまま</button><button type="button" data-ed="duck" data-v="on">小さく</button><button type="button" data-ed="duck" data-v="off">戻す</button></div>
-                <div class="ed-btns ed-songs">${musicList.map(m => `<button type="button" data-ed="song" data-v="${escapeHtml(m.path)}" data-name="${escapeHtml(m.name)}">♪ ${escapeHtml(m.name)}</button>`).join("")}</div></div>
-            <div class="ed-foot"><button type="button" class="btn small danger" data-ed="del">キューを外す</button>
-                <button type="button" class="btn small" data-ed="scene" title="左右の指定のかわりに、いまのPREVIEWの画面をそのまま使います">PREVIEWの画面を使う</button>
-                ${manual ? `<button type="button" class="btn small" data-ed="mv" data-v="-1">▲</button><button type="button" class="btn small" data-ed="mv" data-v="1">▼</button><button type="button" class="btn small danger" data-ed="rowdel">行を消す</button>` : ""}</div>
-            <details class="ed-raw"><summary>台本の原文</summary>${raw}${sg}</details>`;
-    }
-    // 選んでいる内容の印
-    const c = edCue();
-    const lt = c.left ? c.left.type : "";
-    const on = (sel, v) => box.querySelectorAll(sel).forEach(b => b.classList.toggle("on", b.dataset.v === v));
-    on('[data-ed="left"]', lt === "slide" ? "__" : lt);
-    box.querySelectorAll(".pick-item").forEach(b => b.classList.toggle("on", lt === "slide" && b.dataset.v === c.left.file));
-    const rt = c.right ? (c.right.type === "camera" ? c.right.cam : c.right.type) : "";
-    on('[data-ed="right"]', rt);
-    $("#ed-fit-wrap").classList.toggle("hidden", !(c.right && c.right.type === "camera"));
-    $("#ed-fit").checked = !!(c.right && c.right.fit === "contain");
-    on('[data-ed="bgm"]', c.bgm && c.bgm.action !== "play" ? c.bgm.action : (c.bgm ? "__" : ""));
-    box.querySelectorAll('[data-ed="song"]').forEach(b => b.classList.toggle("on", !!c.bgm && c.bgm.action === "play" && b.dataset.v === c.bgm.path));
-    $("#ed-loop").checked = !!(c.bgm && c.bgm.action === "play" && c.bgm.loop);
-    on('[data-ed="duck"]', c.duck === true ? "on" : c.duck === false ? "off" : "");
-}
-
-function onEditorClick(e) {
-    const b = e.target.closest("[data-ed]");
-    if (!b) return;
-    const v = b.dataset.v;
-    switch (b.dataset.ed) {
-        case "left": edMutate(c => { c.left = v ? { type: v } : null; }, true); break;
-        case "leftfile": { const wide = isWideSlide(v, b.querySelector("img")); edMutate(c => putSlide(c, v, wide), true); break; }
-        case "right": edMutate(c => {
-            c.right = !v ? null : /^cam/.test(v) ? ($("#ed-fit").checked ? { type: "camera", cam: v, fit: "contain" } : { type: "camera", cam: v }) : { type: v };
-        }, true); break;
-        case "bgm": edMutate(c => { c.bgm = v ? { action: v } : null; }); break;
-        case "song": edMutate(c => { c.bgm = { action: "play", path: v, name: b.dataset.name.slice(0, 300), loop: $("#ed-loop").checked }; }); break;
-        case "duck": edMutate(c => { if (v) c.duck = v === "on"; else delete c.duck; }); break;
-        case "pickall": edPickAll = true; edKey = ""; renderEditor(); break;
-        case "del": edMutate(c => { c.left = c.right = c.band = c.bgm = null; delete c.scene; delete c.duck; }); break;
-        case "scene": edMutate(c => { c.scene = clone(pvw); }); break;
-        case "mv": moveManual(Number(v)); break;
-        case "rowdel": deleteManual(); break;
-    }
-}
-
-async function moveManual(d) {
-    const i = selRow();
-    if (await scEdit([{ op: "moveRow", row: i, dir: d }])) { script().pos = Math.max(0, i + d); lastSel = -2; scEditQuiet([{ op: "pos", pos: script().pos }]); }
-}
-async function deleteManual() {
-    const i = selRow();
-    const r = script().rows[i];
-    if (!r || !confirm(`「${r.title}」の行を消しますか？`)) return;
-    await scEdit([{ op: "deleteRow", row: i }]);
-}
-
-// ---- 左（と全面）を選ぶ・当日に選ぶ：右側のパネルでサムネイルから1クリック ----
-//   mode "row"   … その行のキューを変える（保存）。全面（14:5）の画像は帯全体にする
-//   mode "adhoc" … キューは変えず、PREVIEW にだけ入れる（TAKE で出せる）
-let pickState = null;
-let adhocActive = false;
-const GROUP_ORDER = ["全面", "ロゴ", "進行", "入場", "選手"];
-function slideGroup(s) {
-    const segs = s.folder.split("/").filter(Boolean);
-    if (segs.length && /^\d+x\d+$/.test(segs[0])) segs.shift();       // 960x686 のような大きさのフォルダは、とばす
-    return segs[0] || "（直下）";
-}
-function slideGroups() {
-    const set = new Set(slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER)).map(slideGroup));
-    return [...set].sort((a, b) => {
-        const ia = GROUP_ORDER.indexOf(a), ib = GROUP_ORDER.indexOf(b);
-        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, "ja");
-    });
-}
-// 全面（14:5）の画像か：縦横比 2.4 以上、または 全面/ フォルダ
-function isWideSlide(path, imgEl) {
-    const r = imgEl && imgEl.naturalWidth ? imgEl.naturalWidth / imgEl.naturalHeight : aspectMap[path];
-    if (r) return r >= 2.4;
-    return /(^|\/)全面\//.test(path);
-}
-
-function openPick(i, mode = "row") {
-    const it = i >= 0 ? itemOf(i) : null;
-    if (mode === "row" && (!it || it.chapter)) return;
-    const groups = slideGroups();
-    let tab = groups[0] || "";
-    let sub = "";
-    if (mode === "row") {
-        if (selRow() !== i) setSel(i);
-        const cur = it.cue && (it.cue.band || it.cue.left);
-        if (it.pick) {                                    // 当日に選ぶ行：そのフォルダを最初に開く
-            const f = slides.find(s => SC.normPath(s.path).includes(SC.normPath(it.pick)));
-            if (f) { tab = slideGroup(f); sub = it.pick; }
-        } else if (cur && cur.type === "slide") {
-            const f = slides.find(s => s.path === cur.file);
-            if (f) tab = slideGroup(f);
-        } else if (groups.includes("進行")) tab = "進行";
-    }
-    pickState = { mode, row: i, tab, sub };
-    renderPick();
-    $("#sc-pick").classList.remove("hidden");
-    $("#tab-script").classList.add("picking");
-    $("#sc-pick").scrollTop = 0;
-}
-function renderPick() {
-    if (!pickState) return;
-    const { mode, row, tab, sub } = pickState;
-    const it = row >= 0 ? itemOf(row) : null;
-    $("#sc-pick-title").textContent = mode === "adhoc" ? "素材から出す（キューは変わりません）" : it && it.pick ? `${rowLabel(it.row)} に出す画像を選ぶ` : `${it ? rowLabel(it.row) : ""} の左を選ぶ`;
-    $("#pick-quick").innerHTML = mode === "row"
-        ? `<button type="button" class="btn small" data-pickq="black" title="左は黒にして、カメラだけを出します">カメラだけ（左は黒）</button><button type="button" class="btn small" data-pickq="futa" title="左にロゴ（フタ）を出します">左フタ（ロゴ）</button>` : "";
-    $("#pick-tabs").innerHTML = slideGroups().map(g => `<button type="button" data-picktab="${escapeHtml(g)}" class="${g === tab ? "on" : ""}">${escapeHtml(g)}</button>`).join("")
-        + (sub ? `<span class="ed-chip">${escapeHtml(sub)}</span>` : "");
-    const cur = it && it.cue && (it.cue.band || it.cue.left);
-    const on = cur && cur.type === "slide" ? cur.file : "";
-    const list = slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && slideGroup(s) === tab && (!sub || SC.normPath(s.path).includes(SC.normPath(sub))));
-    $("#pick-grid").innerHTML = list.map(s => `<button type="button" class="pick-item ${s.path === on ? "on" : ""}" data-pickfile="${escapeHtml(s.path)}" title="${escapeHtml(s.name)}">${s.kind === "video"
-        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}<span class="pick-name">${escapeHtml(s.name)}</span></button>`).join("")
-        || `<div class="empty">画像がありません</div>`;
-}
-function closePick() { $("#sc-pick").classList.add("hidden"); $("#tab-script").classList.remove("picking"); pickState = null; }
-
-// 選んだ画像を、行のキューに入れる（全面なら帯全体、そうでなければ左）
-function putSlide(c, file, wide) {
-    if (wide) { c.band = { type: "slide", file }; c.left = null; c.right = null; }
-    else { c.left = { type: "slide", file }; c.band = null; }
-}
-async function applyPick(file, imgEl) {
-    const st = pickState;
-    if (!st) return;
-    closePick();
-    const wide = isWideSlide(file, imgEl);
-    if (st.mode === "adhoc") return adhocToPreview(file, wide);
-    if (selRow() !== st.row) setSel(st.row);
-    await edMutate(c => putSlide(c, file, wide), true);
-}
-async function applyPickQuick(kind) {
-    const st = pickState;
-    if (!st || st.mode !== "row") return;
-    closePick();
-    if (selRow() !== st.row) setSel(st.row);
-    await edMutate(c => { c.left = { type: kind }; c.band = null; }, true);
-}
-// 素材から出す：キューは変えず、PREVIEW にだけ入れる
-function adhocToPreview(file, wide) {
-    const p = clone(state.program);
-    if (wide) { p.layout = "wide"; p.slots.wide = { type: "slide", file }; }
-    else { p.layout = "split"; p.slots.left = { type: "slide", file }; }
-    pvw = p;
-    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
-    adhocActive = true;
-    pvwChanged({ noAuto: true });
-    showInfo("PREVIEW に入れました（TAKE で出します。台本のキューは変わりません）");
-}
-
-async function clearSectionCues() {
-    const sc = script();
-    const sec = sc.sections[curSheet];
-    if (!sec) return showError("シートを選んでください");
-    if (!confirm(`「${sec.name}」のキューを全部消しますか？（台本の文字は消えません）`)) return;
-    if (await scEdit([{ op: "clearSection", sec: curSheet }])) showInfo(`「${sec.name}」のキューを消しました`);
-}
-
-async function addManualCue() {
-    const name = prompt("手動の式次第に足すキューの名前（いまのプレビューの画面を使います）", "");
-    if (name === null) return;
-    if (!name.trim()) return showError("名前を入れてください");
-    if (await scEdit([{ op: "addManual", title: name.trim().slice(0, 300), cue: { scene: clone(pvw), bgm: null, memo: "" } }])) showInfo("手動の式次第に追加しました");
-}
-
-function setScMode(mode) {
-    scMode = mode;
-    writeLocal(SC_MODE_KEY, mode);
-    scListKey = "";
-    lastPvwKey = "";
-    renderScript();
-    renderMarks({ scroll: true });
-}
-
-function bindScript() {
-    $("#sc-edit-toggle").addEventListener("click", () => setScMode(scMode === "edit" ? "live" : "edit"));
-    $("#sc-showall").addEventListener("change", e => { scShowAll = e.target.checked; writeLocal(SC_ALL_KEY, scShowAll); scListKey = ""; renderScript(); });
-    $("#sc-sheets").addEventListener("click", e => {
-        const b = e.target.closest("[data-sheet]");
-        if (!b) return;
-        curSheet = Number(b.dataset.sheet);
-        const first = view.items.find(x => !x.chapter && x.shown && x.sec === curSheet);
-        if (first) setSel(first.i); else { scListKey = ""; renderScript(); }
-    });
-    $("#btn-sc-next").addEventListener("click", scNext);
-    $("#btn-sc-prev").addEventListener("click", scPrev);
-    $("#sc-card-body").addEventListener("click", e => { const p = e.target.closest("[data-pick]"); if (p) openPick(Number(p.dataset.pick)); });
-
+function bindScriptDialog() {
+    $("#script-close").addEventListener("click", () => $("#dlg-script").close());
     $("#btn-sc-file").addEventListener("click", () => $("#sc-file").click());
     $("#sc-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; uploadScript(f); });
     $("#btn-sc-paste-toggle").addEventListener("click", () => $("#sc-paste-box").classList.toggle("hidden"));
@@ -1488,7 +1135,6 @@ function bindScript() {
     drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
     drop.addEventListener("dragleave", () => drop.classList.remove("over"));
     drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadScript(e.dataTransfer.files[0]); });
-
     $("#sc-import").addEventListener("change", e => {
         const t = e.target;
         if (!importState) return;
@@ -1503,73 +1149,11 @@ function bindScript() {
         if (e.target.closest("#btn-as-ok")) commitAssign();
         else if (e.target.closest("#btn-as-cancel")) { importState = null; renderAssign(); }
     });
-    $("#sc-lost").addEventListener("click", e => { if (e.target.closest("#btn-lost-close")) $("#sc-lost").classList.add("hidden"); });
-
-    $("#btn-sc-adopt-all").addEventListener("click", () => {
-        const rows = Object.keys(suggestions).map(Number).filter(i => suggestions[i].cue);
-        if (!rows.length) return showInfo("採用できる提案がありません");
-        if (confirm(`提案を${rows.length}行すべてに採用して、キューを付けます。よろしいですか？`)) adoptSuggestions(rows);
-    });
-    $("#btn-sc-clear-sec").addEventListener("click", clearSectionCues);
-    $("#btn-sc-add-manual").addEventListener("click", addManualCue);
-
-    // 一覧：クリック＝選ぶ（PREVIEWに即セット）、ダブルクリック＝すぐ出す
-    const onList = e => {
-        const ad = e.target.closest("[data-adopt]");
-        if (ad) return adoptSuggestions([Number(ad.dataset.adopt)]);
-        const p = e.target.closest("[data-pick]");
-        const row = e.target.closest(".cr");
-        if (!row) return;
-        setSel(Number(row.dataset.i));
-        if (p && scMode === "live") openPick(Number(row.dataset.i));
-    };
-    $("#sc-list").addEventListener("click", onList);
-    $("#sc-elist").addEventListener("click", onList);
-    $("#sc-list").addEventListener("dblclick", e => {
-        if (e.target.closest("[data-pick]")) return;
-        if (e.target.closest(".cr")) scTake();
-    });
-    $("#sc-editor").addEventListener("click", onEditorClick);
-    $("#sc-editor").addEventListener("change", e => {
-        if (e.target.id === "ed-fit") edMutate(c => { if (c.right && c.right.type === "camera") { if (e.target.checked) c.right.fit = "contain"; else delete c.right.fit; } }, true);
-        else if (e.target.id === "ed-loop") edMutate(c => { if (c.bgm && c.bgm.action === "play") c.bgm.loop = e.target.checked; });
-    });
-    $("#btn-pick-close").addEventListener("click", closePick);
-    // 一覧の上の知らせ・空のシート・足りない素材
-    const onAct = e => {
-        const a = e.target.closest("[data-act]");
-        if (!a) return;
-        if (a.dataset.act === "adopt-all") adoptAllSuggestions();
-        else if (a.dataset.act === "to-edit") setScMode("edit");
-        else if (a.dataset.act === "close-missing") $("#sc-missing-pop").classList.add("hidden");
-    };
-    $("#sc-banner").addEventListener("click", onAct);
-    $("#sc-list").addEventListener("click", onAct);
-    $("#sc-missing-pop").addEventListener("click", onAct);
-    $("#sc-missing").addEventListener("click", toggleMissingPop);
-    $("#pick-grid").addEventListener("click", e => { const b = e.target.closest("[data-pickfile]"); if (b) applyPick(b.dataset.pickfile, b.querySelector("img")); });
-    $("#pick-tabs").addEventListener("click", e => { const b = e.target.closest("[data-picktab]"); if (b && pickState) { pickState.tab = b.dataset.picktab; pickState.sub = ""; renderPick(); $("#sc-pick").scrollTop = 0; } });
-    $("#pick-quick").addEventListener("click", e => { const b = e.target.closest("[data-pickq]"); if (b) applyPickQuick(b.dataset.pickq); });
-    $("#sc-adhoc").addEventListener("click", () => openPick(-1, "adhoc"));
 }
 
 // --------------------------------------------------------------------------
-// タブの切り替え・フタ
+// フタ・BLACK・切り替え方
 // --------------------------------------------------------------------------
-function selectTab(name) {
-    currentTab = name;
-    $$("#tabs button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
-    $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
-    if (name !== "script") { closePick(); adhocActive = false; }
-    renderMonitorDesc();
-    if (name === "script") {
-        scListKey = "";
-        renderScript();
-        scrollToPos();
-        followNextInPreview();
-    }
-}
-
 function renderFuta() {
     const f = state.futa;
     $("#btn-futa-left").classList.toggle("on", f.active === "left");
@@ -1579,7 +1163,6 @@ function renderFuta() {
     $("#futa-info").textContent = (lg.left ? `左フタ：${baseName(lg.left)}` : "左フタ：画像がありません（黒になります）") + " ／ " +
         (lg.full ? `全面フタ：${baseName(lg.full)}` : "全面フタ：画像がありません（黒になります）") +
         (!lg.left || !lg.full ? "　→ slides/フタ/ に画像を入れて「⟳ 読み直す」を押すか、上で選んでください" : "");
-    sdRefresh();
 }
 
 let lastFutaOptKey = "";
@@ -1599,18 +1182,25 @@ function renderFutaSelects() {
     });
 }
 
-// 右面のカメラ⇔ロゴ（本線に直接）。カメラのときはロゴに、そうでなければカメラ1に切り替える
-let rightCamMemo = { type: "camera", cam: "cam1" };
-function rightCamLogo() {
-    if (!state) return;
-    const prog = clone(state.program);
-    if (prog.layout !== "split") prog.layout = "split";
-    const logo = logos().left;
-    const isLogo = prog.slots.right.type === "slide" && prog.slots.right.file === logo && !!logo;
-    if (!isLogo && prog.slots.right.type === "camera") rightCamMemo = clone(prog.slots.right);
-    prog.slots.right = isLogo ? clone(rightCamMemo) : (logo ? { type: "slide", file: logo } : { type: "black" });
-    if (!logo && !isLogo) showError("フタの画像がありません。slides/フタ/ に画像を入れてください");
-    patch({ program: prog });
+function renderTransition() {
+    const t = state.transition;
+    $("#btn-cut").classList.toggle("on", t.type === "cut");
+    $("#btn-fade").classList.toggle("on", t.type === "fade");
+    if (document.activeElement !== $("#fade-sec")) $("#fade-sec").value = (t.ms / 1000).toFixed(1);
+}
+function setTransition(type, ms) {
+    const cur = state.transition;
+    patch({ transition: { type, ms: ms === undefined ? cur.ms : ms } });
+}
+
+// テスト画面（本線に直接出す。もう一度押すと元の画面に戻る）
+let testPrev = null;
+function toggleTestPattern() {
+    if (testPrev) { const p = testPrev; testPrev = null; patch({ program: p }); showInfo("テスト画面をやめました"); return; }
+    if (state.program.name === "テスト画面") return showError("テスト画面が出ています。TAKE などで別の画面を出してください");
+    testPrev = clone(state.program);
+    patch({ program: { sceneId: "", name: "テスト画面", layers: [SCN.newLayer("test", {}, SCN.presets(stage()).full)] }, black: false });
+    showInfo("テスト画面を本線に出しました。緑の枠がビジョンの四辺に合うか確かめます");
 }
 
 // --------------------------------------------------------------------------
@@ -1620,16 +1210,23 @@ const SD_BGM_KEY = "stadiumvision-baseball.sdbgm";
 const SD_SECTION_KEYS = 8;
 const SD_BGM_KEYS = 12;
 const sdBgmPrefs = readLocal(SD_BGM_KEY, []);
-const wrapLabel = (t, n) => { t = String(t || ""); return t.length > n ? t.slice(0, n) + "\n" + t.slice(n, n * 2) : t; };
 
 function sdSong(i) {
     const path = sdBgmPrefs[i];
     return (path && musicList.find(m => m.path === path)) || (!path ? musicList[i] : null) || null;
 }
 function sdNextTitle() {
-    const sc = script();
-    const i = SC.nextCueRow(sc);
-    return i >= 0 ? (sc.rows[i].title || `${i + 1}行目`) : "（なし）";
+    if (!state) return "";
+    const f = SCN.flowIds(state);
+    const id = f[f.indexOf(state.cursor) + 1];
+    const sc = id && byId(id);
+    return sc ? sc.name : "（なし）";
+}
+// セクション（グループ）の一覧：シーンの並びに出てくる順
+function groupList() {
+    const out = [];
+    orderIds().forEach(id => { const s = byId(id); if (s && !out.includes(s.group)) out.push(s.group); });
+    return out;
 }
 
 function buildSdActions() {
@@ -1637,22 +1234,17 @@ function buildSdActions() {
     const add = (id, describe, run) => A.push({ id, describe, run });
     // 優先順位の高い順（6キー・8キーの機種には、この順に詰める）
     add("next", () => ({ label: "NEXT ▶", sub: sdNextTitle(), color: "#15803d" }), scNext);
-    add("prev", () => ({ label: "◀ PREV", sub: "前のキュー", color: "#0f766e" }), scPrev);
+    add("prev", () => ({ label: "◀ PREV", sub: "前のシーン", color: "#0f766e" }), scPrev);
     add("futaLeft", () => ({ label: "左フタ", sub: "ロゴ", color: "#7c3aed", toggle: true, on: !!state && state.futa.active === "left", onColor: "#a78bfa" }), () => control("futa"));
     add("black", () => ({ label: "BLACK", color: "#475569", toggle: true, on: !!state && state.black, onColor: "#dc2626" }), () => control("black"));
     add("bgmFade", () => ({ label: "BGM\nフェード", sub: "アウト", color: "#b45309" }), musicFade);
     add("bgmStop", () => ({ label: "BGM\n停止", sub: "すぐ止める", color: "#991b1b" }), musicHalt);
     add("futaFull", () => ({ label: "全面フタ", sub: "ロゴ", color: "#6d28d9", toggle: true, on: !!state && state.futa.active === "full", onColor: "#a78bfa" }), () => control("futaFull"));
     add("take", () => ({ label: "TAKE", sub: "PVW→本線", color: "#dc2626" }), doTake);
-    add("readDown", () => ({ label: "読み位置\n↓", color: "#1d4ed8" }), () => moveReadPos(1));
-    add("readUp", () => ({ label: "読み位置\n↑", color: "#1d4ed8" }), () => moveReadPos(-1));
+    add("readDown", () => ({ label: "選ぶ\n↓", sub: "PREVIEW", color: "#1d4ed8" }), () => moveSel(1));
+    add("readUp", () => ({ label: "選ぶ\n↑", sub: "PREVIEW", color: "#1d4ed8" }), () => moveSel(-1));
     add("bgmDuck", () => ({ label: "BGM\n小さく", sub: musicDucked ? "戻す" : "", color: "#b45309", toggle: true, on: musicDucked, onColor: "#f59e0b" }), () => musicDuck());
     add("swap", () => ({ label: "⇄ 入替", sub: "左右", color: "#0369a1" }), swapSides);
-    add("camLogo", () => {
-        const logo = logos().left;
-        const isLogo = !!state && !!logo && state.program.slots.right.type === "slide" && state.program.slots.right.file === logo;
-        return { label: "右面\nカメラ⇔ロゴ", color: "#0e7490", toggle: true, on: isLogo, onColor: "#22d3ee" };
-    }, rightCamLogo);
     for (let i = 0; i < SD_BGM_KEYS; i++) {
         add(`bgm${i + 1}`, () => {
             const m = sdSong(i);
@@ -1667,9 +1259,13 @@ function buildSdActions() {
     }
     for (let i = 0; i < SD_SECTION_KEYS; i++) {
         add(`sec${i + 1}`, () => {
-            const s = script().sections[i];
-            return s ? { label: s.name, sub: "読み位置へ", color: "#854d0e" } : { label: "", color: "#05070c" };
-        }, () => { const first = script().rows.findIndex(r => r.sec === i); if (first >= 0) jumpToRow(first); });
+            const g = groupList()[i];
+            return g !== undefined ? { label: g || "（なし）", sub: "ここへ", color: "#854d0e" } : { label: "", color: "#05070c" };
+        }, () => {
+            const g = groupList()[i];
+            const first = state && state.sceneOrder.find(id => { const s = byId(id); return s && s.group === g; });
+            if (first) selectScene(first, { scroll: true });
+        });
     }
     return A;
 }
@@ -1680,7 +1276,7 @@ function sdRefresh() {
     StreamDeck.refresh();
     renderSdKeys();
     const mk = musicList.map(m => m.path).join("|");
-    if (mk !== lastSdMusicKey) { lastSdMusicKey = mk; renderSdBgmSelects(); refreshSuggestions(); }
+    if (mk !== lastSdMusicKey) { lastSdMusicKey = mk; renderSdBgmSelects(); renderSound(); }
 }
 
 function renderSdKeys() {
@@ -1698,7 +1294,7 @@ function renderSdKeys() {
 function renderSdBgmSelects() {
     const box = $("#sd-bgm");
     if (!box) return;
-    box.innerHTML = Array.from({ length: SD_BGM_KEYS }, (_, i) => `<label>BGM ${i + 1}<select data-sd-bgm="${i}" class="text-input"><option value="">（${musicList[i] ? musicList[i].name : "曲なし"}）自動</option>` +
+    box.innerHTML = Array.from({ length: SD_BGM_KEYS }, (_, i) => `<label>BGM ${i + 1}<select data-sd-bgm="${i}" class="text-input"><option value="">（${musicList[i] ? escapeHtml(musicList[i].name) : "曲なし"}）自動</option>` +
         musicList.map(m => `<option value="${escapeHtml(m.path)}" ${sdBgmPrefs[i] === m.path ? "selected" : ""}>${escapeHtml(m.name)}</option>`).join("") + `</select></label>`).join("");
 }
 
@@ -1728,7 +1324,7 @@ function bindStreamDeckUi() {
     $$("[data-sd-shift]").forEach(b => b.addEventListener("click", () => StreamDeck.shiftKeys(Number(b.dataset.sdShift))));
     $("#sd-bright").addEventListener("change", e => StreamDeck.setBrightness(Number(e.target.value)));
     $("#sd-preview-count").addEventListener("change", e => { StreamDeck.setPreviewCount(Number(e.target.value)); renderSdKeys(); });
-    $("#sd-badge").addEventListener("click", () => { selectTab("settings"); $("#sd-panel").scrollIntoView({ block: "center" }); });
+    $("#sd-badge").addEventListener("click", () => { openSettings(); $("#sd-panel").scrollIntoView({ block: "center" }); });
     // 画面上のキー見本をクリックしても、実機のキーと同じ操作をする
     $("#sd-keys").addEventListener("click", e => { const k = e.target.closest("[data-sd-key]"); if (k) StreamDeck.press(Number(k.dataset.sdKey)); });
     $("#sd-bgm").addEventListener("change", e => {
@@ -1741,10 +1337,15 @@ function bindStreamDeckUi() {
 }
 
 // --------------------------------------------------------------------------
-// 設定：カメラ・チーム
+// 設定（⚙）：カメラ・出力の形
 // --------------------------------------------------------------------------
+function openSettings() {
+    const d = $("#dlg-settings");
+    if (!d.open) d.showModal();
+}
+
 async function refreshDevices(askPermission) {
-    if (!navigator.mediaDevices) return showError("このブラウザではカメラを選べません（Chrome か Edge で http://localhost:3007 を開いてください）");
+    if (!navigator.mediaDevices) return showError("このブラウザではカメラを選べません（Chrome か Edge で管理画面を開いてください）");
     if (askPermission) {
         try {
             const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -1780,9 +1381,6 @@ function setCamera(sel) {
     patch({ cameras });
 }
 
-// --------------------------------------------------------------------------
-// 出力の形（32:9 ／ SDI 1本の帯）
-// --------------------------------------------------------------------------
 let lastOutputKey = "";
 function renderOutput() {
     const o = state.output;
@@ -1791,19 +1389,17 @@ function renderOutput() {
     if (document.activeElement !== $("#out-band-y")) $("#out-band-y").value = o.bandY;
     if (document.activeElement !== $("#out-band-h")) $("#out-band-h").value = o.bandH;
     $("#out-band-info").textContent = o.mode === "sdi"
-        ? `ビジョンに映る帯：1920×${o.bandH}（y=${o.bandY}〜${o.bandY + o.bandH}）／ 左右に2分割したときは 1枚 960×${o.bandH}`
+        ? `ビジョンに映る帯：1920×${o.bandH}（y=${o.bandY}〜${o.bandY + o.bandH}）／ 左半分・右半分は 960×${o.bandH}`
         : "";
-    $("#hdr-sub").textContent = o.mode === "sdi" ? `SDI 1本（1920×1080 の中の帯 1920×${o.bandH}）管理画面` : "32:9（FHD×2）管理画面";
+    $("#hdr-sub").textContent = o.mode === "sdi" ? `1920×${o.bandH}${o.bandH === 686 ? "（守山）" : "（SDI 1本の帯）"}` : "3840×1080（32:9）";
     $$("[data-open=left],[data-open=right]").forEach(b => { b.disabled = o.mode === "sdi"; });
     const key = JSON.stringify(o);
     if (key === lastOutputKey) return;
     lastOutputKey = key;
     // モニターの形をビジョンに合わせる（帯のときは 1920:帯の高さ）
-    const st = stageSize();
+    const st = stage();
     document.documentElement.style.setProperty("--mon-ar", String(st.w / st.h));
     $("#obs-drag").href = obsUrl();
-    renderControls();
-    renderOverlay();
 }
 
 function setOutput(changes) {
@@ -1823,24 +1419,74 @@ function bandFromLed() {
     showInfo(`帯の高さを ${bandH}（上下の中央）にしました。テスト画面を出して、緑の枠がビジョンの四辺に合うか確かめてください`);
 }
 
-function renderTeams() {
-    $$(".team-row").forEach(row => {
-        const t = state.teams[row.dataset.team];
-        row.querySelectorAll("input").forEach(inp => { if (document.activeElement !== inp) inp.value = t[inp.dataset.k]; });
+function openOutput(view) {
+    if (isSdi() && view !== "all") return showError("SDI 1本（1920×1080）で出す設定のため、左右に分けて開けません。「全体」を使ってください");
+    const w = view === "all" ? 1280 : 960;
+    const h = view === "all" ? (isSdi() ? 720 : 360) : 540;
+    window.open(`vision.html?view=${view}`, `sv_baseball_${view}`, `popup=yes,width=${w},height=${h}`);
+    showInfo("確認用の表示画面を開きました。本番は「野球ビジョン HDMI出力」を使ってください（ダブルクリックかFキーで全画面）");
+}
+
+// --------------------------------------------------------------------------
+// 画面の更新・サーバーとの接続
+// --------------------------------------------------------------------------
+function renderAll() {
+    if (!state) return;
+    renderTopbar();
+    renderSceneList();
+    renderLayers();
+    renderOverlay();
+    postPvw();
+    sdRefresh();
+}
+
+function renderTopbar() {
+    $("#btn-black").classList.toggle("on", state.black);
+    $("#pgm-black-flag").classList.toggle("on", state.black);
+    $("#opt-guide").checked = state.guide;
+    renderOutput();
+    renderTransition();
+    renderFuta();
+    $("#derby-count").textContent = state.derby.count;
+    $("#derby-outs").textContent = state.derby.outs;
+    renderCameraSelects();
+    const pv = curScene();
+    $("#pvw-name").textContent = pv ? pv.name : "（シーンなし）";
+    $("#pgm-name").textContent = state.program.name || "";
+}
+
+function connect() {
+    const es = new EventSource("/events");
+    const conn = $("#conn");
+    es.addEventListener("UPDATE_STATE", e => {
+        const ns = JSON.parse(e.data);
+        // 手元で直している最中のシーン・選択は、サーバーからの古い内容で上書きしない
+        if (state && saving()) { ns.scenes = state.scenes; ns.sceneOrder = state.sceneOrder; ns.preview = state.preview; }
+        state = ns;
+        conn.textContent = "接続中";
+        conn.className = "conn ok";
+        renderAll();
     });
+    es.addEventListener("COMMAND", e => handleCommand(JSON.parse(e.data)));
+    es.addEventListener("CUE_FIRED", e => onSceneFired(JSON.parse(e.data)));
+    es.addEventListener("NOTICE", e => showError(JSON.parse(e.data).message));
+    // design_tools で slides が入れ替わった：スライド一覧を読み直す
+    es.addEventListener("SLIDES_CHANGED", () => loadSlides().then(() => showInfo("スライドが入れ替わりました。一覧を読み直しました")).catch(() => {}));
+    es.onerror = () => {
+        conn.textContent = "サーバーにつながっていません";
+        conn.className = "conn ng";
+    };
 }
 
-function onTeamChange(inp) {
-    const row = inp.closest(".team-row");
-    const teams = clone(state.teams);
-    teams[row.dataset.team][inp.dataset.k] = inp.value.trim();
-    patch({ teams });
-}
-
-async function loadPhotoTeams() {
-    const res = await fetch("/api/photo-teams");
-    if (!res.ok) return;
-    $("#photo-teams").innerHTML = (await res.json()).map(t => `<option value="${escapeHtml(t)}">`).join("");
+function handleCommand(cmd) {
+    if (cmd.action === "take") doTake();
+    else if (cmd.action === "swap") swapSides();
+    else if (cmd.action === "musicStop") musicStop();
+    else if (cmd.action === "musicFade") musicFade();
+    else if (cmd.action === "musicDuck") musicDuck(cmd.val);
+    else if (cmd.action === "readNext") moveSel(1);
+    else if (cmd.action === "readPrev") moveSel(-1);
+    else if (cmd.action === "musicPlay") playMusicPath(cmd.val);
 }
 
 // --------------------------------------------------------------------------
@@ -1854,7 +1500,15 @@ function bindEvents() {
     $("#out-band-h").addEventListener("change", e => setOutput({ bandH: e.target.value }));
     $("#btn-band-center").addEventListener("click", () => setOutput({ bandY: Math.round((1080 - state.output.bandH) / 2) }));
     $("#btn-band-led").addEventListener("click", bandFromLed);
+    $("#btn-preset-moriyama").addEventListener("click", () => { setOutput({ mode: "sdi", bandY: 197, bandH: 686 }); showInfo("守山の設定（SDI 1本・帯の上端197・高さ686）にしました"); });
+    $("#btn-test-pattern").addEventListener("click", toggleTestPattern);
     $("#btn-black").addEventListener("click", () => control("black"));
+    $("#btn-futa-left").addEventListener("click", () => control("futa"));
+    $("#btn-futa-full").addEventListener("click", () => control("futaFull"));
+    $("#futa-left").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { left: e.target.value }) }));
+    $("#futa-full").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { full: e.target.value }) }));
+    $("#btn-settings").addEventListener("click", openSettings);
+    $("#settings-close").addEventListener("click", () => $("#dlg-settings").close());
 
     // OBSに入れる（ドラッグ＆ドロップ／アドレスのコピー）※得点板システムと同じ
     const drag = $("#obs-drag");
@@ -1876,102 +1530,52 @@ function bindEvents() {
         }
     });
 
-    $$("#layout-seg button").forEach(b => b.addEventListener("click", () => setLayout(b.dataset.layout)));
-    $$("[data-singlex]").forEach(b => b.addEventListener("click", () => setSingleX(b.dataset.singlex)));
-    $("#single-x").addEventListener("input", e => setSingleX(e.target.value));
-    $("#slot-seg").addEventListener("click", e => { const b = e.target.closest("[data-slot]"); if (b) selectSlot(b.dataset.slot); });
-    $("#btn-swap").addEventListener("click", swapSides);
-    $$("#fit-seg button").forEach(b => b.addEventListener("click", () => setCrop("fit", b.dataset.fit)));
-    $$("[data-posy]").forEach(b => b.addEventListener("click", () => setCrop("posY", b.dataset.posy)));
-    ["posX", "posY", "zoom"].forEach(k => {
-        $(`#crop-${k}`).addEventListener("input", e => setCrop(k, e.target.value));
-        $(`#crop-${k}-num`).addEventListener("change", e => setCrop(k, e.target.value));
+    // TAKE の段
+    $("#btn-cut").addEventListener("click", () => setTransition("cut"));
+    $("#btn-fade").addEventListener("click", e => { if (e.target.id !== "fade-sec") setTransition("fade", state.transition.ms || 500); });
+    $("#fade-sec").addEventListener("change", e => {
+        const ms = Math.max(0, Math.min(5000, Math.round((parseFloat(e.target.value) || 0) * 1000)));
+        setTransition("fade", ms);
     });
-    $("#btn-crop-reset").addEventListener("click", resetCrop);
-
-    $$("#trans-seg button").forEach(b => b.addEventListener("click", () => setTransition(b.dataset.trans)));
-    $("#trans-ms").addEventListener("change", () => setTransition(state ? state.transition.type : "fade"));
-    $("#btn-pgm-to-pvw").addEventListener("click", pgmToPvw);
     $("#btn-take").addEventListener("click", doTake);
+    $("#btn-nextsc").addEventListener("click", nextSceneToPreview);
 
-    $$("#tabs button").forEach(b => b.addEventListener("click", () => selectTab(b.dataset.tab)));
+    bindScenes();
+    bindLayers();
+    bindSound();
+    bindOverlay();
+    bindPicker();
+    bindScriptDialog();
 
-    // 素材
-    $$("[data-src]").forEach(b => b.addEventListener("click", () => assignSource(JSON.parse(b.dataset.src))));
-    $$("[data-box]").forEach(b => b.addEventListener("click", () => $("#" + b.dataset.box).classList.toggle("hidden")));
-    $("#btn-text").addEventListener("click", assignText);
-    $("#btn-url").addEventListener("click", assignUrl);
-    $("#btn-slide-file").addEventListener("click", () => $("#slide-file").click());
-    $("#slide-file").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; uploadSlides(f); });
-    const drop = $("#slide-drop");
-    drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
-    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-    drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadSlides([...e.dataTransfer.files]); });
-    $("#btn-slide-reload").addEventListener("click", () => loadSlides().then(() => showInfo(`スライドを読み直しました（${slides.length}件）`)).catch(e => showError(e.message)));
-    $("#slide-search").addEventListener("input", renderLibrary);
-    $("#slide-folder-chips").addEventListener("click", e => {
-        const c = e.target.closest("[data-folder]");
-        if (!c) return;
-        slideFolder = c.dataset.folder;
-        $$("#slide-folder-chips .chip").forEach(x => x.classList.toggle("on", x === c));
-        renderLibrary();
-    });
-    $("#slide-library").addEventListener("click", e => {
-        const item = e.target.closest(".lib-item");
-        if (!item) return;
-        if (e.target.closest(".lib-del")) return deleteSlide(item.dataset.path);
-        assignSource({ type: "slide", file: item.dataset.path });
-    });
-    $("#slide-library").addEventListener("dblclick", e => { if (e.target.closest(".lib-item") && !e.target.closest(".lib-del")) doTake(); });
-
-    // 選手
-    $$("#team-filter button").forEach(b => b.addEventListener("click", () => { teamFilter = b.dataset.team; renderPlayers(); }));
-    $("#player-search").addEventListener("input", renderPlayers);
-    $("#btn-roster").addEventListener("click", () => $("#roster-file").click());
-    $("#roster-file").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; importRoster(f).catch(err => showError(`読み込めませんでした：${err.message}`)); });
-    $("#player-list").addEventListener("click", e => {
-        const r = e.target.closest(".player-row");
-        if (r) { selectedPlayer = Number(r.dataset.i); renderPlayers(); }
-    });
-    $("#player-list").addEventListener("dblclick", e => { if (e.target.closest(".player-row")) sendPlayer("atbat"); });
-    $$("[data-card]").forEach(b => b.addEventListener("click", () => sendPlayer(b.dataset.card, b.dataset.label)));
     $$("[data-derby]").forEach(b => b.addEventListener("click", () => {
         if (b.dataset.derby === "reset" && !confirm("HR競争の本数とアウトを0に戻しますか？")) return;
         control("derby", b.dataset.derby);
     }));
     $$("[data-derby-out]").forEach(b => b.addEventListener("click", () => control("derbyOut", b.dataset.derbyOut)));
-    $$("[data-lineup]").forEach(b => b.addEventListener("click", () => sendLineup(b.dataset.lineup)));
-
-    // 台本
-    bindScript();
-
-    // 設定
-    $("#btn-preset-moriyama").addEventListener("click", () => { setOutput({ mode: "sdi", bandY: 197, bandH: 686 }); showInfo("守山の設定（SDI 1本・帯の上端197・高さ686）にしました"); });
-    $("#btn-futa-left").addEventListener("click", () => control("futa"));
-    $("#btn-futa-full").addEventListener("click", () => control("futaFull"));
-    $("#futa-left").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { left: e.target.value }) }));
-    $("#futa-full").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { full: e.target.value }) }));
     bindStreamDeckUi();
     $("#btn-devices").addEventListener("click", () => refreshDevices(true));
     $$("#cam1-select, #cam2-select").forEach(sel => sel.addEventListener("change", () => setCamera(sel)));
     $("#opt-monitor-cam").addEventListener("change", reloadMonitors);
-    $$(".team-row input").forEach(inp => inp.addEventListener("change", () => onTeamChange(inp)));
     PREF_CHECKS.forEach(id => $("#" + id).addEventListener("change", savePrefs));
 
-    // キーボード：Space = TAKE（文字を入れている間は効かない）
+    // ボタンを押したあと、Space・Enter でそのボタンがもう一度押されないよう、フォーカスを外す
+    document.addEventListener("click", e => { const b = e.target.closest("button, .pill"); if (b && b.blur) b.blur(); });
+
+    // キーボード（入力中・ダイアログを開いている間は効かない）
     document.addEventListener("keydown", e => {
-        if (e.key === "Escape" && !$("#sc-pick").classList.contains("hidden")) { closePick(); return; }
         const tag = document.activeElement ? document.activeElement.tagName : "";
-        if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
-        if (e.code === "Space" || (e.key === "Enter" && currentTab === "script")) { e.preventDefault(); doTake(); }
-        else if (currentTab === "script") {
-            const k = e.key;
-            if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); moveSel(k === "ArrowDown" ? 1 : -1); }
-            else if (k === "ArrowRight") { e.preventDefault(); scNext(); }
-            else if (k === "ArrowLeft") { e.preventDefault(); scPrev(); }
-            else if (k === "b" || k === "B") control("black");
-            else if (k === "l" || k === "L") control("futa");
-        }
+        if (["INPUT", "SELECT", "TEXTAREA"].includes(tag) || document.querySelector("dialog[open]")) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const k = e.key;
+        if (e.code === "Space" || k === "Enter") { e.preventDefault(); doTake(); }
+        else if (k === "ArrowDown") { e.preventDefault(); moveSel(1); }
+        else if (k === "ArrowUp") { e.preventDefault(); moveSel(-1); }
+        else if (k === "ArrowRight") { e.preventDefault(); scNext(); }
+        else if (k === "ArrowLeft") { e.preventDefault(); scPrev(); }
+        else if (k === "b" || k === "B") control("black");
+        else if (k === "l" || k === "L") control("futa");
+        else if (k === "F2") { e.preventDefault(); if (state && state.preview) startRename(state.preview); }
+        else if (k === "Delete") { e.preventDefault(); deleteLayer(); }
     });
 
     $("#pvw-frame").addEventListener("load", postPvw);
@@ -1986,13 +1590,8 @@ function init() {
     initMusic();
     initStreamDeck();
     reloadMonitors();
-    renderControls();
-    renderOverlay();
     connect();
-    loadSlides().then(() => { renderFutaSelects(); refreshSuggestions(); }).catch(e => showError(`${e.message}。サーバーが起動しているか確認してください`));
-    loadPlayerMedia().catch(e => showError(e.message));
-    loadWalkups().catch(e => showError(e.message));
-    loadPhotoTeams().catch(() => {});
+    loadSlides().catch(e => showError(`${e.message}。サーバーが起動しているか確認してください`));
     refreshDevices(false).catch(() => {});
 }
 
