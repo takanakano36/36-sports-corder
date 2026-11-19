@@ -66,7 +66,7 @@ def layout_name(d, s, cap, maxw, wrap_below):
     if one < wrap_below:
         for a, b in _splits(s):
             sz = min(cap, maxw / max(w(a), w(b)) * 100)
-            key = (round(sz), -abs(w(a) - w(b)))          # 大きいほう優先、同じなら2行の長さが近いほう
+            key = sz - 0.35 * sz * abs(w(a) - w(b)) / max(w(a), w(b))    # 大きいほう優先。ただし2行の長さの差が大きいと減点（均等な分け方を優先）
             if sz > one * 1.15 and (best_key is None or key > best_key): best, best_key = (sz, [a, b]), key
     return int(best[0]) // 2 * 2, best[1]
 
@@ -91,17 +91,26 @@ def entrance(order, team, league):
     d = ImageDraw.Draw(img)
     X = 150
     size, lines = layout_name(d, team, 210, 1320, 170)     # 右の赤ラインに触れないよう、幅は16:9版より少し狭く
-    f = jp(size, 900); pitch = round(size * 1.18)
+    f = jp(size, 900); pitch = round(size * 1.12)          # 2行のときの行送り
     kf = osw(52, 600)
     kt, kb = kf.getbbox('TEAM ENTRANCE', anchor='ls')[1::2]
-    top = 380                                      # 見出しの位置は全スライド共通
+    lf = jp(56, 500)
+    # 見出し＋線＋名前（1〜2行）＋リーグ名を、ひとつの塊として高さを測り、
+    # 塊の見える上端〜下端の真ん中を、上端〜フッターの線の 46% の高さ（目で見た中央＝少しだけ上）に置く。1行でも2行でも同じ規則
+    GAP1, RULE, GAP2 = 34, 5, 84
+    nt = f.getbbox(lines[0], anchor='ls')[1]
+    nb = f.getbbox(lines[-1], anchor='ls')[3]
+    names_h = (len(lines) - 1) * pitch + (nb - nt)
+    gap3 = round(size * 0.32)                              # 名前とリーグ名のあいだ
+    lt, lb = lf.getbbox(league, anchor='ls')[1::2] if league else (0, 0)
+    total = (kb - kt) + GAP1 + RULE + GAP2 + names_h + ((gap3 + lb - lt) if league else 0)
+    top = FOOT * 0.46 - total / 2                          # 塊の見える上端
     text(d, (X + 10, top - kt), 'TEAM ENTRANCE', kf, RED, spacing=12)
-    y = top + (kb - kt) + 34
-    d.rectangle((X + 10, y, X + 10 + 120, y + 4), fill=LINE); y += 5 + 84
+    y = top + (kb - kt) + GAP1
+    d.rectangle((X + 10, y, X + 10 + 120, y + 4), fill=LINE); y += RULE + GAP2
     last = _stack(d, lines, f, X - 6, y, 'ls', WHITE, pitch)
     if league:
-        lf = jp(56, 500)
-        text(d, (X + 10, last + 40 - lf.getbbox(league, anchor='ls')[1]), league, lf, (200, 210, 225), spacing=4)
+        text(d, (X + 10, last + gap3 - lt), league, lf, (200, 210, 225), spacing=4)
     footer(img, d, '11.21 SAT  OPENING CEREMONY')
     return finish(img)
 
