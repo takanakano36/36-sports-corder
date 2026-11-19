@@ -50,6 +50,8 @@
             <option value="5">フェード 5秒</option>
         </select>
         <label class="mb-loop"><input type="checkbox" id="mb-loop"> くり返し</label>
+        <button type="button" class="btn mb-duck" id="mb-duck" title="BGMの音量を下げます（MCが話すときなど）。もう一度押すと戻ります">♪ 小さく</button>
+        <select id="mb-duck-pct" class="mb-select" title="「小さく」のときの音量（いまの音量に対する割合。1秒でなめらかに変わります）"><option value="10">小さく 10%</option><option value="20">小さく 20%</option><option value="30">小さく 30%</option><option value="40">小さく 40%</option><option value="50">小さく 50%</option><option value="70">小さく 70%</option></select>
         <label class="mb-vol">音量<input type="range" id="mb-vol" min="0" max="100" step="1"><span id="mb-vol-num"></span></label>
         <select id="mb-sink" class="mb-select mb-sink" title="音楽を鳴らす出力先（イヤホンジャックなど）"></select>
         <button type="button" class="btn small mb-folder" id="mb-folder" title="クリックすると、曲が入っているフォルダを選べます"><span id="mb-folder-name"></span></button>
@@ -308,6 +310,7 @@
                             <option value="">変えない</option><option value="slide">スライド</option><option value="futa">左フタ</option><option value="black">黒</option>
                         </select>
                         <select id="cue-left-file" class="text-input hidden"></select>
+                        <span class="note hidden" id="cue-pick-note"></span>
                     </label>
                     <label>右面
                         <select id="cue-right" class="text-input">
@@ -321,6 +324,9 @@
                             <option value="">使わない</option><option value="futa">全面フタ</option><option value="slide">スライド（1920×帯）</option>
                         </select>
                         <select id="cue-band-file" class="text-input hidden"></select>
+                    </label>
+                    <label>BGMの音量
+                        <select id="cue-duck" class="text-input"><option value="">変えない</option><option value="on">小さく</option><option value="off">小さくを戻す</option></select>
                     </label>
                     <label>BGM
                         <select id="cue-bgm" class="text-input">

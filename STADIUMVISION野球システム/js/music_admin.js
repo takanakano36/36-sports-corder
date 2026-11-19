@@ -23,7 +23,7 @@ let musicSinkLabels = {}; // 出力先のID → 名前
 // --------------------------------------------------------------------------
 const MUSIC_PREF_KEY = "stadiumvision.music";
 function readMusicPrefs() {
-    const base = { vol: 80, fade: 2, loop: false, sink: "" };
+    const base = { vol: 80, fade: 2, loop: false, sink: "", duckPct: 30 };
     try {
         const saved = JSON.parse(localStorage.getItem(MUSIC_PREF_KEY) || "{}");
         return Object.assign(base, saved);
@@ -41,7 +41,37 @@ function saveMusicPrefs() {
     }
 }
 
-const musicMaster = () => musicPrefs.vol / 100;
+// 「小さく」（ダック）：BGMの音量を、いまの音量の duckPct% に下げる（1秒でなめらかに。もう一度で元に戻る）
+let musicDucked = false;
+let duckGain = 1;          // 1 = ふつう、duckPct/100 = 小さく
+let duckTimer = null;
+const DUCK_SEC = 1;
+const musicMaster = () => (musicPrefs.vol / 100) * duckGain;
+function applyMusicVolume() {
+    [musicCur, ...musicFading].forEach(x => { if (x) x.audio.volume = musicMaster() * x.gain; });
+}
+// on=true で小さく、false で戻す。instant=true は時間をかけず、すぐ切り替える（曲を鳴らすと同時のとき）
+function musicDuckSet(on, instant) {
+    musicDucked = !!on;
+    const target = musicDucked ? Math.max(0.05, Math.min(1, musicPrefs.duckPct / 100)) : 1;
+    clearInterval(duckTimer);
+    if (instant || DUCK_SEC <= 0) { duckGain = target; applyMusicVolume(); renderDuck(); return; }
+    const from = duckGain, start = performance.now();
+    duckTimer = setInterval(() => {
+        const t = Math.min(1, (performance.now() - start) / (DUCK_SEC * 1000));
+        duckGain = from + (target - from) * t;
+        applyMusicVolume();
+        if (t >= 1) clearInterval(duckTimer);
+    }, 40);
+    renderDuck();
+}
+// val = "on" / "off" / 省略（切り替え）
+function musicDuck(val) { musicDuckSet(val === "on" ? true : val === "off" ? false : !musicDucked); }
+function renderDuck() {
+    const b = $("#mb-duck");
+    if (b) { b.classList.toggle("on", musicDucked); b.textContent = musicDucked ? "♪ 小さく中（押すと戻す）" : "♪ 小さく"; }
+    if (typeof sdRefresh === "function") sdRefresh();
+}
 const fmtTime = sec => {
     if (!isFinite(sec)) return "--:--";
     const s = Math.floor(sec);
@@ -394,6 +424,7 @@ function initMusic() {
     $("#mb-vol-num").textContent = musicPrefs.vol;
     $("#mb-fade").value = String(musicPrefs.fade);
     $("#mb-loop").checked = musicPrefs.loop;
+    $("#mb-duck-pct").value = String(musicPrefs.duckPct);
 
     $("#mb-songs").addEventListener("click", e => {
         const b = e.target.closest("[data-music]");
@@ -407,10 +438,16 @@ function initMusic() {
     $("#mb-vol").addEventListener("input", e => {
         musicPrefs.vol = Number(e.target.value);
         $("#mb-vol-num").textContent = musicPrefs.vol;
-        [musicCur, ...musicFading].forEach(x => { if (x) x.audio.volume = musicMaster() * x.gain; });
+        applyMusicVolume();
     });
     $("#mb-vol").addEventListener("change", saveMusicPrefs);
     $("#mb-fade").addEventListener("change", e => { musicPrefs.fade = Number(e.target.value); saveMusicPrefs(); });
+    $("#mb-duck").addEventListener("click", () => musicDuck());
+    $("#mb-duck-pct").addEventListener("change", e => {
+        musicPrefs.duckPct = Number(e.target.value);
+        saveMusicPrefs();
+        if (musicDucked) musicDuckSet(true);
+    });
     $("#mb-loop").addEventListener("change", e => {
         musicPrefs.loop = e.target.checked;
         if (musicCur) musicCur.audio.loop = musicPrefs.loop;

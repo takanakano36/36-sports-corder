@@ -3,7 +3,7 @@
    - 「BASEBALLテロップシステム」の Stream Deck 直結と同じ方式（Chrome / Edge）。機種の表・LCDの描画・
      キー入力の読み取り・上下反転・つなぎ直しをここにまとめた（あちらのファイルは読み込まない）
    - キーの割り当ては「操作の一覧（優先順位つき）」から機種のキー数に合わせて自動で決める
-       15キー … 決まった並び（下の LAYOUTS） ／ 32キー … 15キー＋BGM4〜12＋セクションのジャンプ
+       15キー … 決まった並び（下の LAYOUTS。中段3番目は「BGM 小さく⇔戻す」） ／ 32キー … 15キー（右面カメラ⇔ロゴを残す）＋BGM4〜12＋セクションのジャンプ
        6・8キーなど … 優先順位の高いものから詰める
    - 操作の中身（run）と表示（describe）は dashboard.js が渡す。画面のボタンと同じ関数を呼ぶ
    ※ 実機での確認は MK.2（15キー・JPEG）を想定。BMP方式の機種（初代・Mini）は画像の向きが未確認（上下反転ボタン・位置ずれ調整で合わせる）
@@ -28,13 +28,13 @@ const StreamDeck = (() => {
     // 決まった並び（操作の id。左上から右へ・下へ）。ここに無いキー数は、優先順位の高い順に詰める
     const LAYOUTS = {
         15: ["next", "prev", "readUp", "readDown", "take",
-            "futaLeft", "futaFull", "camLogo", "swap", "black",
+            "futaLeft", "futaFull", "bgmDuck", "swap", "black",
             "bgm1", "bgm2", "bgm3", "bgmFade", "bgmStop"],
         // 32キー（8×4）：左の5列は15キーと同じ。右の3列と最下段に BGM4〜12・セクションのジャンプ
         32: ["next", "prev", "readUp", "readDown", "take", "sec1", "sec2", "sec3",
             "futaLeft", "futaFull", "camLogo", "swap", "black", "sec4", "sec5", "sec6",
             "bgm1", "bgm2", "bgm3", "bgmFade", "bgmStop", "bgm4", "bgm5", "bgm6",
-            "bgm7", "bgm8", "bgm9", "bgm10", "bgm11", "bgm12", "sec7", "sec8"]
+            "bgm7", "bgm8", "bgm9", "bgm10", "bgm11", "bgm12", "sec7", "bgmDuck"]
     };
 
     const PREF_KEY = "stadiumvision-baseball.streamdeck";
