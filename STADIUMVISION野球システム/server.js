@@ -84,6 +84,8 @@ function initialState() {
         sceneOrder: scenes.map(s => s.id),     // シーンの並び順
         preview: scenes[0].id,                 // PREVIEW（次に出す・いま直しているシーン）
         cursor: '',                            // 台本の流れの中で、最後に出したシーン
+        lid: true,                             // カメラのフタ（全体のスイッチ）。ONの間、カメラの上にフタの画像を重ねる
+        lidImage: '',                          // フタの画像（空＝slides の L_960x686_horiz_black）
         bgmEnabled: false                      // BGM（音楽）をこのシステムで鳴らすか（既定は鳴らさない）
     };
 }
@@ -117,7 +119,7 @@ function validatePlayer(p, label) {
 const isSongPath = v => isMediaPath(v, ['music']) || (isStr(v, 200) && /^local:[^\/\\]+$/.test(v));
 const isId = v => typeof v === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(v);
 
-const LAYER_KEYS = ['id', 'type', 'name', 'src', 'cam', 'color', 'text', 'logo', 'x', 'y', 'w', 'h', 'visible', 'fit', 'opacity'];
+const LAYER_KEYS = ['id', 'type', 'name', 'src', 'cam', 'color', 'text', 'logo', 'lidFor', 'noLid', 'x', 'y', 'w', 'h', 'visible', 'fit', 'opacity'];
 function validateLayer(l, label) {
     if (!isObj(l)) return `${label}の形が正しくありません`;
     for (const k of Object.keys(l)) if (!LAYER_KEYS.includes(k)) return `${label}に不明な項目があります (${k})`;
@@ -140,6 +142,11 @@ function validateLayer(l, label) {
             break;
         case 'camera':
             if (!CAMS.includes(l.cam)) return `${label}のカメラは cam1 か cam2 にしてください`;
+            if (l.noLid !== undefined && typeof l.noLid !== 'boolean') return `${label}のフタの指定が正しくありません`;
+            break;
+        case 'lid':
+            if (!isStr(l.src, 500) || (l.src !== '' && !isMediaPath(l.src, ['slides']))) return `${label}のフタの画像の場所が正しくありません`;
+            if (!isId(l.lidFor)) return `${label}のフタの対象が正しくありません`;
             break;
         case 'color':
             if (!isHex(l.color)) return `${label}の色が正しくありません`;
@@ -217,6 +224,8 @@ function validateScenes(s) {
     }
     if (!(s.preview === '' || ids.has(s.preview))) return 'PREVIEWのシーンが正しくありません';
     if (!(s.cursor === '' || ids.has(s.cursor))) return '台本の流れの位置が正しくありません';
+    if (typeof s.lid !== 'boolean') return 'カメラのフタの設定が正しくありません';
+    if (!isStr(s.lidImage, 500) || (s.lidImage !== '' && !isMediaPath(s.lidImage, ['slides']))) return 'カメラのフタの画像の場所が正しくありません';
     if (typeof s.bgmEnabled !== 'boolean') return 'BGMの使う・使わないの設定が正しくありません';
     return null;
 }
@@ -337,6 +346,7 @@ function scenesFromLegacyScript(old, stage, ctx) {
             if (pk && !(cue && (cue.left || cue.band))) { pic.band = null; pic.left = null; }
             layers = Scene.pictureLayers(pic, stage);
         }
+        Scene.normalizeLids(layers);
         const sc = {
             id: Scene.uid('s'), name, group: secName, layers,
             bgm: cue && cue.bgm ? cue.bgm : null,
@@ -373,6 +383,14 @@ function migrateToScenes(s) {
     console.log(`[起動] 旧い形の保存データを、シーンに移しました（台本のキュー→ ${conv.scenes.length}シーン、いつでも ${defaults.length}シーン）`);
 }
 
+// 本線のフタのレイヤーを、いまの設定（画像・ON／OFF）に合わせる。フタが無い本線には付ける
+function refreshProgramLids(st) {
+    try {
+        Scene.normalizeLids(st.program.layers);
+        st.program.layers = Scene.resolveLayers(st.program.layers, currentLogos(st));
+    } catch (e) { console.error(`[フタ] 本線のフタを更新できませんでした（${e.message}）`); }
+}
+
 function loadState() {
     if (!fs.existsSync(STATE_FILE)) {
         console.log('[起動] 保存データが無いため、初期状態で開始します');
@@ -381,6 +399,7 @@ function loadState() {
         st.scenes = Scene.defaultScenes(Scene.stageOf(st.output), listTree(SLIDE_DIR, 'slides', SLIDE_EXTS));
         st.sceneOrder = st.scenes.map(x => x.id);
         st.preview = st.scenes[0].id;
+        refreshProgramLids(st);
         return st;
     }
     // 保存データが壊れている場合は、勝手に初期化せずに止める（式次第や名簿を失わないため）
@@ -398,6 +417,7 @@ function loadState() {
         s.script.rows.forEach(r => { if (isObj(r)) { if (r.no === undefined) r.no = ''; if (r.visionR === undefined) r.visionR = ''; if (r.kind === undefined) r.kind = 'row'; } });
     }
     migrateToScenes(s);
+    const hadLid = 'lid' in s;
     // 機能を追加する前の保存データには、新しい項目を書き足す
     const init = initialState();
     STATE_KEYS.forEach(k => {
@@ -406,11 +426,14 @@ function loadState() {
             console.log(`[起動] 以前の形式の保存データのため、「${k}」を初期値で追加しました`);
         }
     });
+    // カメラのフタ：なかった保存データのシーンにも、カメラの上にフタを置く。本線のフタも画像・ON／OFFに合わせる
+    if (Array.isArray(s.scenes) && !hadLid) s.scenes.forEach(sc => { if (isObj(sc) && Array.isArray(sc.layers)) Scene.normalizeLids(sc.layers); });
     // BLACKはその場かぎりのもの。起動し直したときに真っ黒のままにならないよう解除して始める
     if (s.black) {
         console.log('[起動] 前回の終了時に BLACK になっていたため、解除して始めます');
         s.black = false;
     }
+    if (isObj(s.program) && Array.isArray(s.program.layers)) refreshProgramLids(s);
     const err = validateState(s);
     if (err) throw new Error(`保存データ(${STATE_FILE})の内容が正しくありません: ${err}`);
     console.log('[起動] 保存データから前回の状態を復元しました');
@@ -617,7 +640,7 @@ function listMusic() {
 // フタ（ロゴ）の画像の場所（設定が空なら slides/フタ/ の最初の画像）
 function currentLogos(st) {
     const list = listTree(SLIDE_DIR, 'slides', SLIDE_EXTS);
-    return { left: Core.resolveLogo(st.futa, 'left', list), full: Core.resolveLogo(st.futa, 'full', list) };
+    return { left: Core.resolveLogo(st.futa, 'left', list), full: Core.resolveLogo(st.futa, 'full', list), lid: Scene.findLid(st.lidImage, list), lidOn: st.lid !== false };
 }
 
 // シーンを本線に出す（BLACK・フタは解除）。流れのシーンなら、「最後に出したシーン」にして、次の流れのシーンを PREVIEW に入れる
@@ -678,6 +701,11 @@ function applyControl(action, val) {
         case 'musicDuck':            // BGMを小さく／戻す（val=on / off、省略でトグル。管理画面が開いている必要あり）
             if (val !== undefined && val !== '' && !['on', 'off'].includes(val)) throw new Error('val は on か off にしてください（省略で切り替え）');
             command = { action, val: val || '' };
+            break;
+        case 'lid':                  // カメラのフタ（val=on / off、省略で切り替え）。本線のフタも、すぐ付く・外れる
+            if (val !== undefined && val !== '' && !['on', 'off'].includes(val)) throw new Error('val は on か off にしてください（省略で切り替え）');
+            next.lid = val === 'on' ? true : val === 'off' ? false : !state.lid;
+            refreshProgramLids(next);
             break;
         case 'futa':                 // 左フタ（左面だけロゴ）のオン・オフ
         case 'futaFull':             // 全面フタ（帯全体ロゴ）のオン・オフ
@@ -982,6 +1010,7 @@ function handleRequest(req, res) {
                     if (!isObj(patch)) throw new Error('送られたデータの形が正しくありません');
                     next = applyPatch(state, patch);
                     markEdited(state, next);
+                    if ('lid' in patch || 'lidImage' in patch) refreshProgramLids(next);
                 } catch (e) {
                     console.error(`[更新拒否] ${e.message}`);
                     return sendJson(res, 400, { error: e instanceof SyntaxError ? '送られたデータを読み取れません' : e.message });

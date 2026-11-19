@@ -117,7 +117,7 @@ const byId = id => scenes().find(s => s.id === id) || null;
 const curScene = () => (state ? byId(state.preview) : null);
 const stage = () => SCN.stageOf(state && state.output);
 const isSdi = () => !!(state && state.output && state.output.mode === "sdi");
-const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides) });
+const logos = () => ({ left: SC.resolveLogo(state && state.futa, "left", slides), full: SC.resolveLogo(state && state.futa, "full", slides), lid: SCN.findLid(state && state.lidImage, slides), lidOn: !state || state.lid !== false });
 const baseName = p => String(p || "").split("/").pop();
 const mediaUrl = p => String(p).split("/").map(encodeURIComponent).join("/");
 const thumbUrl = p => `${mediaUrl(p)}?v=${slidesVer}`;
@@ -130,7 +130,8 @@ function curLayer() {
     const sc = curScene();
     if (!sc || !sc.layers.length) return null;
     const id = layerSel[sc.id];
-    return sc.layers.find(l => l.id === id) || sc.layers[sc.layers.length - 1];
+    // 何も選んでいないときは、いちばん上の（フタではない）レイヤー
+    return sc.layers.find(l => l.id === id) || sc.layers.slice().reverse().find(l => l.type !== "lid") || sc.layers[sc.layers.length - 1];
 }
 
 // --------------------------------------------------------------------------
@@ -166,6 +167,11 @@ function thumbHtml(sc) {
                 parts.push(src
                     ? `<div class="tl" style="${st}"><img src="${thumbUrl(src)}" loading="lazy" alt="" style="object-fit:${l.fit}" onerror="this.remove()"></div>`
                     : `<div class="tl" style="${st}background:#222"></div>`);
+                break;
+            }
+            case "lid": {
+                if (!lg.lidOn) break;
+                parts.push(lg.lid ? `<div class="tl" style="${st}"><img src="${thumbUrl(lg.lid)}" loading="lazy" alt="" style="object-fit:cover" onerror="this.remove()"></div>` : `<div class="tl" style="${st}background:#000"></div>`);
                 break;
             }
             case "video": parts.push(`<div class="tl" style="${st}background:#2b1b4e;color:#c4b5fd;font-size:12px">動画</div>`); break;
@@ -368,7 +374,9 @@ function duplicateScene() {
     sc.id = SCN.uid("s");
     sc.name = `${cur.name} コピー`.slice(0, 100);
     sc.script = null;
-    sc.layers.forEach(l => { l.id = SCN.uid("l"); });
+    const idMap = {};
+    sc.layers.forEach(l => { const n = SCN.uid("l"); idMap[l.id] = n; l.id = n; });
+    sc.layers.forEach(l => { if (l.lidFor) l.lidFor = idMap[l.lidFor] || l.lidFor; });
     insertSceneAfter(sc, cur.id);
     state.preview = sc.id;
     queueSave(["scenes", "sceneOrder", "preview"], 0);
@@ -535,6 +543,8 @@ function bindScenes() {
 // --------------------------------------------------------------------------
 // シーンの中身を直したあとの再描画（手元の state はもう変えてある。保存は少しまとめてから）
 function edited(keys) {
+    const cs = curScene();
+    if (cs) SCN.normalizeLids(cs.layers);      // カメラのフタは、カメラの上に同じ位置・大きさで付いてくる
     queueSave(keys || ["scenes"]);
     renderSceneList();
     renderLayers();
@@ -559,7 +569,11 @@ function renderLayers() {
         list.innerHTML = `<div class="empty">レイヤーがありません。下の「レイヤーを足す」から入れます</div>`;
     } else {
         // 上が手前（配列は下から順なので、逆に並べる）
-        list.innerHTML = sc.layers.slice().reverse().map(l => `
+        list.innerHTML = sc.layers.slice().reverse().map(l => l.type === "lid" ? `
+            <div class="layer ${l.id === (sel && sel.id) ? "on" : ""} ${state.lid ? "" : "hid"}" data-lid="${escapeHtml(l.id)}">
+                <span class="eye" data-eye="1" title="全体のスイッチ（上の「カメラのフタ」ボタン）で切り替えます">${state.lid ? "👁" : "－"}</span>
+                <span class="lb">🔒 カメラのフタ（上のボタンで切替）</span>
+            </div>` : `
             <div class="layer ${l.id === (sel && sel.id) ? "on" : ""} ${l.visible ? "" : "hid"}" data-lid="${escapeHtml(l.id)}" draggable="true">
                 <span class="eye" data-eye="1" title="${l.visible ? "隠す" : "表示する"}">${l.visible ? "👁" : "－"}</span>
                 <span class="lb">${SCN.LAYER_ICONS[l.type] || ""} ${escapeHtml(SCN.layerLabel(l))}</span>
@@ -569,7 +583,7 @@ function renderLayers() {
     renderDetail(sc, sel);
     // 置き場所
     const pre = sel ? SCN.presetOf(sel, stage()) : "";
-    $$("#ly-preset button").forEach(b => { b.disabled = !sel; b.classList.toggle("on", b.dataset.preset === pre); });
+    $$("#ly-preset button").forEach(b => { b.disabled = !sel || sel.type === "lid"; b.classList.toggle("on", b.dataset.preset === pre); });
     $$("#ly-add button").forEach(b => { b.disabled = !sc; });
     renderSound();
 }
@@ -581,6 +595,7 @@ function renderDetail(sc, l) {
     if (box.contains(document.activeElement) && box._lid === l.id && box._type === l.type) return;
     box._lid = l.id;
     box._type = l.type;
+    if (l.type === "lid") { box._html = ""; box.innerHTML = `<span class="dl">全体のスイッチは上の「カメラのフタ」ボタン。このシーンだけ外すときは削除</span><button type="button" data-d="del" class="del">削除</button>`; return; }
     const fitable = ["image", "video", "camera", "logo"].includes(l.type);
     let h = "";
     if (l.type === "camera") h += `<button type="button" data-d="cam1" class="${l.cam === "cam1" ? "on" : ""}">カメラ1</button><button type="button" data-d="cam2" class="${l.cam === "cam2" ? "on" : ""}">カメラ2</button>`;
@@ -616,7 +631,9 @@ function addLayer(type, opts, rectOverride) {
 async function deleteLayer() {
     const sc = curScene(), l = curLayer();
     if (!sc || !l) return;
-    if (!confirm(`レイヤー「${SCN.layerLabel(l)}」を消しますか？`)) return;
+    if (!confirm(l.type === "lid" ? "このシーンのカメラのフタを外します（このシーンだけ。付け直しません）。よろしいですか？" : `レイヤー「${SCN.layerLabel(l)}」を消しますか？`)) return;
+    // フタを手で消したら、そのカメラには付け直さない（このシーンだけ）
+    if (l.type === "lid") { const c = sc.layers.find(x => x.id === l.lidFor); if (c) c.noLid = true; }
     sc.layers = sc.layers.filter(x => x.id !== l.id);
     delete layerSel[sc.id];
     edited();
@@ -663,6 +680,7 @@ function bindLayers() {
         if (!row || !sc) return;
         if (e.target.closest("[data-eye]")) {
             const l = sc.layers.find(x => x.id === row.dataset.lid);
+            if (l && l.type === "lid") { control("lid"); return; }
             if (l) { l.visible = !l.visible; edited(); }
             return;
         }
@@ -820,7 +838,7 @@ function renderOverlay() {
     if (!sc) { ov.innerHTML = ""; return; }
     if (dragging) return;
     const sel = curLayer();
-    ov.innerHTML = sc.layers.filter(l => l.visible).map(l => {
+    ov.innerHTML = sc.layers.filter(l => l.visible && l.type !== "lid").map(l => {
         const s = sel && l.id === sel.id;
         return `<div class="ov-box ${s ? "sel" : ""}" data-lid="${escapeHtml(l.id)}" style="left:${l.x * 100}%;top:${l.y * 100}%;width:${l.w * 100}%;height:${l.h * 100}%">` +
             (s ? `<i class="hd nw" data-h="nw"></i><i class="hd ne" data-h="ne"></i><i class="hd sw" data-h="sw"></i><i class="hd se" data-h="se"></i>` : "") + `</div>`;
@@ -881,6 +899,8 @@ function startOverlayDrag(e, layer, mode) {
         }
         const box = $(`#ov .ov-box[data-lid="${CSS.escape(layer.id)}"]`);
         if (box) Object.assign(box.style, { left: layer.x * 100 + "%", top: layer.y * 100 + "%", width: layer.w * 100 + "%", height: layer.h * 100 + "%" });
+        const csc = curScene();
+        if (csc) SCN.normalizeLids(csc.layers);
         queueSave(["scenes"]);
         postPvw();
         $$("#ly-preset button").forEach(b => b.classList.toggle("on", b.dataset.preset === pre));
@@ -1159,6 +1179,9 @@ function bindScriptDialog() {
 // --------------------------------------------------------------------------
 function renderFuta() {
     const f = state.futa;
+    const lb = $("#btn-lid");
+    lb.classList.toggle("on", state.lid);
+    lb.textContent = state.lid ? "カメラ待ち（フタ ON）" : "カメラのフタ OFF";
     $("#btn-futa-left").classList.toggle("on", f.active === "left");
     $("#btn-futa-full").classList.toggle("on", f.active === "full");
     renderFutaSelects();
@@ -1172,10 +1195,13 @@ let lastFutaOptKey = "";
 function renderFutaSelects() {
     if (!state) return;
     const imgs = slides.filter(s => s.kind === "image");
-    const key = imgs.map(s => s.path).join("|") + "|" + state.futa.left + "|" + state.futa.full;
+    const key = imgs.map(s => s.path).join("|") + "|" + state.futa.left + "|" + state.futa.full + "|" + state.lidImage;
     if (key === lastFutaOptKey) return;
     lastFutaOptKey = key;
     const opts = `<option value="">自動（slides/フタ/ の最初の画像）</option>` + imgs.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides\//, ""))}</option>`).join("");
+    const lsel = $("#lid-image");
+    lsel.innerHTML = `<option value="">自動（slides の L_960x686_horiz_black）</option>` + imgs.map(s => `<option value="${escapeHtml(s.path)}">${escapeHtml(s.path.replace(/^slides./, ""))}</option>`).join("");
+    lsel.value = state.lidImage;
     ["left", "full"].forEach(k => {
         const sel = $(`#futa-${k}`);
         let o = opts;
@@ -1241,6 +1267,7 @@ function buildSdActions() {
     add("next", () => ({ label: "NEXT ▶", sub: sdNextTitle(), color: "#15803d" }), scNext);
     add("prev", () => ({ label: "◀ PREV", sub: "前のシーン", color: "#0f766e" }), scPrev);
     add("futaLeft", () => ({ label: "左フタ", sub: "ロゴ", color: "#7c3aed", toggle: true, on: !!state && state.futa.active === "left", onColor: "#a78bfa" }), () => control("futa"));
+    add("lid", () => ({ label: "カメラの\nフタ", sub: state && state.lid ? "ON（待ち）" : "OFF", color: "#9a3412", toggle: true, on: !!state && state.lid, onColor: "#ea580c" }), () => control("lid"));
     add("black", () => ({ label: "BLACK", color: "#475569", toggle: true, on: !!state && state.black, onColor: "#dc2626" }), () => control("black"));
     add("bgmFade", () => ({ label: "BGM\nフェード", sub: "アウト", color: "#b45309" }), musicFade);
     add("bgmStop", () => ({ label: "BGM\n停止", sub: "すぐ止める", color: "#991b1b" }), musicHalt);
@@ -1526,6 +1553,8 @@ function bindEvents() {
     $("#btn-preset-moriyama").addEventListener("click", () => { setOutput({ mode: "sdi", bandY: 197, bandH: 686 }); showInfo("守山の設定（SDI 1本・帯の上端197・高さ686）にしました"); });
     $("#btn-test-pattern").addEventListener("click", toggleTestPattern);
     $("#btn-black").addEventListener("click", () => control("black"));
+    $("#btn-lid").addEventListener("click", () => control("lid"));
+    $("#lid-image").addEventListener("change", e => patch({ lidImage: e.target.value }));
     $("#btn-futa-left").addEventListener("click", () => control("futa"));
     $("#btn-futa-full").addEventListener("click", () => control("futaFull"));
     $("#futa-left").addEventListener("change", e => patch({ futa: Object.assign({}, state.futa, { left: e.target.value }) }));

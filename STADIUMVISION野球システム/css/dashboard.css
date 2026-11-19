@@ -318,3 +318,6 @@ code { font-family: monospace; color: #93c5fd; }
 }
 
 body.no-bgm .bgm-only { display: none !important; }
+
+.btn-lid { background: #3b1d0a; border-color: #9a3412; min-width: 150px; }
+.btn-lid.on { background: #ea580c; border-color: #fed7aa; color: #fff; box-shadow: 0 0 0 2px rgba(251,146,60,.5); animation: blink 1.6s infinite; }

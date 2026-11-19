@@ -188,8 +188,8 @@ function layerContentKey(l) {
     return [l.id, l.type, l.src || '', l.cam || '', l.color || '', l.text || '', l.logo || ''].join('\u0001');
 }
 
-function sceneKey(scene) {
-    const parts = (scene.layers || []).filter(l => l.visible).map(l => layerContentKey(l) + (inView(layerGeom(l)) ? '' : '\u0001hidden'));
+function sceneKey(scene, noLid) {
+    const parts = (scene.layers || []).filter(l => l.visible && !(noLid && l.type === 'lid')).map(l => layerContentKey(l) + (inView(layerGeom(l)) ? '' : '\u0001hidden'));
     return STAGE_W + 'x' + STAGE_H + '|' + VIEW + '|' + parts.join('|');
 }
 
@@ -254,6 +254,11 @@ function buildLayerContent(el, l) {
                 });
             break;
         }
+        case 'lid':
+            // カメラのフタ：画像があれば画像、無ければ真っ黒（不透明）でカメラを隠す
+            if (l.src) buildLayerContent(el, Object.assign({}, l, { type: 'image' }));
+            else el.style.background = '#000';
+            break;
         case 'text':
             el.appendChild(buildTextLayer(l));
             break;
@@ -364,7 +369,9 @@ function renderScene(scene, transition) {
     }
     const layers = document.getElementById('layers');
     const layer = buildLayer(scene);
-    const t = transition || { type: 'cut', ms: 0 };
+    let t = transition || { type: 'cut', ms: 0 };
+    // カメラのフタを付ける・外すだけの変化は、フェードせずすぐ切り替える
+    if (current && current.keyNoLid === sceneKey(scene, true)) t = { type: 'cut', ms: 0 };
     const old = current ? current.layer : null;
     // 前回のフェードが途中なら、古いレイヤーを即座に片付ける
     Array.from(layers.children).forEach(l => { if (l !== old) disposeLayer(l); });
@@ -380,7 +387,7 @@ function renderScene(scene, transition) {
         layers.appendChild(layer);
         if (old) disposeLayer(old);
     }
-    current = { key, layer, scene };
+    current = { key, keyNoLid: sceneKey(scene, true), layer, scene };
     lastDerbyCount = null;
     updateLive();
 }

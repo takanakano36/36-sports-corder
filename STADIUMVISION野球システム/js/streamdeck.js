@@ -28,11 +28,11 @@ const StreamDeck = (() => {
     // 決まった並び（操作の id。左上から右へ・下へ）。ここに無いキー数は、優先順位の高い順に詰める
     const LAYOUTS = {
         15: ["next", "prev", "readUp", "readDown", "take",
-            "futaLeft", "futaFull", "bgmDuck", "swap", "black",
+            "futaLeft", "futaFull", "bgmDuck", "lid", "black",
             "bgm1", "bgm2", "bgm3", "bgmFade", "bgmStop"],
         // 32キー（8×4）：左の5列は15キーと同じ。右の3列と最下段に BGM4〜12・セクションのジャンプ
         32: ["next", "prev", "readUp", "readDown", "take", "sec1", "sec2", "sec3",
-            "futaLeft", "futaFull", "sec8", "swap", "black", "sec4", "sec5", "sec6",
+            "futaLeft", "futaFull", "lid", "swap", "black", "sec4", "sec5", "sec6",
             "bgm1", "bgm2", "bgm3", "bgmFade", "bgmStop", "bgm4", "bgm5", "bgm6",
             "bgm7", "bgm8", "bgm9", "bgm10", "bgm11", "bgm12", "sec7", "bgmDuck"]
     };

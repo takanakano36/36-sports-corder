@@ -10,7 +10,8 @@
     else root.SceneCore = factory();
 }(typeof self !== 'undefined' ? self : this, function () {
     const ALWAYS_GROUP = 'いつでも';
-    const LAYER_TYPES = ['image', 'camera', 'color', 'text', 'logo', 'video', 'test'];
+    const LAYER_TYPES = ['image', 'camera', 'color', 'text', 'logo', 'video', 'test', 'lid'];
+    const LID_PATTERN = /(^|\/)L_960x686_horiz_black\.[a-z0-9]+$/i;     // カメラのフタの画像（slides の中から名前で探す）
     const VIDEO_RE = /\.(mp4|webm|m4v|mov)$/i;
 
     let seq = 0;
@@ -83,10 +84,11 @@
             case 'color': return l.color === '#000000' ? '背景（黒）' : '色 ' + (l.color || '');
             case 'text': return String(l.text || '').replace(/\s*\n\s*/g, ' ') || '（文字）';
             case 'test': return 'テスト画面';
+            case 'lid': return 'カメラのフタ（上のボタンで切替）';
         }
         return l.type;
     }
-    const LAYER_ICONS = { image: '🖼', video: '🎞', logo: '◆', camera: '📹', color: '■', text: 'Ａ', test: '▦' };
+    const LAYER_ICONS = { image: '🖼', video: '🎞', logo: '◆', camera: '📹', color: '■', text: 'Ａ', test: '▦', lid: '🔒' };
 
     // ---- 旧い形（layout＋slots）・キューの顔 → レイヤー ----------------------------------
     function mediaLayer(file, rect, fit) {
@@ -165,7 +167,7 @@
     // ---- 初期のシーン（「いつでも」） ----------------------------------------------------
     function defaultScenes(stage, slideList) {
         const P = presets(stage);
-        const mk = (name, layers) => ({ id: uid('s'), name, group: ALWAYS_GROUP, layers, bgm: null, duck: null, pick: null, script: null, warn: '' });
+        const mk = (name, layers) => ({ id: uid('s'), name, group: ALWAYS_GROUP, layers: normalizeLids(layers), bgm: null, duck: null, pick: null, script: null, warn: '' });
         const soon = (slideList || []).find(s => s.kind === 'image' && /^slides\/全面\//.test(s.path) && /まもなく|開会式/.test(s.path));
         const soonLayers = soon
             ? [newLayer('image', { src: soon.path }, P.full)]
@@ -179,12 +181,44 @@
         ];
     }
 
+    // ---- カメラのフタ --------------------------------------------------------------------
+    // カメラのレイヤーのすぐ上に、同じ位置・大きさでフタのレイヤー（lidFor＝カメラのレイヤーの番号）を置く。
+    // カメラを動かせばフタも追従する。手で消したカメラ（noLid）には付け直さない。カメラが無くなったフタは取り除く
+    function normalizeLids(layers) {
+        const cams = new Map();
+        layers.forEach(l => { if (l.type === 'camera') cams.set(l.id, l); });
+        const lids = new Map();
+        layers.forEach(l => { if (l.type === 'lid' && cams.has(l.lidFor) && !lids.has(l.lidFor)) lids.set(l.lidFor, l); });
+        const out = [];
+        layers.forEach(l => {
+            if (l.type === 'lid') return;
+            out.push(l);
+            if (l.type !== 'camera') return;
+            let lid = lids.get(l.id);
+            if (!lid && !l.noLid) lid = newLayer('lid', { src: '', lidFor: l.id }, l);
+            if (lid) {
+                Object.assign(lid, { x: l.x, y: l.y, w: l.w, h: l.h, visible: true, fit: 'cover', opacity: 1 });
+                out.push(lid);
+            }
+        });
+        layers.length = 0;
+        out.forEach(l => layers.push(l));
+        return layers;
+    }
+    // フタの画像：設定（lidImage）か、slides の中の L_960x686_horiz_black
+    function findLid(lidImage, slideList) {
+        if (lidImage) return lidImage;
+        const hit = (slideList || []).find(x => x.kind === 'image' && LID_PATTERN.test(x.path));
+        return hit ? hit.path : '';
+    }
+
     // ---- 本線に出す形 ------------------------------------------------------------------
     // ロゴのレイヤーの画像（src が空なら、フタの設定どおり）を決める。logos = { left, full }
     function resolveLayers(layers, logos) {
         return (layers || []).map(l => {
             const c = JSON.parse(JSON.stringify(l));
             if (c.type === 'logo' && !c.src) c.src = (c.logo === 'full' ? logos.full : logos.left) || '';
+            if (c.type === 'lid') { c.src = logos.lid || ''; c.visible = logos.lidOn !== false; }
             return c;
         });
     }
@@ -246,7 +280,7 @@
                 id: uid('s'),
                 name: (oneLine((r.no ? r.no + ' ' : '') + oneLine(r.title)) || `${i + 1}行目`).slice(0, 100),
                 group: secName.slice(0, 60),
-                layers: pictureLayers(pic, stage),
+                layers: normalizeLids(pictureLayers(pic, stage)),
                 bgm: cue && cue.bgm ? cue.bgm : null,
                 duck: cue && typeof cue.duck === 'boolean' ? cue.duck : null,
                 pick: pick ? { folder: pick.slice(0, 200) } : null,
@@ -279,6 +313,6 @@
         ALWAYS_GROUP, LAYER_TYPES, PRESET_NAMES, LAYER_ICONS, VIDEO_RE,
         uid, stageOf, presets, presetOf, overlapFrac, defaultRect, newLayer, layerLabel,
         mediaLayer, legacySceneToLayers, faceToLayers, pictureLayers, sceneFromCue, defaultScenes,
-        resolveLayers, programFromScene, isFlow, flowIds, flowAfter, buildScenesFromScript, sceneKeys, oneLine, collapse
+        normalizeLids, findLid, LID_PATTERN, resolveLayers, programFromScene, isFlow, flowIds, flowAfter, buildScenesFromScript, sceneKeys, oneLine, collapse
     };
 }));
