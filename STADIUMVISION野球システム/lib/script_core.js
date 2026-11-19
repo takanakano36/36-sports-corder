@@ -43,7 +43,7 @@
         if (!face) return null;
         switch (face.type) {
             case 'slide': return { type: 'slide', file: face.file };
-            case 'camera': return { type: 'camera', cam: face.cam };
+            case 'camera': return face.fit ? { type: 'camera', cam: face.cam, fit: face.fit } : { type: 'camera', cam: face.cam };
             case 'futa': return logoPath ? { type: 'slide', file: logoPath } : { type: 'black' };
             default: return { type: 'black' };
         }
@@ -72,6 +72,16 @@
     const LOOP_RE = /ループ|loop|リピート|繰り返し|くり返し/;
 
     function slideKey(name) { return norm(String(name).replace(/^\d+[_\-.\s　]*/, '')); }
+
+    // 『』が無く曲名だけのセル：「再生／演奏／ループ再生／1回のみ／（…）」や空白を除いた全体が曲名と一致するとき（部分一致はしない）
+    function plainSong(text, songs) {
+        const strip = t => t.replace(/[\s・、,，。.:：\-ー]+/g, '');
+        const k = strip(norm(text)
+            .replace(/[（(][^）)]*[）)]/g, '')
+            .replace(/ループ再生|くり返し再生|繰り返し再生|1回のみ|一回のみ|ループ|再生|演奏|リピート|loop/g, ''));
+        if (!k) return null;
+        return songs.find(x => strip(x.k) === k) || null;
+    }
 
     // 台本の1行から、キューの「提案」を作る。ctx = { music: [{path,name}], slides: [{path,name,folder}] }
     // 戻り値：{ cue, reasons[], hints[] } または null
@@ -104,6 +114,10 @@
                 } else {
                     hints.push(`曲が見つかりません：${titles[0]}`);
                 }
+            } else if (plainSong(bgmText, ctx._songs)) {
+                const hit = plainSong(bgmText, ctx._songs);
+                cue.bgm = { action: 'play', path: hit.s.path, name: hit.s.name, loop: LOOP_RE.test(n) };
+                reasons.push(`BGM「${hit.s.name}」${cue.bgm.loop ? '（くり返し）' : ''}`);
             } else if (FADE_RE.test(n)) {
                 cue.bgm = { action: 'fade' };
                 reasons.push('BGM フェードアウト');
@@ -116,7 +130,8 @@
         const vis = row.vision || '';
         if (vis && !isSame(vis)) {
             const n = norm(vis);
-            if (n.includes('ロゴ')) {
+            // 内容がスライド名と合うときは、左面はそのスライドを優先する（ロゴのフタより先）
+            if (n.includes('ロゴ') && !titleSlide(row, ctx)) {
                 if (n.includes('全面')) { cue.band = { type: 'futa' }; reasons.push('全面フタ'); }
                 else { cue.left = { type: 'futa' }; reasons.push('左フタ'); }
             }
@@ -127,19 +142,8 @@
         }
 
         // 内容がスライドのファイル名（番号・拡張子を除く）と合うとき、左面のスライドを提案
-        const title = row.title || '';
-        if (title && !isSame(title) && !cue.left && !cue.band) {
-            const lines = [title, ...title.split('\n')].map(norm).filter(Boolean);
-            let best = null, bestScore = 0;
-            ctx._slides.forEach(({ s, k }) => {
-                lines.forEach(l => {
-                    let score = 0;
-                    if (l === k) score = 1000 + k.length;
-                    else if (k.length >= 3 && l.includes(k)) score = k.length;
-                    else if (l.length >= 3 && k.includes(l)) score = l.length - 0.5;
-                    if (score > bestScore) { best = s; bestScore = score; }
-                });
-            });
+        if (!cue.left && !cue.band) {
+            const best = titleSlide(row, ctx);
             if (best) { cue.left = { type: 'slide', file: best.path }; reasons.push(`左面 スライド「${best.name}」`); }
         }
 
@@ -147,10 +151,27 @@
         return { cue, reasons, hints };
     }
 
+    function titleSlide(row, ctx) {
+        const title = row.title || '';
+        if (!title || isSame(title)) return null;
+        const lines = [title, ...title.split('\n')].map(norm).filter(Boolean);
+        let best = null, bestScore = 0;
+        ctx._slides.forEach(({ s, k }) => {
+            lines.forEach(l => {
+                let score = 0;
+                if (l === k) score = 1000 + k.length;
+                else if (k.length >= 3 && l.includes(k)) score = k.length;
+                else if (l.length >= 3 && k.includes(l)) score = l.length - 0.5;
+                if (score > bestScore) { best = s; bestScore = score; }
+            });
+        });
+        return best;
+    }
+
     function describeFace(f) {
         if (!f) return '';
         if (f.type === 'slide') return 'スライド ' + String(f.file).split('/').pop().replace(/\.[^.]+$/, '');
-        if (f.type === 'camera') return 'カメラ' + (f.cam === 'cam2' ? '2' : '1');
+        if (f.type === 'camera') return 'カメラ' + (f.cam === 'cam2' ? '2' : '1') + (f.fit === 'contain' ? '（16:9のまま）' : '');
         if (f.type === 'futa') return 'フタ';
         return '黒';
     }

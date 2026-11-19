@@ -79,6 +79,10 @@ body.monitor { cursor: default; }
 /* OBS用（?camera=obs）：背景を透明にし、カメラの枠だけ透明にする */
 html.cam-hole, body.cam-hole, body.cam-hole #viewport, body.cam-hole #stage { background: transparent; }
 .slot.hole { background: transparent; }
+.slot.hole-contain { container-type: size; }
+.slot.hole-contain::before, .slot.hole-contain::after { content: ''; position: absolute; left: 0; right: 0; background: #000; height: max(0px, calc((100cqh - 100cqw * 9 / 16) / 2)); }
+.slot.hole-contain::before { top: 0; }
+.slot.hole-contain::after { bottom: 0; }
 
 #black {
     position: absolute;

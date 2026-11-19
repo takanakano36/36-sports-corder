@@ -128,6 +128,51 @@ const StreamDeck = (() => {
         }
         return fs;
     }
+    const fontOf = (fs, bold) => `${bold ? "bold " : ""}${fs}px "Noto Sans JP","Yu Gothic","Hiragino Sans",sans-serif`;
+    function ellipsize(ctx, text, maxW) {
+        if (ctx.measureText(text).width <= maxW) return text;
+        let t = text;
+        while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+        return t + "…";
+    }
+    // ラベルの折り返し：空白（全角含む）で優先して改行 → 入りきらなければ文字を縮める → それでも入らなければ末尾を「…」にする
+    // 戻り値 { lines, fs }
+    function layoutLabel(ctx, label, maxW, baseFs) {
+        if (label.includes("\n")) {
+            const lines = label.split("\n").slice(0, 2);
+            const fs = Math.min(...lines.map(t => fitFont(ctx, t, baseFs * 0.85, maxW, true)));
+            return { lines, fs };
+        }
+        const text = label.trim();
+        const minFs = Math.max(10, Math.round(baseFs * 0.6));
+        // 空白の位置で2行に分ける案（幅の大きい方がいちばん小さくなる位置）
+        const words = text.split(/[\s\u3000]+/).filter(Boolean);
+        const spaced = words.length >= 2;
+        for (let fs = Math.round(baseFs); fs >= minFs; fs--) {
+            ctx.font = fontOf(fs, true);
+            if (ctx.measureText(text).width <= maxW) return { lines: [text], fs };
+            if (spaced) {
+                let best = null, bestW = Infinity;
+                for (let i = 1; i < words.length; i++) {
+                    const a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
+                    const w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
+                    if (w < bestW) { bestW = w; best = [a, b]; }
+                }
+                if (best && bestW <= maxW) return { lines: best, fs };
+            }
+        }
+        ctx.font = fontOf(minFs, true);
+        if (spaced) {
+            let best = null, bestW = Infinity;
+            for (let i = 1; i < words.length; i++) {
+                const a = words.slice(0, i).join(" "), b = words.slice(i).join(" ");
+                const w = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
+                if (w < bestW) { bestW = w; best = [a, b]; }
+            }
+            return { lines: best.map(t => ellipsize(ctx, t, maxW)), fs: minFs };
+        }
+        return { lines: [ellipsize(ctx, text, maxW)], fs: minFs };
+    }
     function wrapChars(ctx, text, maxW, maxLines) {
         const lines = [];
         let cur = "";
@@ -151,16 +196,13 @@ const StreamDeck = (() => {
         ctx.strokeRect(2, 2, size - 4, size - 4);
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const lines = lk.label.split("\n").slice(0, 2);
         const hasSub = !!lk.sub;
-        const base = size * (lines.length > 1 ? 0.2 : 0.24);
+        const { lines, fs } = layoutLabel(ctx, lk.label, size - 10, size * 0.24);
         const top = hasSub ? size * (lines.length > 1 ? 0.26 : 0.34) : size * 0.5;
-        const step = base * 1.15;
+        const step = fs * 1.15;
         ctx.fillStyle = "#ffffff";
-        lines.forEach((t, i) => {
-            fitFont(ctx, t, base, size - 10, true);
-            ctx.fillText(t, size / 2, top + (i - (lines.length - 1) / 2) * step);
-        });
+        ctx.font = fontOf(fs, true);
+        lines.forEach((t, i) => ctx.fillText(t, size / 2, top + (i - (lines.length - 1) / 2) * step));
         if (hasSub) {
             const sfs = size * 0.15;
             ctx.font = `${Math.round(sfs)}px "Noto Sans JP","Yu Gothic",sans-serif`;
@@ -410,6 +452,6 @@ const StreamDeck = (() => {
         shiftKeys(d) { keyShift = Math.max(-3, Math.min(8, keyShift + d)); savePrefs(); status(); },
         setBrightness(p) { brightness = Math.max(0, Math.min(100, Math.round(p))); savePrefs(); status(); return setBrightness(brightness); },
         // 試験用（モックの機器で描画データを確かめる）
-        _renderNow: renderNow, _handleInput: handleInput, _toLogical: toLogical, _toPhysical: toPhysical
+        _layoutLabel: layoutLabel, _drawKey: drawKey, _renderNow: renderNow, _handleInput: handleInput, _toLogical: toLogical, _toPhysical: toPhysical
     };
 })();

@@ -380,9 +380,11 @@ function msg(slotEl, html) {
 
 // トリミング (表示位置・拡大) を反映
 function applyCrop(slotEl, src) {
+    const fit = (src && src.fit) || 'cover';
+    // OBS用の透明な穴：「16:9のまま」のときは、穴を16:9にして上下は黒（不透明）にする
+    if (slotEl.classList.contains('hole')) { slotEl.classList.toggle('hole-contain', fit === 'contain'); return; }
     const media = slotEl.querySelector('.media');
     if (!media) return;
-    const fit = (src && src.fit) || 'cover';
     const x = src && src.posX !== undefined ? src.posX : 50;
     const y = src && src.posY !== undefined ? src.posY : 50;
     const zoom = (src && src.zoom ? src.zoom : 100) / 100;

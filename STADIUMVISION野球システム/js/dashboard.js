@@ -1111,6 +1111,8 @@ function renderCueEditor() {
     };
     face($("#cue-left"), $("#cue-left-file"), c.left);
     face($("#cue-right"), $("#cue-right-file"), c.right);
+    $("#cue-right-fit").value = c.right && c.right.type === "camera" && c.right.fit === "contain" ? "contain" : "cover";
+    $("#cue-right-fit").classList.toggle("hidden", !c.right || c.right.type !== "camera");
     face($("#cue-band"), $("#cue-band-file"), c.band);
     const b = c.bgm;
     $("#cue-bgm").value = b ? b.action : "";
@@ -1128,10 +1130,10 @@ function readCueForm() {
         const v = sel.value;
         if (!v) return null;
         if (v === "slide") { if (!fileSel.value) throw new Error("スライドを選んでください"); return { type: "slide", file: fileSel.value }; }
-        if (v === "cam1" || v === "cam2") return { type: "camera", cam: v };
+        if (v === "cam1" || v === "cam2") return isRight && $("#cue-right-fit").value === "contain" ? { type: "camera", cam: v, fit: "contain" } : { type: "camera", cam: v };
         return { type: v };
     };
-    const cue = { left: faceOf($("#cue-left"), $("#cue-left-file")), right: faceOf($("#cue-right"), $("#cue-right-file")), band: faceOf($("#cue-band"), $("#cue-band-file")), bgm: null, memo: $("#cue-memo").value.slice(0, 1000) };
+    const cue = { left: faceOf($("#cue-left"), $("#cue-left-file")), right: faceOf($("#cue-right"), $("#cue-right-file"), true), band: faceOf($("#cue-band"), $("#cue-band-file")), bgm: null, memo: $("#cue-memo").value.slice(0, 1000) };
     const a = $("#cue-bgm").value;
     if (a === "play") {
         const sel = $("#cue-bgm-song");
@@ -1251,7 +1253,10 @@ function bindScript() {
     });
 
     // キューの編集
-    ["left", "right", "band"].forEach(k => $(`#cue-${k}`).addEventListener("change", e => $(`#cue-${k}-file`).classList.toggle("hidden", e.target.value !== "slide")));
+    ["left", "right", "band"].forEach(k => $(`#cue-${k}`).addEventListener("change", e => {
+        $(`#cue-${k}-file`).classList.toggle("hidden", e.target.value !== "slide");
+        if (k === "right") $("#cue-right-fit").classList.toggle("hidden", !/^cam/.test(e.target.value));
+    }));
     $("#cue-bgm").addEventListener("change", e => {
         $("#cue-bgm-song").classList.toggle("hidden", e.target.value !== "play");
         $("#cue-bgm-loop-wrap").classList.toggle("hidden", e.target.value !== "play");
@@ -1323,13 +1328,15 @@ function renderFutaSelects() {
 }
 
 // 右面のカメラ⇔ロゴ（本線に直接）。カメラのときはロゴに、そうでなければカメラ1に切り替える
+let rightCamMemo = { type: "camera", cam: "cam1" };
 function rightCamLogo() {
     if (!state) return;
     const prog = clone(state.program);
     if (prog.layout !== "split") prog.layout = "split";
     const logo = logos().left;
     const isLogo = prog.slots.right.type === "slide" && prog.slots.right.file === logo && !!logo;
-    prog.slots.right = isLogo ? { type: "camera", cam: "cam1" } : (logo ? { type: "slide", file: logo } : { type: "black" });
+    if (!isLogo && prog.slots.right.type === "camera") rightCamMemo = clone(prog.slots.right);
+    prog.slots.right = isLogo ? clone(rightCamMemo) : (logo ? { type: "slide", file: logo } : { type: "black" });
     if (!logo && !isLogo) showError("フタの画像がありません。slides/フタ/ に画像を入れてください");
     patch({ program: prog });
 }
@@ -1377,7 +1384,7 @@ function buildSdActions() {
         add(`bgm${i + 1}`, () => {
             const m = sdSong(i);
             if (!m) return { label: `BGM ${i + 1}`, sub: "（曲なし）", color: "#1e293b" };
-            return { label: wrapLabel(m.name, 5), sub: `BGM ${i + 1}`, color: "#1d4ed8", toggle: true, on: !!musicCur && musicCur.item.path === m.path, onColor: "#16a34a" };
+            return { label: m.name, sub: `BGM ${i + 1}`, color: "#1d4ed8", toggle: true, on: !!musicCur && musicCur.item.path === m.path, onColor: "#16a34a" };
         }, () => {
             const m = sdSong(i);
             if (!m) return showError(`BGM ${i + 1} に曲がありません`);
@@ -1388,7 +1395,7 @@ function buildSdActions() {
     for (let i = 0; i < SD_SECTION_KEYS; i++) {
         add(`sec${i + 1}`, () => {
             const s = script().sections[i];
-            return s ? { label: wrapLabel(s.name, 4), sub: "読み位置へ", color: "#854d0e" } : { label: "", color: "#05070c" };
+            return s ? { label: s.name, sub: "読み位置へ", color: "#854d0e" } : { label: "", color: "#05070c" };
         }, () => { const first = script().rows.findIndex(r => r.sec === i); if (first >= 0) jumpToRow(first); });
     }
     return A;
@@ -1506,7 +1513,7 @@ function setCamera(sel) {
 let lastOutputKey = "";
 function renderOutput() {
     const o = state.output;
-    $$("#out-mode-seg button").forEach(b => b.classList.toggle("on", b.dataset.outmode === o.mode));
+    $$("#out-mode-seg button[data-outmode]").forEach(b => b.classList.toggle("on", b.dataset.outmode === o.mode));
     $("#out-sdi-box").classList.toggle("hidden", o.mode !== "sdi");
     if (document.activeElement !== $("#out-band-y")) $("#out-band-y").value = o.bandY;
     if (document.activeElement !== $("#out-band-h")) $("#out-band-h").value = o.bandH;
@@ -1569,7 +1576,7 @@ async function loadPhotoTeams() {
 function bindEvents() {
     $$("[data-open]").forEach(b => b.addEventListener("click", () => openOutput(b.dataset.open)));
     $("#opt-guide").addEventListener("change", e => patch({ guide: e.target.checked }));
-    $$("#out-mode-seg button").forEach(b => b.addEventListener("click", () => setOutput({ mode: b.dataset.outmode })));
+    $$("#out-mode-seg button[data-outmode]").forEach(b => b.addEventListener("click", () => setOutput({ mode: b.dataset.outmode })));
     $("#out-band-y").addEventListener("change", e => setOutput({ bandY: e.target.value }));
     $("#out-band-h").addEventListener("change", e => setOutput({ bandH: e.target.value }));
     $("#btn-band-center").addEventListener("click", () => setOutput({ bandY: Math.round((1080 - state.output.bandH) / 2) }));

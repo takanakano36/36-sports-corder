@@ -23,10 +23,15 @@ function roleOfHeader(cell) {
     const t = norm(cell);
     if (!t) return '';
     for (const r of ROLES) if (VOCAB[r].includes(t)) return r;
-    if (t.length <= 10) {
-        // 「MIC（有線）」のように語を含むもの（長い語を優先）
-        let best = '', bestLen = 0;
-        for (const r of ROLES) for (const w of VOCAB[r]) if (w.length >= 2 && t.includes(w) && w.length > bestLen) { best = r; bestLen = w.length; }
+    if (t.length <= 60) {
+        // 「MIC（有線）」「備考（動線・MC・演者）」のように語を含むもの：最も前に現れる語（同じ位置なら長い語）で決める
+        let best = '', bestPos = Infinity, bestLen = 0;
+        for (const r of ROLES) for (const w of VOCAB[r]) {
+            if (w.length < 2) continue;
+            const pos = t.indexOf(w);
+            if (pos < 0) continue;
+            if (pos < bestPos || (pos === bestPos && w.length > bestLen)) { best = r; bestPos = pos; bestLen = w.length; }
+        }
         return best;
     }
     return '';

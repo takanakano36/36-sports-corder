@@ -178,10 +178,11 @@ const isSongPath = v => isMediaPath(v, ['music']) || (isStr(v, 200) && /^local:[
 function validateFace(f, label, types) {
     if (f === null) return null;
     if (!isObj(f) || !types.includes(f.type)) return `${label}の指定が正しくありません`;
-    const keys = f.type === 'slide' ? ['type', 'file'] : f.type === 'camera' ? ['type', 'cam'] : ['type'];
+    const keys = f.type === 'slide' ? ['type', 'file'] : f.type === 'camera' ? ['type', 'cam', 'fit'] : ['type'];
     for (const k of Object.keys(f)) if (!keys.includes(k)) return `${label}に不明な項目があります (${k})`;
     if (f.type === 'slide' && !isMediaPath(f.file, ['slides'])) return `${label}のスライドのファイル名が正しくありません`;
     if (f.type === 'camera' && !CAMS.includes(f.cam)) return `${label}のカメラは cam1 か cam2 にしてください`;
+    if (f.type === 'camera' && f.fit !== undefined && !['cover', 'contain'].includes(f.fit)) return `${label}のカメラの収め方は cover か contain にしてください`;
     return null;
 }
 
