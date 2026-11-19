@@ -9,6 +9,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { parseXlsx, XlsxError } = require('./lib/xlsx');
+const SI = require('./lib/script_import');
+const Core = require('./lib/script_core');
 
 const PORT = 3007;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -39,8 +42,15 @@ const SRC_TYPES = ['black', 'slide', 'url', 'camera', 'player', 'lineup', 'text'
 const CAMS = ['cam1', 'cam2'];
 const TEAMS = ['HOME', 'AWAY'];
 const CARD_TYPES = ['atbat', 'sub', 'hr'];
-const MAX_CUES = 300;
 const MAX_ROSTER = 200;
+// 台本（Excel の台本を読み込んだもの）
+const MAX_SCRIPT_ROWS = 6000;          // 全シート合わせた行数の上限
+const MAX_SCRIPT_SECTIONS = 31;        // シート30 ＋ 手動の式次第
+const MAX_CELL = 5000;
+const MAX_XLSX_BYTES = 20 * 1024 * 1024;
+const MANUAL_SECTION = '手動の式次第';
+const ROW_TEXT_KEYS = ['time', 'dur', 'title', 'bgm', 'vision', 'mic', 'speaker', 'script', 'note'];
+const FUTA_ACTIVE = ['', 'left', 'full'];
 
 function emptyScene() {
     const slots = {};
@@ -48,16 +58,28 @@ function emptyScene() {
     return { layout: 'wide', slots, singleX: 50 };
 }
 
+// 守山の既定：左右2分割（左＝スライド、右＝遊撃カメラ cam1）
+function moriyamaScene() {
+    const sc = emptyScene();
+    sc.layout = 'split';
+    sc.slots.right = { type: 'camera', cam: 'cam1' };
+    return sc;
+}
+
+function emptyScript() {
+    return { title: '', rev: 0, sections: [], rows: [], pos: -1, onair: -1 };
+}
+
 function initialState() {
     return {
-        program: emptyScene(),                 // いまビジョンに出ている画面
+        program: moriyamaScene(),              // いまビジョンに出ている画面
         black: false,                          // 黒にする（BLACK）
         guide: false,                          // 2画面の境目の線を出す（設置・調整用）
         // 出力の形
         //   wide … 3840×1080（32:9）をそのまま出す
         //   sdi  … 1920×1080 で出し、ビジョンに映る「帯」（y=bandY から高さ bandH）だけを使う
         //          （HDMI→SDIコンバーター経由で、スケーラーが横100%・上下トリミングする現場用）
-        output: { mode: 'wide', bandY: 225, bandH: 630 },
+        output: { mode: 'sdi', bandY: 197, bandH: 686 },   // 守山：1920×686 の帯（14:5）
         transition: { type: 'fade', ms: 500 }, // 切り替え方（cut / fade）
         cameras: { cam1: { deviceId: '', label: '' }, cam2: { deviceId: '', label: '' } },
         teams: {
@@ -66,8 +88,8 @@ function initialState() {
         },
         roster: [],                            // 選手名簿（CSVから読み込む）
         derby: { count: 0, outs: 0 },          // ホームラン競争のカウンター
-        cues: [],                              // 式次第（キュー）
-        cueIndex: -1                           // いま出しているキュー（-1 = なし）
+        script: emptyScript(),                 // 台本とキュー（旧「式次第」もここに統合）
+        futa: { left: '', full: '', active: '', prev: null }   // フタ（ロゴ画面）。空の画像＝slides/フタ/ の最初の画像
     };
 }
 
@@ -150,6 +172,83 @@ function validateScene(sc, label) {
     return null;
 }
 
+// 曲の場所：music/ の中、または「local:ファイル名」（音楽バーで選んだ別フォルダの曲）
+const isSongPath = v => isMediaPath(v, ['music']) || (isStr(v, 200) && /^local:[^\/\\]+$/.test(v));
+
+function validateFace(f, label, types) {
+    if (f === null) return null;
+    if (!isObj(f) || !types.includes(f.type)) return `${label}の指定が正しくありません`;
+    const keys = f.type === 'slide' ? ['type', 'file'] : f.type === 'camera' ? ['type', 'cam'] : ['type'];
+    for (const k of Object.keys(f)) if (!keys.includes(k)) return `${label}に不明な項目があります (${k})`;
+    if (f.type === 'slide' && !isMediaPath(f.file, ['slides'])) return `${label}のスライドのファイル名が正しくありません`;
+    if (f.type === 'camera' && !CAMS.includes(f.cam)) return `${label}のカメラは cam1 か cam2 にしてください`;
+    return null;
+}
+
+const CUE_KEYS = ['left', 'right', 'band', 'bgm', 'memo', 'scene'];
+function validateCue(c, label) {
+    if (c === null) return null;
+    if (!isObj(c)) return `${label}のキューの形が正しくありません`;
+    for (const k of Object.keys(c)) if (!CUE_KEYS.includes(k)) return `${label}のキューに不明な項目があります (${k})`;
+    let e = validateFace(c.left === undefined ? null : c.left, `${label}の左面`, ['slide', 'futa', 'black'])
+        || validateFace(c.right === undefined ? null : c.right, `${label}の右面`, ['camera', 'slide', 'black'])
+        || validateFace(c.band === undefined ? null : c.band, `${label}の帯全体`, ['futa', 'slide']);
+    if (e) return e;
+    if (!isStr(c.memo === undefined ? '' : c.memo, 1000)) return `${label}のメモは1000文字以内にしてください`;
+    const b = c.bgm === undefined ? null : c.bgm;
+    if (b !== null) {
+        if (!isObj(b) || !['play', 'fade', 'stop'].includes(b.action)) return `${label}の音楽の指定が正しくありません`;
+        const keys = b.action === 'play' ? ['action', 'path', 'name', 'loop'] : ['action'];
+        for (const k of Object.keys(b)) if (!keys.includes(k)) return `${label}の音楽に不明な項目があります (${k})`;
+        if (b.action === 'play') {
+            if (!isSongPath(b.path)) return `${label}の曲が正しくありません`;
+            if (!isStr(b.name, 300) || typeof b.loop !== 'boolean') return `${label}の曲の名前・くり返しの指定が正しくありません`;
+        }
+    }
+    if (c.scene !== undefined) { e = validateScene(c.scene, `${label}の画面`); if (e) return e; }
+    return null;
+}
+
+function validateScript(sc) {
+    if (!isObj(sc)) return '台本の形が正しくありません';
+    const keys = ['title', 'rev', 'sections', 'rows', 'pos', 'onair'];
+    for (const k of keys) if (!(k in sc)) return `台本の項目が足りません (${k})`;
+    for (const k of Object.keys(sc)) if (!keys.includes(k)) return `台本に不明な項目があります (${k})`;
+    if (!isStr(sc.title, 300)) return '台本の名前は300文字以内にしてください';
+    if (!isInt(sc.rev, 0, 1e9)) return '台本の版の番号が正しくありません';
+    if (!Array.isArray(sc.sections) || sc.sections.length > MAX_SCRIPT_SECTIONS) return `台本のセクションは${MAX_SCRIPT_SECTIONS}個までです`;
+    for (const sec of sc.sections) {
+        if (!isObj(sec) || !isStr(sec.name, 100) || !sec.name || typeof sec.manual !== 'boolean') return '台本のセクションの設定が正しくありません';
+        for (const k of Object.keys(sec)) if (!['name', 'manual'].includes(k)) return `台本のセクションに不明な項目があります (${k})`;
+    }
+    if (!Array.isArray(sc.rows) || sc.rows.length > MAX_SCRIPT_ROWS) return `台本の行は${MAX_SCRIPT_ROWS}行までです`;
+    const rowKeys = ['sec', 'cue', ...ROW_TEXT_KEYS];
+    for (let i = 0; i < sc.rows.length; i++) {
+        const r = sc.rows[i];
+        const label = `台本の${i + 1}行目`;
+        if (!isObj(r)) return `${label}の形が正しくありません`;
+        for (const k of Object.keys(r)) if (!rowKeys.includes(k)) return `${label}に不明な項目があります (${k})`;
+        if (!isInt(r.sec, 0, sc.sections.length - 1)) return `${label}のセクションが正しくありません`;
+        for (const k of ROW_TEXT_KEYS) if (!isStr(r[k], MAX_CELL)) return `${label}の「${k}」は${MAX_CELL}文字以内の文字にしてください`;
+        const e = validateCue(r.cue === undefined ? null : r.cue, label);
+        if (e) return e;
+    }
+    if (!isInt(sc.pos, -1, Math.max(-1, sc.rows.length - 1))) return '台本の読み位置が正しくありません';
+    if (!isInt(sc.onair, -1, Math.max(-1, sc.rows.length - 1))) return 'いま出しているキューの位置が正しくありません';
+    return null;
+}
+
+function validateFuta(f) {
+    if (!isObj(f)) return 'フタの設定が正しくありません';
+    for (const k of Object.keys(f)) if (!['left', 'full', 'active', 'prev'].includes(k)) return `フタの設定に不明な項目があります (${k})`;
+    for (const k of ['left', 'full']) {
+        if (!isStr(f[k], 500) || (f[k] !== '' && !isMediaPath(f[k], ['slides']))) return `フタの画像（${k === 'left' ? '左' : '全面'}）の場所が正しくありません`;
+    }
+    if (!FUTA_ACTIVE.includes(f.active)) return 'フタの状態が正しくありません';
+    if (f.prev !== null) { const e = validateScene(f.prev, 'フタの前の画面'); if (e) return e; }
+    return null;
+}
+
 function validateState(s) {
     if (!isObj(s)) return '状態の形が正しくありません';
     for (const k of STATE_KEYS) if (!(k in s)) return `項目が足りません (${k})`;
@@ -183,25 +282,44 @@ function validateState(s) {
         if (!s.roster[i].name) return `名簿の${i + 1}人目に名前がありません`;
     }
     if (!isObj(s.derby) || !isInt(s.derby.count, 0, 999) || !isInt(s.derby.outs, 0, 99)) return 'HR競争のカウンターが正しくありません';
-    if (!Array.isArray(s.cues) || s.cues.length > MAX_CUES) return `式次第は${MAX_CUES}個までです`;
-    for (let i = 0; i < s.cues.length; i++) {
-        const c = s.cues[i];
-        const label = `式次第の${i + 1}番目`;
-        if (!isObj(c) || !isStr(c.name, 100) || !isStr(c.memo, 1000)) return `${label}の名前・メモが正しくありません`;
-        e = validateScene(c.scene, label);
-        if (e) return e;
-        if (!isObj(c.music) || !['', 'play', 'stop'].includes(c.music.action) || !isStr(c.music.path, 500) || !isStr(c.music.name, 300)) {
-            return `${label}の音楽の設定が正しくありません`;
-        }
-        if (c.music.action === 'play' && !isMediaPath(c.music.path, ['music'])) return `${label}の曲が正しくありません`;
-    }
-    if (!isInt(s.cueIndex, -1, MAX_CUES - 1)) return 'いま出しているキューの番号が正しくありません';
+    e = validateScript(s.script);
+    if (e) return e;
+    e = validateFuta(s.futa);
+    if (e) return e;
     return null;
 }
 
 // ==========================================================================
 // 状態の読み込み・保存
 // ==========================================================================
+// 旧い保存データの式次第（cues・cueIndex）を、台本の「手動の式次第」セクションに移す
+function migrateLegacyCues(s) {
+    if (!('cues' in s) && !('cueIndex' in s)) return;
+    const legacy = Array.isArray(s.cues) ? s.cues : [];
+    if (!s.script) {
+        const sc = emptyScript();
+        if (legacy.length) {
+            sc.sections.push({ name: MANUAL_SECTION, manual: true });
+            legacy.forEach(c => {
+                const m = c && c.music || {};
+                const bgm = m.action === 'play' ? { action: 'play', path: m.path, name: m.name, loop: false } : m.action === 'stop' ? { action: 'fade' } : null;
+                const row = { sec: 0, cue: { scene: c.scene, bgm, memo: c.memo || '' } };
+                ROW_TEXT_KEYS.forEach(k => { row[k] = ''; });
+                row.title = String(c.name || '');
+                row.note = String(c.memo || '');
+                sc.rows.push(row);
+            });
+            const ci = Number.isInteger(s.cueIndex) ? s.cueIndex : -1;
+            if (ci >= 0 && ci < sc.rows.length) { sc.pos = ci; sc.onair = ci; }
+            sc.rev = 1;
+            console.log(`[起動] 旧い式次第 ${legacy.length}個を、台本の「${MANUAL_SECTION}」に移しました`);
+        }
+        s.script = sc;
+    }
+    delete s.cues;
+    delete s.cueIndex;
+}
+
 function loadState() {
     if (!fs.existsSync(STATE_FILE)) {
         console.log('[起動] 保存データが無いため、初期状態で開始します');
@@ -215,6 +333,8 @@ function loadState() {
     } catch (e) {
         throw new Error(`保存データ(${STATE_FILE})を読み込めません: ${e.message}`);
     }
+    // 旧い「式次第（cues）」は、台本の「手動の式次第」セクションに移す
+    migrateLegacyCues(s);
     // 機能を追加する前の保存データには、新しい項目を書き足す
     const init = initialState();
     STATE_KEYS.forEach(k => {
@@ -292,6 +412,11 @@ function applyPatch(base, patch) {
 
 // 保存できたときだけ反映する（表示と保存データを常に一致させる）
 function commit(next) {
+    // 本線の画面がフタ以外の操作（TAKE・キュー）で変わったら、フタは「出ていない」ことにする
+    if (isObj(next.futa) && isObj(state.futa) && state.futa.active && next.futa.active === state.futa.active
+        && JSON.stringify(next.program) !== JSON.stringify(state.program)) {
+        next.futa = Object.assign({}, next.futa, { active: '', prev: null });
+    }
     const err = validateState(next);
     if (err) return err;
     try {
@@ -322,6 +447,21 @@ function readBody(req, limit, cb) {
         if (size > limit) return cb(new Error('データが大きすぎます'));
         cb(null, Buffer.concat(chunks).toString('utf-8'));
     });
+}
+
+// バイナリのまま受け取る（Excel のファイル用）。大きすぎるときは受け取りを打ち切る
+function readBodyBuffer(req, limit, cb) {
+    const chunks = [];
+    let size = 0, done = false;
+    const finish = (err, buf) => { if (!done) { done = true; cb(err, buf); } };
+    if (Number(req.headers['content-length'] || 0) > limit) { req.resume(); return finish(new Error('too-big')); }
+    req.on('data', chunk => {
+        size += chunk.length;
+        if (size <= limit) chunks.push(chunk);
+    });
+    req.on('end', () => size > limit ? finish(new Error('too-big')) : finish(null, Buffer.concat(chunks)));
+    req.on('error', e => finish(e));
+    req.on('aborted', () => finish(new Error('aborted')));
 }
 
 // ==========================================================================
@@ -367,40 +507,91 @@ function listMusic() {
 // ==========================================================================
 // Stream Deck などからの操作
 // ==========================================================================
-function fireCue(next, index) {
-    const cue = next.cues[index];
-    if (!cue) throw new Error(`式次第の${index + 1}番目はありません`);
-    next.program = JSON.parse(JSON.stringify(cue.scene));
+// フタ（ロゴ）の画像の場所（設定が空なら slides/フタ/ の最初の画像）
+function currentLogos(st) {
+    const list = listTree(SLIDE_DIR, 'slides', SLIDE_EXTS);
+    return { left: Core.resolveLogo(st.futa, 'left', list), full: Core.resolveLogo(st.futa, 'full', list) };
+}
+
+// 台本の行のキューを本線に出す（読み位置・「いま出している行」もその行にする）
+function fireCue(next, index, opts = {}) {
+    const row = next.script.rows[index];
+    if (!row || !row.cue) throw new Error(`台本の${index + 1}行目にはキューがありません`);
+    next.program = Core.buildScene(row.cue, next.program, currentLogos(next));
     next.black = false;
-    next.cueIndex = index;
-    return { index };
+    next.futa = Object.assign({}, next.futa, { active: '', prev: null });
+    next.script.pos = index;
+    next.script.onair = index;
+    return { index, silent: !!opts.silent };
+}
+
+// フタのオン・オフ（kind = left / full）。もう一度押すと直前の画面に戻る。BLACK には触らない
+function toggleFuta(next, kind) {
+    const f = next.futa;
+    if (f.active === kind) {
+        if (f.prev) next.program = f.prev;
+        next.futa = Object.assign({}, f, { active: '', prev: null });
+        return null;
+    }
+    const prev = f.active ? f.prev : JSON.parse(JSON.stringify(next.program));
+    const logo = currentLogos(next)[kind];
+    const src = logo ? { type: 'slide', file: logo } : { type: 'black' };
+    const p = JSON.parse(JSON.stringify(next.program));
+    if (kind === 'left') {
+        if (p.layout !== 'split' && p.slots.right.type === 'black') p.slots.right = { type: 'camera', cam: 'cam1' };
+        p.layout = 'split';
+        p.slots.left = src;
+    } else {
+        p.layout = 'wide';
+        p.slots.wide = src;
+    }
+    next.program = p;
+    next.futa = Object.assign({}, f, { active: kind, prev });
+    return logo ? null : 'フタの画像がありません。slides/フタ/ に画像を入れるか、設定タブで選んでください（いまは黒を出しています）';
 }
 
 function applyControl(action, val) {
     const next = JSON.parse(JSON.stringify(state));
     let cue = null;
     let command = null;
+    let notice = null;
     switch (action) {
         case 'take':                 // 管理画面のプレビューを本線に出す（管理画面が開いている必要あり）
         case 'swap':                 // プレビューの左右2分割の左と右を入れ替える（管理画面が開いている必要あり）
         case 'musicStop':            // 音楽を止める（フェードは音楽バーの設定どおり）
+        case 'musicFade':            // 音楽をフェードアウト（音楽バーの秒数。0秒のときは2秒）
+        case 'readNext':             // 台本の読み位置を1行下へ（キューは出さない。管理画面が開いている必要あり）
+        case 'readPrev':             // 台本の読み位置を1行上へ
             command = { action };
+            break;
+        case 'futa':                 // 左フタ（左面だけロゴ）のオン・オフ
+        case 'futaFull':             // 全面フタ（帯全体ロゴ）のオン・オフ
+            notice = toggleFuta(next, action === 'futa' ? 'left' : 'full');
             break;
         case 'musicPlay':            // 曲を鳴らす (val=music/ からの場所。例: 01_入場曲.mp3 / 登場曲/HOME/25.mp3)
             if (!val) throw new Error('val に曲の場所を入れてください');
             command = { action, val: val.startsWith('music/') ? val : `music/${val}` };
             if (!isMediaPath(command.val, ['music'])) throw new Error('曲の場所が正しくありません');
             break;
-        case 'next':                 // 式次第の次へ
-            cue = fireCue(next, state.cueIndex + 1);
+        case 'next': {               // 読み位置より後の、最初のキュー付きの行を出す
+            const i = Core.nextCueRow(state.script);
+            if (i < 0) throw new Error('次のキューがありません');
+            cue = fireCue(next, i);
             break;
-        case 'prev':
-            cue = fireCue(next, Math.max(0, state.cueIndex - 1));
+        }
+        case 'prev': {               // 1つ前のキュー付きの行を出し直す（BGMは鳴らし直さない）
+            let i = Core.prevCueRow(state.script);
+            if (i < 0) i = Core.cueRows(state.script)[0];
+            if (i === undefined) throw new Error('キューがありません');
+            cue = fireCue(next, i, { silent: true });
             break;
-        case 'cue': {                // val=式次第の番号（1から）
+        }
+        case 'cue': {                // val=キュー付きの行の順番（1から）
             const n = Number(val);
-            if (!Number.isInteger(n) || n < 1) throw new Error('val に式次第の番号（1から）を入れてください');
-            cue = fireCue(next, n - 1);
+            if (!Number.isInteger(n) || n < 1) throw new Error('val にキューの番号（1から）を入れてください');
+            const i = Core.cueRows(state.script)[n - 1];
+            if (i === undefined) throw new Error(`キューの${n}番目はありません`);
+            cue = fireCue(next, i);
             break;
         }
         case 'black':                // val=on / off / 省略でオン・オフ切り替え
@@ -426,7 +617,288 @@ function applyControl(action, val) {
         default:
             throw new Error(`不明な操作です (${action})`);
     }
-    return { next, cue, command };
+    return { next, cue, command, notice };
+}
+
+// ==========================================================================
+// 台本の読み込み・編集
+// ==========================================================================
+let lastImport = null;     // 直近に読み込んだファイルの中身（列の割り当てを直してから取り込むため、サーバーが覚えておく）
+let importSeq = 0;
+
+const collapse = t => String(t || '').replace(/\s+/g, '');
+function rowKey(sectionName, row) {
+    return `${collapse(sectionName)}\u0000${collapse(row.title)}\u0000${collapse(row.script).slice(0, 40)}`;
+}
+
+function summarizeImport(imp) {
+    return {
+        importId: imp.id,
+        filename: imp.filename,
+        roles: SI.ROLES.map(r => ({ role: r, label: SI.ROLE_NAMES[r] })),
+        sheets: imp.sheets.map((sh, index) => Object.assign({ index, name: sh.name }, SI.analyzeSheet(sh.grid)))
+    };
+}
+
+// アップロードされた台本（xlsx / csv / tsv / 貼り付け）を読み、シートごとの見出し・列の割り当て案を返す
+function importScriptBuffer(buf, filename, format) {
+    let sheets;
+    if (format === 'xlsx') {
+        sheets = parseXlsx(buf).sheets;
+    } else {
+        const text = SI.decodeText(buf);
+        const grid = SI.parseDelimited(text, format === 'csv' ? ',' : '\t');
+        if (grid.length === 0) throw new XlsxError('中身が空です');
+        if (grid.length > 3000) throw new XlsxError('行が多すぎます（1シート3000行まで）');
+        if (grid.some(r => r.some(c => c.length > MAX_CELL))) throw new XlsxError(`${MAX_CELL}文字を超えるセルがあります`);
+        sheets = [{ name: format === 'paste' ? '貼り付け' : (path.basename(filename, path.extname(filename)) || '台本').slice(0, 100), grid }];
+    }
+    const imp = { id: `imp${++importSeq}`, filename: String(filename || '').slice(0, 300), sheets };
+    lastImport = imp;
+    return summarizeImport(imp);
+}
+
+// 取り込み：シートごとの設定（見出し行・列の役割）どおりに台本を作り、既にひもづけたキューを引き継ぐ
+function commitImport(req) {
+    if (!isObj(req) || !lastImport || req.importId !== lastImport.id) {
+        throw new Error('読み込んだファイルの情報がありません。もう一度ファイルを選んでください');
+    }
+    if (!Array.isArray(req.sheets)) throw new Error('シートの設定が正しくありません');
+    const next = JSON.parse(JSON.stringify(state));
+    const old = next.script;
+    const manualCount = old.sections.length && old.sections[0].manual ? old.rows.filter(r => r.sec === 0).length : 0;
+    const oldKeys = new Map();
+    old.rows.forEach((r, i) => {
+        if (old.sections[r.sec].manual) return;
+        const k = rowKey(old.sections[r.sec].name, r);
+        if (!oldKeys.has(k)) oldKeys.set(k, []);
+        oldKeys.get(k).push(i);
+    });
+
+    const sections = old.sections.filter(sc => sc.manual);
+    const manualRows = old.rows.slice(0, manualCount);
+    const newRows = [];
+    const names = new Set(sections.map(sc => sc.name));
+    for (const cfg of req.sheets) {
+        if (!isObj(cfg) || !Number.isInteger(cfg.index) || !lastImport.sheets[cfg.index]) throw new Error('シートの番号が正しくありません');
+        if (cfg.include === false) continue;
+        const sh = lastImport.sheets[cfg.index];
+        if (!Array.isArray(cfg.roles) || cfg.roles.some(r => r !== '' && !SI.ROLES.includes(r))) throw new Error(`シート「${sh.name}」の列の割り当てが正しくありません`);
+        if (!Number.isInteger(cfg.headerRow) || cfg.headerRow < -1) throw new Error(`シート「${sh.name}」の見出し行が正しくありません`);
+        const rows = SI.extractRows(sh.grid, cfg.headerRow, cfg.roles);
+        if (rows.length === 0) continue;
+        let name = String(sh.name).slice(0, 100) || 'シート';
+        for (let n = 2; names.has(name); n++) name = `${String(sh.name).slice(0, 90)}(${n})`;
+        names.add(name);
+        sections.push({ name, manual: false });
+        rows.forEach(r => newRows.push(Object.assign({ sec: sections.length - 1, cue: null }, r)));
+    }
+    if (newRows.length === 0) throw new Error('取り込める行がありません。列の割り当てを確かめてください（「内容」や「セリフ」の列が必要です）');
+    if (manualRows.length + newRows.length > MAX_SCRIPT_ROWS) throw new Error(`行が多すぎます（${manualRows.length + newRows.length}行。合計${MAX_SCRIPT_ROWS}行まで）`);
+
+    // 既にひもづけたキューの引き継ぎ（セクション名＋内容＋セリフの先頭が一致する行へ）
+    const indexMap = new Map();     // 旧い行の番号 → 新しい行の番号
+    for (let i = 0; i < manualCount; i++) indexMap.set(i, i);
+    let carried = 0;
+    const used = new Set();
+    newRows.forEach((r, j) => {
+        const list = oldKeys.get(rowKey(sections[r.sec].name, r));
+        if (!list) return;
+        const oi = list.find(i => !used.has(i));
+        if (oi === undefined) return;
+        used.add(oi);
+        indexMap.set(oi, manualCount + j);
+        if (old.rows[oi].cue) { r.cue = old.rows[oi].cue; carried++; }
+    });
+    const lost = [];
+    old.rows.forEach((r, i) => {
+        if (old.sections[r.sec].manual || !r.cue || used.has(i)) return;
+        lost.push({ section: old.sections[r.sec].name, title: r.title.slice(0, 60), script: r.script.slice(0, 40) });
+    });
+
+    next.script = {
+        title: lastImport.filename,
+        rev: old.rev + 1,
+        sections,
+        rows: manualRows.concat(newRows),
+        pos: indexMap.has(old.pos) ? indexMap.get(old.pos) : -1,
+        onair: indexMap.has(old.onair) ? indexMap.get(old.onair) : -1
+    };
+    return { next, summary: { rows: newRows.length, sections: sections.filter(sc => !sc.manual).length, carried, lost } };
+}
+
+// 台本の編集（キューの付け外し・手動の式次第・読み位置）。ops をまとめて1回で保存する
+function applyScriptOps(next, ops) {
+    const sc = next.script;
+    const rowAt = i => {
+        if (!Number.isInteger(i) || i < 0 || i >= sc.rows.length) throw new Error('台本の行の番号が正しくありません');
+        return sc.rows[i];
+    };
+    const manualRow = i => {
+        const r = rowAt(i);
+        if (!sc.sections[r.sec].manual) throw new Error('読み込んだ台本の行は、並べ替え・削除できません（「手動の式次第」の行だけ）');
+        return r;
+    };
+    // 行の番号を付け替える（pos・onair を追いかけさせる）
+    const remap = fn => { sc.pos = fn(sc.pos); sc.onair = fn(sc.onair); };
+    let touched = false;
+    for (const op of ops) {
+        if (!isObj(op)) throw new Error('操作の形が正しくありません');
+        switch (op.op) {
+            case 'cue':
+                rowAt(op.row).cue = op.cue === null || op.cue === undefined ? null : op.cue;
+                touched = true;
+                break;
+            case 'cues':
+                if (!Array.isArray(op.items)) throw new Error('キューの一覧が正しくありません');
+                op.items.forEach(it => { if (!isObj(it)) throw new Error('キューの形が正しくありません'); rowAt(it.row).cue = it.cue === undefined ? null : it.cue; });
+                touched = true;
+                break;
+            case 'clearSection':
+                if (!Number.isInteger(op.sec) || !sc.sections[op.sec]) throw new Error('セクションの番号が正しくありません');
+                sc.rows.forEach(r => { if (r.sec === op.sec) r.cue = null; });
+                touched = true;
+                break;
+            case 'addManual': {
+                if (!isStr(op.title, 300) || !op.title.trim()) throw new Error('キューの名前を入れてください（300文字以内）');
+                if (!(sc.sections.length && sc.sections[0].manual)) {
+                    sc.sections.unshift({ name: MANUAL_SECTION, manual: true });
+                    sc.rows.forEach(r => { r.sec++; });
+                }
+                const at = sc.rows.filter(r => r.sec === 0).length;
+                const row = { sec: 0, cue: op.cue === undefined ? null : op.cue };
+                ROW_TEXT_KEYS.forEach(k => { row[k] = ''; });
+                row.title = op.title.trim();
+                sc.rows.splice(at, 0, row);
+                remap(i => (i >= at ? i + 1 : i));
+                touched = true;
+                break;
+            }
+            case 'deleteRow': {
+                manualRow(op.row);
+                sc.rows.splice(op.row, 1);
+                remap(i => (i === op.row ? -1 : i > op.row ? i - 1 : i));
+                if (!sc.rows.some(r => r.sec === 0)) { sc.sections.shift(); sc.rows.forEach(r => { r.sec--; }); }
+                touched = true;
+                break;
+            }
+            case 'moveRow': {
+                manualRow(op.row);
+                const to = op.row + (op.dir < 0 ? -1 : 1);
+                if (to < 0 || to >= sc.rows.length || !sc.sections[sc.rows[to].sec].manual) break;
+                [sc.rows[op.row], sc.rows[to]] = [sc.rows[to], sc.rows[op.row]];
+                remap(i => (i === op.row ? to : i === to ? op.row : i));
+                touched = true;
+                break;
+            }
+            case 'rename':
+                if (!isStr(op.title, 300) || !op.title.trim()) throw new Error('キューの名前を入れてください（300文字以内）');
+                manualRow(op.row).title = op.title.trim();
+                touched = true;
+                break;
+            case 'pos':
+                if (!Number.isInteger(op.pos) || op.pos < -1 || op.pos >= sc.rows.length) throw new Error('読み位置が正しくありません');
+                sc.pos = op.pos;
+                break;
+            default:
+                throw new Error(`不明な台本の操作です (${op.op})`);
+        }
+    }
+    if (touched) sc.rev++;
+}
+
+// 台本の取り込み用のAPI（/api/script/...）。処理したら true を返す
+function handleScriptApi(pathname, req, res, reqUrl) {
+    if (!pathname.startsWith('/api/script/')) return false;
+    const fail = (code, msg) => sendJson(res, code, { error: msg });
+    const jsonBody = (limit, cb) => readBody(req, limit, (err, body) => {
+        if (err) return fail(413, err.message);
+        let obj;
+        try { obj = JSON.parse(body); } catch (e) { return fail(400, '送られたデータを読み取れません'); }
+        if (!isObj(obj)) return fail(400, '送られたデータの形が正しくありません');
+        try { cb(obj); } catch (e) {
+            console.error(`[台本] ${pathname}: ${e.message}`);
+            fail(400, e.message);
+        }
+    });
+
+    if (pathname === '/api/script/import') {
+        if (req.method !== 'POST') { fail(405, 'POST で呼び出してください'); return true; }
+        const ctype = String(req.headers['content-type'] || '');
+        readBodyBuffer(req, Math.ceil(MAX_XLSX_BYTES * 1.4) + 4096, (err, buf) => {
+            if (err) return fail(413, err.message === 'too-big' ? 'ファイルが大きすぎます（20MBまで）' : 'ファイルの受け取りが途中で止まりました');
+            try {
+                let filename = String(reqUrl.searchParams.get('filename') || '');
+                let format = String(reqUrl.searchParams.get('format') || '');
+                let data = buf;
+                if (ctype.includes('application/json')) {
+                    const j = JSON.parse(buf.toString('utf-8'));
+                    if (!isObj(j)) throw new XlsxError('送られたデータの形が正しくありません');
+                    filename = String(j.filename || filename);
+                    format = String(j.format || format);
+                    if (typeof j.base64 === 'string') data = Buffer.from(j.base64, 'base64');
+                    else if (typeof j.text === 'string') data = Buffer.from(j.text, 'utf-8');
+                    else throw new XlsxError('base64 か text を送ってください');
+                }
+                if (!format) {
+                    const ext = path.extname(filename).toLowerCase();
+                    format = ext === '.csv' ? 'csv' : ext === '.tsv' || ext === '.txt' ? 'tsv' : 'xlsx';
+                }
+                if (!['xlsx', 'csv', 'tsv', 'paste'].includes(format)) throw new XlsxError('形式は xlsx・csv・tsv・paste のどれかにしてください');
+                if (data.length === 0) throw new XlsxError('ファイルが空です');
+                if (data.length > MAX_XLSX_BYTES) throw new XlsxError('ファイルが大きすぎます（20MBまで）');
+                sendJson(res, 200, importScriptBuffer(data, filename, format));
+            } catch (e) {
+                const msg = e instanceof XlsxError ? e.message : e instanceof SyntaxError ? '送られたデータを読み取れません' : `読み込めませんでした（${e.message}）`;
+                if (!(e instanceof XlsxError)) console.error(`[台本] 読み込み失敗: ${e.stack}`);
+                else console.error(`[台本] 読み込み失敗: ${e.message}`);
+                fail(400, msg);
+            }
+        });
+        return true;
+    }
+    if (pathname === '/api/script/analyze' && req.method === 'POST') {
+        jsonBody(4096, j => {
+            if (!lastImport || j.importId !== lastImport.id) throw new Error('読み込んだファイルの情報がありません。もう一度ファイルを選んでください');
+            const sh = lastImport.sheets[j.sheet];
+            if (!sh) throw new Error('シートの番号が正しくありません');
+            const forced = j.headerRow === null || j.headerRow === undefined ? undefined : j.headerRow;
+            if (forced !== undefined && !(Number.isInteger(forced) && forced >= -1)) throw new Error('見出し行が正しくありません');
+            sendJson(res, 200, Object.assign({ index: j.sheet, name: sh.name }, SI.analyzeSheet(sh.grid, forced)));
+        });
+        return true;
+    }
+    if (pathname === '/api/script/commit' && req.method === 'POST') {
+        jsonBody(2 * 1024 * 1024, j => {
+            const { next, summary } = commitImport(j);
+            const vErr = commit(next);
+            if (vErr) throw new Error(vErr);
+            console.log(`[台本] 取り込み: ${summary.sections}セクション ${summary.rows}行（キュー引き継ぎ ${summary.carried}、引き継げず ${summary.lost.length}）`);
+            sendJson(res, 200, Object.assign({ status: 'ok' }, summary));
+        });
+        return true;
+    }
+    if (pathname === '/api/script/edit' && req.method === 'POST') {
+        jsonBody(8 * 1024 * 1024, j => {
+            if (!Array.isArray(j.ops) || j.ops.length === 0 || j.ops.length > 6000) throw new Error('操作の一覧が正しくありません');
+            const next = JSON.parse(JSON.stringify(state));
+            applyScriptOps(next, j.ops);
+            const vErr = commit(next);
+            if (vErr) throw new Error(vErr);
+            sendJson(res, 200, { status: 'ok' });
+        });
+        return true;
+    }
+    if (pathname === '/api/script/suggestions') {
+        if (req.method !== 'GET') { fail(405, 'GET で呼び出してください'); return true; }
+        const ctx = { music: listMusic(), slides: listTree(SLIDE_DIR, 'slides', SLIDE_EXTS) };
+        const out = {};
+        state.script.rows.forEach((r, i) => { if (!r.cue) { const sg = Core.suggestCue(r, ctx); if (sg) out[i] = sg; } });
+        sendJson(res, 200, { suggestions: out });
+        return true;
+    }
+    fail(404, '不明な台本のAPIです');
+    return true;
 }
 
 // ==========================================================================
@@ -555,8 +1027,8 @@ function handleRequest(req, res) {
             let rel;
             try { rel = String(JSON.parse(body).path || ''); } catch (e) { rel = ''; }
             if (!isMediaPath(rel, ['slides'])) return sendJson(res, 400, { error: 'ファイルの場所が正しくありません' });
-            const used = JSON.stringify([state.program, state.cues.map(c => c.scene)]).includes(JSON.stringify(rel));
-            if (used) return sendJson(res, 400, { error: '本線か式次第で使っているため消せません。先に差し替えてください' });
+            const used = JSON.stringify([state.program, state.futa, state.script.rows.map(r => r.cue)]).includes(JSON.stringify(rel));
+            if (used) return sendJson(res, 400, { error: '本線・フタ・台本のキューで使っているため消せません。先に差し替えてください' });
             try {
                 fs.rmSync(path.join(__dirname, ...rel.split('/')));
             } catch (e) {
@@ -603,6 +1075,9 @@ function handleRequest(req, res) {
         });
     }
 
+    // 3.6 台本の読み込み・編集
+    if (handleScriptApi(pathname, req, res, reqUrl)) return;
+
     // 4. Stream Deck 等からの操作
     if (pathname === '/api/control') {
         const { action, val } = Object.fromEntries(reqUrl.searchParams);
@@ -622,6 +1097,7 @@ function handleRequest(req, res) {
                 return sendJson(res, 400, { error: vErr });
             }
             if (result.cue) broadcastEvent('CUE_FIRED', result.cue);
+            if (result.notice) broadcastEvent('NOTICE', { message: result.notice });
         }
         console.log(`[操作] ${action} val=${val === undefined ? '-' : val}`);
         return sendJson(res, 200, { status: 'ok' });
