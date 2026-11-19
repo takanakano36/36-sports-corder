@@ -303,7 +303,7 @@ code { font-family: monospace; color: #93c5fd; }
 
 /* キュー一覧 */
 .cr-list { position: relative; border: 1px solid var(--line); border-radius: 10px; background: #0f131b; overflow-y: auto; max-height: 72vh; }
-.cr { display: grid; grid-template-columns: 52px 78px minmax(0, 1fr) auto auto 20px 44px; align-items: center; gap: 10px; height: 58px; padding: 0 10px; border-bottom: 1px solid #1d2432; cursor: pointer; user-select: none; outline-offset: -3px; }
+.cr { display: grid; grid-template-columns: 52px minmax(78px, auto) minmax(0, 1fr) auto auto 20px 44px; align-items: center; gap: 10px; height: 58px; padding: 0 10px; border-bottom: 1px solid #1d2432; cursor: pointer; user-select: none; outline-offset: -3px; }
 .cr:hover { background: #161c28; }
 .cr.sel { outline: 3px solid #eab308; background: #2a2410; }
 .cr.onair { background: #3a1417; box-shadow: inset 6px 0 0 #ef4444; }
@@ -404,3 +404,10 @@ body.script-mode .take-bar { display: none; }
 .sc-pick-head .btn.big { flex: none; padding: 10px 28px; font-size: 18px; background: #3a1414; border-color: #b45309; }
 .pick-grid.big { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 #pick-grid .pick-item img, #pick-grid .pick-item video { height: 150px; }
+
+/* 全面（14:5）のキューは横長のサムネイル。選ぶパネルのフォルダのタブ */
+.cr-thumb.wide { width: 140px; height: 50px; }
+.pick-quick { display: flex; gap: 6px; margin-bottom: 6px; }
+.pick-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; }
+.pick-tabs button { background: #232937; border: 1px solid var(--line); border-radius: 8px 8px 0 0; padding: 6px 16px; font-size: 15px; font-weight: 900; color: var(--sub); cursor: pointer; }
+.pick-tabs button.on { background: var(--accent); border-color: var(--accent); color: #111; }

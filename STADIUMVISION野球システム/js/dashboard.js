@@ -373,7 +373,8 @@ function onSlotWheel(e, slot) {
 // --------------------------------------------------------------------------
 async function doTake() {
     // 台本タブでは、選んでいるキューを本線へ（BGMも動く）。選択は次のキューへ進む
-    if (currentTab === "script" && script().rows.length) return scTake();
+    if (adhocActive) { adhocActive = false; lastPvwKey = ""; }      // 「素材から出す」で入れた PREVIEW は、そのまま本線へ
+    else if (currentTab === "script" && script().rows.length) return scTake();
     const ok = await patch({ program: clone(pvw) });
     if (!ok) return;
     const b = $("#btn-take");
@@ -844,13 +845,12 @@ function computeView() {
         const eff = cue || (scMode === "edit" && sug && sug.cue) || null;
         if (eff) {
             if (eff.scene) { const sl = eff.scene.slots; st.left = faceFromSrc(eff.scene.layout === "split" ? sl.left : sl.wide); }
-            else if (eff.band) st.left = eff.band;
             else if (eff.left) st.left = eff.left;
         }
         const pick = sug && sug.pick && sug.pick[0] || "";
         const warn = sug && !cue ? sug.hints.filter(h => !h.startsWith("当日に選ぶ")).join("\n") : "";
         const shown = scMode === "edit" ? true : !!(cue || pick || scShowAll);
-        items.push({ i, row: r, sec, cue, sug, eff, left: st.left, pick, warn, bgm: bgmShort(eff), right: rightMark(eff), suggested: !cue && !!(sug && sug.cue), shown });
+        items.push({ i, row: r, sec, cue, sug, eff, left: eff && eff.band ? eff.band : st.left, pick, warn, bgm: bgmShort(eff), right: rightMark(eff), suggested: !cue && !!(sug && sug.cue), shown });
     });
     view = { items, shown: items.filter(x => !x.chapter && x.shown).map(x => x.i) };
 }
@@ -873,16 +873,17 @@ function thumbSrc(face) {
 }
 function thumbHtml(it, big) {
     const cls = big ? "cr-thumb big" : "cr-thumb";
-    const pickable = it.pick ? ` data-pick="${it.i}"` : "";
+    const pickable = ` data-pick="${it.i}"`;
+    const wide = it.cue && it.cue.band ? " wide" : "";
     // 「当日に選ぶ」行は、選ぶまで「＋選ぶ」の枠を出す（前の行の画像を引き継いで見せない）
-    if (it.pick && !(it.cue && it.cue.left)) return `<span class="${cls} pick"${pickable}>＋選ぶ</span>`;
+    if (it.pick && !(it.cue && (it.cue.left || it.cue.band))) return `<span class="${cls} pick"${pickable}>＋選ぶ</span>`;
     const src = thumbSrc(it.left);
-    if (!src) return `<span class="${cls} empty"${pickable}></span>`;
+    if (!src) return `<span class="${cls}${wide} empty"${pickable}></span>`;
     const meta = slides.find(x => x.path === src);
     const media = meta && meta.kind === "video"
         ? `<video src="${mediaUrl(src)}#t=0.1" preload="metadata" muted></video>`
         : `<img src="${mediaUrl(src)}" loading="lazy" alt="" onerror="this.remove()">`;
-    return `<span class="${cls}"${pickable}>${media}</span>`;
+    return `<span class="${cls}${wide}"${pickable}>${media}</span>`;
 }
 
 function rowHtml(it, edit) {
@@ -1009,7 +1010,7 @@ function renderMarks(opts = {}) {
     }
     renderCard(sel);
     const key = `${sel}|${sc.rev}|${scMode}|${state ? JSON.stringify(state.program) : ""}`;
-    if (currentTab === "script" && key !== lastPvwKey) { lastPvwKey = key; previewRow(sel); }
+    if (currentTab === "script" && key !== lastPvwKey) { lastPvwKey = key; if (!adhocActive) previewRow(sel); }
 }
 
 function renderCard(sel) {
@@ -1042,6 +1043,7 @@ function persistPos(i) {
     posTimer = setTimeout(() => { scEditQuiet([{ op: "pos", pos: i }]); }, 60);
 }
 function setSel(i) {
+    adhocActive = false;
     const sc = script();
     if (!(i >= 0 && i < sc.rows.length)) return;
     sc.pos = i;
@@ -1316,7 +1318,7 @@ function onEditorClick(e) {
     const v = b.dataset.v;
     switch (b.dataset.ed) {
         case "left": edMutate(c => { c.left = v ? { type: v } : null; }, true); break;
-        case "leftfile": edMutate(c => { c.left = { type: "slide", file: v }; }, true); break;
+        case "leftfile": { const wide = isWideSlide(v, b.querySelector("img")); edMutate(c => putSlide(c, v, wide), true); break; }
         case "right": edMutate(c => {
             c.right = !v ? null : /^cam/.test(v) ? ($("#ed-fit").checked ? { type: "camera", cam: v, fit: "contain" } : { type: "camera", cam: v }) : { type: v };
         }, true); break;
@@ -1342,26 +1344,102 @@ async function deleteManual() {
     await scEdit([{ op: "deleteRow", row: i }]);
 }
 
-// ---- 「当日に選ぶ」：サムネイルのグリッドから1クリック ----
-let pickRowIndex = -1;
-function openPick(i) {
-    const it = itemOf(i);
-    if (!it || !it.pick) return;
-    pickRowIndex = i;
-    if (selRow() !== i) setSel(i);
-    $("#sc-pick-title").textContent = `${rowLabel(it.row)} に出す画像を選ぶ`;
-    $("#pick-grid").innerHTML = slideThumbs(it.pick, it.cue && it.cue.left && it.cue.left.type === "slide" ? it.cue.left.file : "", true).replace(/data-ed="leftfile" data-v=/g, 'data-pickfile=');
+// ---- 左（と全面）を選ぶ・当日に選ぶ：右側のパネルでサムネイルから1クリック ----
+//   mode "row"   … その行のキューを変える（保存）。全面（14:5）の画像は帯全体にする
+//   mode "adhoc" … キューは変えず、PREVIEW にだけ入れる（TAKE で出せる）
+let pickState = null;
+let adhocActive = false;
+const GROUP_ORDER = ["全面", "ロゴ", "進行", "入場", "選手"];
+function slideGroup(s) {
+    const segs = s.folder.split("/").filter(Boolean);
+    if (segs.length && /^\d+x\d+$/.test(segs[0])) segs.shift();       // 960x686 のような大きさのフォルダは、とばす
+    return segs[0] || "（直下）";
+}
+function slideGroups() {
+    const set = new Set(slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER)).map(slideGroup));
+    return [...set].sort((a, b) => {
+        const ia = GROUP_ORDER.indexOf(a), ib = GROUP_ORDER.indexOf(b);
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b, "ja");
+    });
+}
+// 全面（14:5）の画像か：縦横比 2.4 以上、または 全面/ フォルダ
+function isWideSlide(path, imgEl) {
+    const r = imgEl && imgEl.naturalWidth ? imgEl.naturalWidth / imgEl.naturalHeight : aspectMap[path];
+    if (r) return r >= 2.4;
+    return /(^|\/)全面\//.test(path);
+}
+
+function openPick(i, mode = "row") {
+    const it = i >= 0 ? itemOf(i) : null;
+    if (mode === "row" && (!it || it.chapter)) return;
+    const groups = slideGroups();
+    let tab = groups[0] || "";
+    let sub = "";
+    if (mode === "row") {
+        if (selRow() !== i) setSel(i);
+        const cur = it.cue && (it.cue.band || it.cue.left);
+        if (it.pick) {                                    // 当日に選ぶ行：そのフォルダを最初に開く
+            const f = slides.find(s => SC.normPath(s.path).includes(SC.normPath(it.pick)));
+            if (f) { tab = slideGroup(f); sub = it.pick; }
+        } else if (cur && cur.type === "slide") {
+            const f = slides.find(s => s.path === cur.file);
+            if (f) tab = slideGroup(f);
+        } else if (groups.includes("進行")) tab = "進行";
+    }
+    pickState = { mode, row: i, tab, sub };
+    renderPick();
     $("#sc-pick").classList.remove("hidden");
     $("#sc-pick").scrollTop = 0;
 }
-function closePick() { $("#sc-pick").classList.add("hidden"); pickRowIndex = -1; }
-async function applyPick(file) {
-    const i = pickRowIndex;
+function renderPick() {
+    if (!pickState) return;
+    const { mode, row, tab, sub } = pickState;
+    const it = row >= 0 ? itemOf(row) : null;
+    $("#sc-pick-title").textContent = mode === "adhoc" ? "素材から出す（キューは変わりません）" : it && it.pick ? `${rowLabel(it.row)} に出す画像を選ぶ` : `${it ? rowLabel(it.row) : ""} の左を選ぶ`;
+    $("#pick-quick").innerHTML = mode === "row"
+        ? `<button type="button" class="btn small" data-pickq="black" title="左は黒にして、カメラだけを出します">カメラだけ（左は黒）</button><button type="button" class="btn small" data-pickq="futa" title="左にロゴ（フタ）を出します">左フタ（ロゴ）</button>` : "";
+    $("#pick-tabs").innerHTML = slideGroups().map(g => `<button type="button" data-picktab="${escapeHtml(g)}" class="${g === tab ? "on" : ""}">${escapeHtml(g)}</button>`).join("")
+        + (sub ? `<span class="ed-chip">${escapeHtml(sub)}</span>` : "");
+    const cur = it && it.cue && (it.cue.band || it.cue.left);
+    const on = cur && cur.type === "slide" ? cur.file : "";
+    const list = slides.filter(s => !s.path.startsWith(SC.FUTA_FOLDER) && slideGroup(s) === tab && (!sub || SC.normPath(s.path).includes(SC.normPath(sub))));
+    $("#pick-grid").innerHTML = list.map(s => `<button type="button" class="pick-item ${s.path === on ? "on" : ""}" data-pickfile="${escapeHtml(s.path)}" title="${escapeHtml(s.name)}">${s.kind === "video"
+        ? `<video src="${mediaUrl(s.path)}#t=0.1" preload="metadata" muted></video>` : `<img src="${mediaUrl(s.path)}" loading="lazy" alt="" onerror="this.remove()">`}<span class="pick-name">${escapeHtml(s.name)}</span></button>`).join("")
+        || `<div class="empty">画像がありません</div>`;
+}
+function closePick() { $("#sc-pick").classList.add("hidden"); pickState = null; }
+
+// 選んだ画像を、行のキューに入れる（全面なら帯全体、そうでなければ左）
+function putSlide(c, file, wide) {
+    if (wide) { c.band = { type: "slide", file }; c.left = null; c.right = null; }
+    else { c.left = { type: "slide", file }; c.band = null; }
+}
+async function applyPick(file, imgEl) {
+    const st = pickState;
+    if (!st) return;
     closePick();
-    const r = script().rows[i];
-    if (!r) return;
-    if (selRow() !== i) setSel(i);
-    await edMutate(c => { c.left = { type: "slide", file }; }, true);
+    const wide = isWideSlide(file, imgEl);
+    if (st.mode === "adhoc") return adhocToPreview(file, wide);
+    if (selRow() !== st.row) setSel(st.row);
+    await edMutate(c => putSlide(c, file, wide), true);
+}
+async function applyPickQuick(kind) {
+    const st = pickState;
+    if (!st || st.mode !== "row") return;
+    closePick();
+    if (selRow() !== st.row) setSel(st.row);
+    await edMutate(c => { c.left = { type: kind }; c.band = null; }, true);
+}
+// 素材から出す：キューは変えず、PREVIEW にだけ入れる
+function adhocToPreview(file, wide) {
+    const p = clone(state.program);
+    if (wide) { p.layout = "wide"; p.slots.wide = { type: "slide", file }; }
+    else { p.layout = "split"; p.slots.left = { type: "slide", file }; }
+    pvw = p;
+    if (!LAYOUT_SLOTS[pvw.layout].includes(selectedSlot)) selectedSlot = LAYOUT_SLOTS[pvw.layout][0];
+    adhocActive = true;
+    pvwChanged({ noAuto: true });
+    showInfo("PREVIEW に入れました（TAKE で出します。台本のキューは変わりません）");
 }
 
 async function clearSectionCues() {
@@ -1471,7 +1549,10 @@ function bindScript() {
     $("#sc-list").addEventListener("click", onAct);
     $("#sc-missing-pop").addEventListener("click", onAct);
     $("#sc-missing").addEventListener("click", toggleMissingPop);
-    $("#pick-grid").addEventListener("click", e => { const b = e.target.closest("[data-pickfile]"); if (b) applyPick(b.dataset.pickfile); });
+    $("#pick-grid").addEventListener("click", e => { const b = e.target.closest("[data-pickfile]"); if (b) applyPick(b.dataset.pickfile, b.querySelector("img")); });
+    $("#pick-tabs").addEventListener("click", e => { const b = e.target.closest("[data-picktab]"); if (b && pickState) { pickState.tab = b.dataset.picktab; pickState.sub = ""; renderPick(); $("#sc-pick").scrollTop = 0; } });
+    $("#pick-quick").addEventListener("click", e => { const b = e.target.closest("[data-pickq]"); if (b) applyPickQuick(b.dataset.pickq); });
+    $("#sc-adhoc").addEventListener("click", () => openPick(-1, "adhoc"));
 }
 
 // --------------------------------------------------------------------------
@@ -1483,7 +1564,7 @@ function selectTab(name) {
     $$(".tab-body").forEach(t => t.classList.toggle("hidden", t.id !== `tab-${name}`));
     // 台本タブでは、左に台本・右にモニターの並びにする（CSS の .script-mode）
     document.body.classList.toggle("script-mode", name === "script");
-    if (name !== "script") closePick();
+    if (name !== "script") { closePick(); adhocActive = false; }
     renderMonitorDesc();
     if (name === "script") {
         scListKey = "";

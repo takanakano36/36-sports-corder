@@ -69,6 +69,8 @@
         <!-- 「当日に選ぶ」：右側（PREVIEWの上）に出すパネル -->
         <div class="panel sc-pick hidden" id="sc-pick">
             <div class="sc-pick-head"><b id="sc-pick-title"></b><button type="button" class="btn big" id="btn-pick-close" title="閉じる（Escキー）">閉じる</button></div>
+            <div class="pick-quick" id="pick-quick"></div>
+            <div class="pick-tabs" id="pick-tabs"></div>
             <div class="pick-grid big" id="pick-grid"></div>
         </div>
         <div class="panel mon-panel">
@@ -275,6 +277,7 @@
         <div class="tab-body hidden" id="tab-script">
             <div class="sc-top">
                 <div class="sc-sheets" id="sc-sheets"></div>
+                <button type="button" class="btn small" id="sc-adhoc" title="キューは変えずに、画像を選んで PREVIEW にだけ入れます（その場の差し込み用）。TAKE で出せます">素材から出す</button>
                 <button type="button" class="sc-missing hidden" id="sc-missing"></button>
                 <label class="sc-allrows" title="キューの無い行も一覧に出します"><input type="checkbox" id="sc-showall"> 全行</label>
                 <button type="button" class="btn small" id="sc-trans" title="画面の切り替え方。押すたびに CUT と FADE が入れ替わります">FADE</button>
