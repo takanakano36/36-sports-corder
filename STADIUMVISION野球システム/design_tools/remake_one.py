@@ -9,6 +9,9 @@ if __name__ == '__main__':
     no = input('背番号（例: 4）: ').strip('﻿ 　')
     if not team or not no:
         print('チーム名と背番号の両方が必要です。'); sys.exit(1)
-    try: sys.exit(bulk_players.main(['--team', team, '--no', no]))
+    try:
+        rc = bulk_players.main(['--team', team, '--no', no])
+        rc2 = bulk_players.main(['--team', team, '--no', no, '--small'])     # 球場ビジョン用 960x686 も作る
+        sys.exit(rc or rc2)
     except DataError as e:
         print('!! 止めました:', e); sys.exit(1)

@@ -489,6 +489,7 @@ function listTree(rootDir, topName, exts) {
         try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch (e) { return; }
         for (const ent of entries) {
             if (ent.name.startsWith('.')) continue;
+            if (ent.name === '_退避') continue;      // 入れ替えで退避した古いスライド（一覧・提案には出さない）
             const r = rel ? `${rel}/${ent.name}` : ent.name;
             if (ent.isDirectory()) { walk(path.join(abs, ent.name), r); continue; }
             const ext = path.extname(ent.name).toLowerCase();
@@ -502,6 +503,37 @@ function listTree(rootDir, topName, exts) {
         }
     })(rootDir, '');
     return out.sort((a, b) => a.path.localeCompare(b.path, 'ja', { numeric: true }));
+}
+
+// slides フォルダの変化を見張る（5秒ごと。Windows でも確実に動くよう fs.watch は使わない）。
+// design_tools の「ビジョンにセット」で slides が入れ替わると、開いている管理画面に知らせて一覧を読み直させる
+function slidesSignature() {
+    const parts = [];
+    (function walk(abs, rel) {
+        let entries;
+        try { entries = fs.readdirSync(abs, { withFileTypes: true }); } catch (e) { return; }
+        for (const ent of entries) {
+            if (ent.name.startsWith('.') || ent.name === '_退避') continue;
+            const p = path.join(abs, ent.name);
+            if (ent.isDirectory()) { walk(p, `${rel}/${ent.name}`); continue; }
+            if (!SLIDE_EXTS.includes(path.extname(ent.name).toLowerCase())) continue;
+            try { const st = fs.statSync(p); parts.push(`${rel}/${ent.name}:${st.size}:${Math.round(st.mtimeMs)}`); } catch (e) { /* 消えた */ }
+        }
+    })(SLIDE_DIR, '');
+    return parts.sort().join('\n');
+}
+let lastSlidesSig = null;
+function watchSlides() {
+    try {
+        const sig = slidesSignature();
+        if (lastSlidesSig !== null && sig !== lastSlidesSig) {
+            console.log('[スライド] slides フォルダの変化を見つけました。管理画面に知らせます');
+            broadcastEvent('SLIDES_CHANGED', {});
+        }
+        lastSlidesSig = sig;
+    } catch (e) {
+        console.error(`[スライド] 変化の確認に失敗しました（${e.message}）`);
+    }
 }
 
 // 音楽バーの曲（music/ の直下だけ。番号付きは番号順、番号なしはその後に名前順）
@@ -1245,6 +1277,8 @@ server.on('error', err => {
 });
 
 server.listen(PORT, () => {
+    watchSlides();
+    setInterval(watchSlides, 5000);
     console.log('======================================================================');
     console.log(' スタジアムビジョン野球システム (32:9) サーバー起動中');
     console.log(`   管理画面 : ${DASHBOARD_URL}`);

@@ -418,6 +418,8 @@ function connect() {
     es.addEventListener("COMMAND", e => handleCommand(JSON.parse(e.data)));
     es.addEventListener("CUE_FIRED", e => onCueFired(JSON.parse(e.data)));
     es.addEventListener("NOTICE", e => showError(JSON.parse(e.data).message));
+    // design_tools で slides が入れ替わった：スライド一覧を読み直す（提案・⚠も追従する）
+    es.addEventListener("SLIDES_CHANGED", () => loadSlides().then(() => showInfo("スライドが入れ替わりました。一覧を読み直しました")).catch(() => {}));
     es.onerror = () => {
         conn.textContent = "サーバーにつながっていません";
         conn.className = "conn ng";

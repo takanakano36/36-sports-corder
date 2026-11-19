@@ -11,7 +11,37 @@ if not exist input\entrance.csv (
   exit /b
 )
 "%USERPROFILE%\mlb-venv\Scripts\python.exe" bulk_banners.py
-"%USERPROFILE%\mlb-venv\Scripts\python.exe" banners_band.py
+if errorlevel 1 (
+  echo.
+  echo 途中でエラーになりました。上の文字を読んでから、何かキーを押してください。
+  pause
+  exit /b 1
+)
 echo.
-echo 作ったバナー: output\入場\  output\対戦\  output\進行\  output\1920x686\全面\（14:5 全面）
+echo ===== 球場ビジョン用（960x686）を作ります =====
+"%USERPROFILE%\mlb-venv\Scripts\python.exe" bulk_banners.py --small
+if errorlevel 1 (
+  echo.
+  echo 途中でエラーになりました。上の文字を読んでから、何かキーを押してください。
+  pause
+  exit /b 1
+)
+"%USERPROFILE%\mlb-venv\Scripts\python.exe" banners_band.py
+if errorlevel 1 (
+  echo.
+  echo 途中でエラーになりました。上の文字を読んでから、何かキーを押してください。
+  pause
+  exit /b 1
+)
+echo.
+echo ===== ビジョンの slides フォルダへ入れ替えます =====
+"%USERPROFILE%\mlb-venv\Scripts\python.exe" sync_to_slides.py
+if errorlevel 1 (
+  echo.
+  echo 途中でエラーになりました。上の文字を読んでから、何かキーを押してください。
+  pause
+  exit /b 1
+)
+echo.
+echo 作ったバナー: output\入場\  output\対戦\  output\進行\  output\1920x686\全面\（14:5 全面）  ・ ビジョン用 output\960x686\（slides にも入りました）
 pause
