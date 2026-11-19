@@ -11,6 +11,7 @@ if not exist input\entrance.csv (
   exit /b
 )
 "%USERPROFILE%\mlb-venv\Scripts\python.exe" bulk_banners.py
+"%USERPROFILE%\mlb-venv\Scripts\python.exe" banners_band.py
 echo.
-echo 作ったバナー: output\入場\  output\対戦\  output\進行\
+echo 作ったバナー: output\入場\  output\対戦\  output\進行\  output\1920x686\全面\（14:5 全面）
 pause
