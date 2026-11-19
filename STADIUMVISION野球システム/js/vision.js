@@ -1,6 +1,7 @@
 /* ==========================================================================
    スタジアムビジョン野球システム - 表示画面
-   - サーバー(/events)から届いた本線(program)を描画する
+   - サーバー(/events)から届いた本線(program)＝レイヤーを下から順に重ねたシーンを描画する
+     （レイヤーの位置・大きさは、帯に対する割合 0〜1。カメラのレイヤーは、OBS取り込み(camera=obs)のとき透明な穴になる）
      出力の形（state.output）が
        wide … 3840×1080（32:9）
        sdi  … 1920×1080 の画面の中の「帯」（ビジョンに映る部分。例 1920×630）だけに描く。帯の外は黒
@@ -38,13 +39,6 @@ const CAM_HOLE = params.get('camera') === 'obs' && !MONITOR;
 if (CAM_HOLE) { document.documentElement.classList.add('cam-hole'); document.body.classList.add('cam-hole'); }
 if (MONITOR) document.body.classList.add('monitor');
 if (params.get('guide') === '1') document.body.classList.add('show-guide');
-
-const CROP_KEYS = ['fit', 'posX', 'posY', 'zoom'];
-const LAYOUT_SLOTS = {
-    wide: ['wide'],
-    split: ['left', 'right'],
-    single: ['bg', 'single']
-};
 
 let state = null;          // サーバーの最新状態
 let previewScene = null;   // pvwモニター用シーン
@@ -159,127 +153,6 @@ function isVideoFile(p) {
     return /\.(mp4|webm|mov|m4v)$/i.test(p || '');
 }
 
-function contentKey(src) {
-    if (!src) return 'none';
-    const o = {};
-    Object.keys(src).sort().forEach(k => { if (!CROP_KEYS.includes(k)) o[k] = src[k]; });
-    return JSON.stringify(o);
-}
-
-// 一文字の守備位置表記は、ビジョン上で読みやすい正式名称にする (「一」がダッシュに見える対策)
-const POS_FULL = { '投': '投手', '捕': '捕手', '一': '一塁手', '二': '二塁手', '三': '三塁手', '遊': '遊撃手', '左': '左翼手', '中': '中堅手', '右': '右翼手', '指': '指名打者', 'DH': '指名打者', '内': '内野手', '外': '外野手' };
-function posLabel(p) { return POS_FULL[String(p || '').trim()] || p || ''; }
-
-function teamInfo(team) {
-    const t = (state && state.teams && state.teams[team]) || {};
-    return { name: t.name || team || '', color: t.color || '#b91c1c', photoTeam: t.photoTeam || t.name || team || '' };
-}
-
-// 顔写真: player.photo → photos/<チーム>/player/<背番号>.(png|jpg|jpeg) の順に探す
-function photoCandidates(p) {
-    const list = [];
-    if (p.photo) list.push(p.photo);
-    const folder = teamInfo(p.team).photoTeam;
-    if (folder && p.number !== undefined && p.number !== '') {
-        ['png', 'jpg', 'jpeg', 'webp'].forEach(ext => list.push(`photos/${folder}/player/${p.number}.${ext}`));
-    }
-    return list;
-}
-
-function attachPhoto(container, player) {
-    const cands = photoCandidates(player);
-    const numBg = document.createElement('div');
-    numBg.className = 'pc-num-bg';
-    numBg.textContent = player.number || '';
-    if (!cands.length) { container.appendChild(numBg); return; }
-    const img = document.createElement('img');
-    let i = 0;
-    img.onerror = () => {
-        i++;
-        if (i < cands.length) img.src = mediaUrl(cands[i]);
-        else { img.remove(); container.appendChild(numBg); }
-    };
-    img.src = mediaUrl(cands[0]);
-    container.appendChild(img);
-}
-
-// --------------------------------------------------------------------------
-// ソース別の描画
-// --------------------------------------------------------------------------
-function buildPlayerCard(src) {
-    const p = src.player || {};
-    const team = teamInfo(p.team);
-    const card = document.createElement('div');
-    card.className = 'pcard enter card-' + (src.card || 'atbat');
-    card.style.setProperty('--team', team.color);
-
-    const photo = document.createElement('div');
-    photo.className = 'pc-photo';
-    attachPhoto(photo, p);
-    card.appendChild(photo);
-
-    const info = document.createElement('div');
-    info.className = 'pc-info';
-
-    const defaultLabel = { atbat: 'NOW BATTING', sub: '選手交代', hr: 'HOME RUN DERBY' }[src.card] || '';
-    const label = src.label || defaultLabel;
-    let html = '';
-    if (label) html += `<div class="pc-label"><span>${esc(label)}</span></div>`;
-    html += `<div class="pc-team">${esc(team.name)}</div>`;
-
-    const row = [];
-    if (src.card === 'atbat' && p.order) row.push(`<span class="pc-order">${esc(p.order)}番</span>`);
-    if (src.card === 'sub') row.push('<span class="pc-in-tag">IN</span>');
-    if (p.position) row.push(`<span class="pc-pos">${esc(posLabel(p.position))}</span>`);
-    if (p.number !== undefined && p.number !== '') row.push(`<span class="pc-number">${esc(p.number)}</span>`);
-    if (row.length) html += `<div class="pc-row">${row.join('')}</div>`;
-
-    html += `<div class="pc-name">${esc(p.name)}</div>`;
-    if (p.kana) html += `<div class="pc-kana">${esc(p.kana)}</div>`;
-
-    if (src.card === 'atbat' || src.card === 'sub') {
-        const stats = [];
-        if (p.avg) stats.push(`<div class="pc-stat"><b>${esc(p.avg)}</b><small>打率</small></div>`);
-        if (p.hr) stats.push(`<div class="pc-stat"><b>${esc(p.hr)}</b><small>本塁打</small></div>`);
-        if (p.rbi) stats.push(`<div class="pc-stat"><b>${esc(p.rbi)}</b><small>打点</small></div>`);
-        if (p.era) stats.push(`<div class="pc-stat"><b>${esc(p.era)}</b><small>防御率</small></div>`);
-        if (stats.length && src.showStats !== false) html += `<div class="pc-stats">${stats.join('')}</div>`;
-        if (p.comment && src.showComment) html += `<div class="pc-comment">${esc(p.comment)}</div>`;
-    }
-    if (src.card === 'sub' && src.out && src.out.name) {
-        const o = src.out;
-        html += `<div class="pc-out"><span class="tag">OUT</span>${o.position ? esc(posLabel(o.position)) + ' ' : ''}${o.number ? '#' + esc(o.number) + ' ' : ''}${esc(o.name)}</div>`;
-    }
-    info.innerHTML = html;
-    card.appendChild(info);
-
-    if (src.card === 'hr') {
-        const d = document.createElement('div');
-        d.className = 'pc-derby';
-        d.innerHTML = '<div class="d-label">HR</div><div class="d-count" data-live="derby-count">0</div><div class="d-outs" data-live="derby-outs"></div>';
-        card.appendChild(d);
-    }
-    return card;
-}
-
-function buildLineup(src) {
-    const team = teamInfo(src.team);
-    const el = document.createElement('div');
-    el.className = 'lineup enter';
-    el.style.setProperty('--team', team.color);
-    const rows = src.rows || [];
-    el.style.setProperty('--rows', Math.max(5, Math.min(10, rows.length)));
-    el.innerHTML = `
-        <div class="lu-head"><div class="lu-title">${esc(src.title || 'STARTING LINEUP')}</div><div class="lu-team">${esc(team.name)}</div></div>
-        <div class="lu-list">${rows.map((r, i) => `
-            <div class="lu-row" style="animation-delay:${(i * 0.06).toFixed(2)}s">
-                <span class="o">${esc(r.order || '')}</span><span class="p">${esc(r.position || '')}</span>
-                <span class="n">${r.number !== undefined && r.number !== '' ? '#' + esc(r.number) : ''}</span><span class="nm">${esc(r.name || '')}</span>
-            </div>`).join('')}
-        </div>`;
-    return el;
-}
-
 function buildTestPattern() {
     const el = document.createElement('div');
     el.className = 'test-pattern';
@@ -293,187 +166,181 @@ function buildTestPattern() {
     return el;
 }
 
-function buildSlotContent(slotEl, src) {
-    src = src || { type: 'black' };
-    switch (src.type) {
-        case 'slide':
-        case 'url': {
-            const path = src.type === 'slide' ? mediaUrl(src.file || '') : (src.url || '');
-            if (!path) return;
-            if (isVideoFile(src.file || src.url)) {
+// --------------------------------------------------------------------------
+// レイヤーの描画
+//   シーン（program）= { layers: [下から順] }。各レイヤーは帯に対する割合（x, y, w, h）で絶対配置する
+// --------------------------------------------------------------------------
+const CAM_NAMES = { cam1: '遊撃カメラ', cam2: 'カメラ2' };
+
+function layerGeom(l) {
+    return { left: l.x * STAGE_W, top: l.y * STAGE_H, width: l.w * STAGE_W, height: l.h * STAGE_H };
+}
+
+// 片側だけを出すウィンドウ（?view=left / right）で、そのレイヤーが映るか
+function inView(g) {
+    if (VIEW === 'left') return g.left < HALF_W;
+    if (VIEW === 'right') return g.left + g.width > HALF_W;
+    return true;
+}
+
+// 中身（素材）が同じかを見分ける印。位置・大きさ・不透明度・収め方だけの変更は、作り直さずその場で更新する
+function layerContentKey(l) {
+    return [l.id, l.type, l.src || '', l.cam || '', l.color || '', l.text || '', l.logo || ''].join('\u0001');
+}
+
+function sceneKey(scene) {
+    const parts = (scene.layers || []).filter(l => l.visible).map(l => layerContentKey(l) + (inView(layerGeom(l)) ? '' : '\u0001hidden'));
+    return STAGE_W + 'x' + STAGE_H + '|' + VIEW + '|' + parts.join('|');
+}
+
+function buildTextLayer(l) {
+    const t = document.createElement('div');
+    t.className = 'text-card';
+    t.style.color = /^#[0-9a-fA-F]{6}$/.test(l.color || '') ? l.color : '#fff';
+    // {HR} はホームラン競争のカウンターの数字に置き換わる（数字だけ変わり続ける）
+    const html = esc(l.text).replace(/\{HR\}/g, '<span class="hr-live" data-live="derby-count">0</span>').replace(/\n/g, '<br>');
+    t.innerHTML = `<div class="t-title">${html}</div>`;
+    return t;
+}
+
+function buildLayerContent(el, l) {
+    switch (l.type) {
+        case 'image':
+        case 'logo':
+        case 'video': {
+            if (!l.src) return;
+            const path = mediaUrl(l.src);
+            if (l.type === 'video' || isVideoFile(l.src)) {
                 const v = document.createElement('video');
                 v.className = 'media';
                 v.muted = true;
                 v.playsInline = true;
                 v.autoplay = true;
-                v.loop = src.loop !== false;
+                v.loop = true;
                 v.src = path;
-                v.onerror = () => notice(`動画を読み込めませんでした（${src.file || src.url}）`);
+                v.onerror = () => notice(`動画を読み込めませんでした（${l.src}）`);
                 v.play().catch(() => {});
-                slotEl.appendChild(v);
+                el.appendChild(v);
             } else {
                 const img = document.createElement('img');
                 img.className = 'media';
                 img.src = path;
                 img.onerror = () => {
                     img.remove();
-                    notice(`画像を読み込めませんでした（${src.file || src.url}）`);
-                    if (MONITOR) msg(slotEl, '画像を読み込めません<br>' + esc(src.file || src.url));
+                    notice(`画像を読み込めませんでした（${l.src}）`);
+                    if (MONITOR) msg(el, '画像を読み込めません<br>' + esc(l.src));
                 };
-                slotEl.appendChild(img);
+                el.appendChild(img);
             }
             break;
         }
         case 'camera': {
-            if (CAM_HOLE) { slotEl.classList.add('hole'); break; }
-            if (NO_CAM) { msg(slotEl, '📹 ' + esc(src.cam || 'cam1') + '<br><small>(モニター表示OFF)</small>'); break; }
+            if (CAM_HOLE) { el.classList.add('hole'); break; }
+            if (NO_CAM) { msg(el, '📹 ' + esc(CAM_NAMES[l.cam] || l.cam || 'cam1')); break; }
             const v = document.createElement('video');
             v.className = 'media';
             v.muted = true;
             v.playsInline = true;
             v.autoplay = true;
-            slotEl.appendChild(v);
-            getCamStream(src.cam || 'cam1')
+            el.appendChild(v);
+            getCamStream(l.cam || 'cam1')
                 .then(stream => { v.srcObject = stream; v.play().catch(() => {}); })
                 .catch(err => {
                     v.remove();
                     notice(window.obsstudio
-                        ? `OBSの中ではカメラ(${src.cam})を開けませんでした（${err.name}）。OBSを「--enable-media-stream」を付けて起動するか、キャプチャーボードはOBSの「映像キャプチャデバイス」で入れてください`
-                        : `カメラ(${src.cam})を開けませんでした：${err.name} ${err.message}。管理画面のプレビューや他のソフトがキャプチャーボードを使っていないか確かめてください`);
-                    if (MONITOR) msg(slotEl, 'カメラを開けません (' + esc(src.cam) + ')<br><small>' + esc(err.message) + '</small>');
+                        ? `OBSの中ではカメラ(${l.cam})を開けませんでした（${err.name}）。OBSを「--enable-media-stream」を付けて起動するか、キャプチャーボードはOBSの「映像キャプチャデバイス」で入れてください`
+                        : `カメラ(${l.cam})を開けませんでした：${err.name} ${err.message}。管理画面のプレビューや他のソフトがキャプチャーボードを使っていないか確かめてください`);
+                    if (MONITOR) msg(el, 'カメラを開けません (' + esc(l.cam) + ')<br><small>' + esc(err.message) + '</small>');
                 });
             break;
         }
-        case 'player':
-            slotEl.appendChild(buildPlayerCard(src));
+        case 'text':
+            el.appendChild(buildTextLayer(l));
             break;
-        case 'lineup':
-            slotEl.appendChild(buildLineup(src));
-            break;
-        case 'text': {
-            const t = document.createElement('div');
-            t.className = 'text-card';
-            t.style.background = src.color || '#0b1220';
-            t.style.color = src.textColor || '#fff';
-            t.innerHTML = `<div class="t-title">${esc(src.title).replace(/\n/g, '<br>')}</div>${src.sub ? `<div class="t-sub">${esc(src.sub).replace(/\n/g, '<br>')}</div>` : ''}`;
-            slotEl.appendChild(t);
-            break;
-        }
         case 'color':
-            slotEl.style.background = src.color || '#000';
+            el.style.background = l.color || '#000';
             break;
         case 'test':
-            slotEl.appendChild(buildTestPattern());
-            break;
-        default:
-            // black / none
+            el.appendChild(buildTestPattern());
             break;
     }
 }
 
-function msg(slotEl, html) {
+function msg(el, html) {
     const m = document.createElement('div');
     m.className = 'msg';
     m.innerHTML = html;
-    slotEl.appendChild(m);
+    el.appendChild(m);
 }
 
-// トリミング (表示位置・拡大) を反映
-function applyCrop(slotEl, src) {
-    const fit = (src && src.fit) || 'cover';
-    // OBS用の透明な穴：「16:9のまま」のときは、穴を16:9にして上下は黒（不透明）にする
-    if (slotEl.classList.contains('hole')) { slotEl.classList.toggle('hole-contain', fit === 'contain'); return; }
-    const media = slotEl.querySelector('.media');
-    if (!media) return;
-    const x = src && src.posX !== undefined ? src.posX : 50;
-    const y = src && src.posY !== undefined ? src.posY : 50;
-    const zoom = (src && src.zoom ? src.zoom : 100) / 100;
-    media.style.objectFit = fit;
-    media.style.objectPosition = `${x}% ${y}%`;
-    media.style.transformOrigin = `${x}% ${y}%`;
-    media.style.transform = zoom !== 1 ? `scale(${zoom})` : '';
+// 位置・大きさ・不透明度・収め方を反映
+function applyLayerStyle(el, l) {
+    const g = layerGeom(l);
+    el.style.left = g.left + 'px';
+    el.style.top = g.top + 'px';
+    el.style.width = g.width + 'px';
+    el.style.height = g.height + 'px';
+    el.style.opacity = String(l.opacity === undefined ? 1 : l.opacity);
+    const fit = l.fit || 'cover';
+    if (el.classList.contains('hole')) { el.classList.toggle('hole-contain', fit === 'contain'); return; }
+    const media = el.querySelector('.media');
+    if (media) media.style.objectFit = fit;
 }
 
-function slotGeometry(scene, slot) {
-    switch (slot) {
-        case 'wide':
-        case 'bg': return { left: 0, width: STAGE_W };
-        case 'left': return { left: 0, width: HALF_W };
-        case 'right': return { left: HALF_W, width: HALF_W };
-        case 'single': {
-            // 16:9 の枠（高さいっぱい）。32:9 のときは半分の幅、SDIの帯のときは帯の高さ×16/9
-            const w = Math.min(STAGE_W, Math.round(STAGE_H * 16 / 9));
-            const x = scene.singleX !== undefined ? Number(scene.singleX) : 50;
-            return { left: Math.round((STAGE_W - w) * x / 100), width: w };
-        }
-    }
-    return { left: 0, width: STAGE_W };
+// OBS用：カメラのレイヤーは透明な穴。その下にあるレイヤー（背景の色・画像など）も、穴の形にくり抜く（OBSのカメラが見えるように）
+function holeRect(l) {
+    const g = layerGeom(l);
+    if ((l.fit || 'cover') !== 'contain') return g;
+    const h = Math.min(g.height, g.width * 9 / 16);
+    const w = h * 16 / 9;
+    return { left: g.left + (g.width - w) / 2, top: g.top + (g.height - h) / 2, width: w, height: h };
 }
-
-// --------------------------------------------------------------------------
-// シーン描画 (トランジション付き)
-// --------------------------------------------------------------------------
-function isVisible(g) {
-    if (VIEW === 'left') return g.left < HALF_W;
-    if (VIEW === 'right') return g.left + g.width > HALF_W;
-    return true;
-}
-
-// 位置だけ変わって、片側のウィンドウで映らなかった枠が映るようになったら作り直す
-function visibilityKey(scene) {
-    return (LAYOUT_SLOTS[scene.layout] || []).map(s => isVisible(slotGeometry(scene, s)) ? 1 : 0).join('');
-}
-
-function sceneKey(scene) {
-    const slots = LAYOUT_SLOTS[scene.layout] || LAYOUT_SLOTS.wide;
-    return STAGE_W + 'x' + STAGE_H + '|' + scene.layout + '|' + visibilityKey(scene) + '|' + slots.map(s => s + '=' + contentKey(scene.slots && scene.slots[s])).join('|');
+function applyHoles(container, layers) {
+    if (!CAM_HOLE) return;
+    const vis = layers.filter(l => l.visible && inView(layerGeom(l)));
+    vis.forEach((l, i) => {
+        const el = container.querySelector(`[data-lid="${CSS.escape(l.id)}"]`);
+        if (!el) return;
+        const g = layerGeom(l);
+        const cuts = [];
+        vis.slice(i + 1).forEach(u => {
+            if (u.type !== 'camera') return;
+            const h = holeRect(u);
+            const x0 = Math.max(g.left, h.left), y0 = Math.max(g.top, h.top);
+            const x1 = Math.min(g.left + g.width, h.left + h.width), y1 = Math.min(g.top + g.height, h.top + h.height);
+            if (x1 - x0 > 0.5 && y1 - y0 > 0.5) cuts.push(`M${x0 - g.left} ${y0 - g.top} H${x1 - g.left} V${y1 - g.top} H${x0 - g.left} Z`);
+        });
+        el.style.clipPath = cuts.length ? `path(evenodd, 'M0 0 H${g.width} V${g.height} H0 Z ${cuts.join(' ')}')` : '';
+    });
 }
 
 function buildLayer(scene) {
     const layer = document.createElement('div');
     layer.className = 'layer';
-    const slots = LAYOUT_SLOTS[scene.layout] || LAYOUT_SLOTS.wide;
-    slots.forEach(name => {
-        const el = document.createElement('div');
-        el.className = 'slot slot-' + name;
-        el.dataset.slot = name;
-        const g = slotGeometry(scene, name);
-        el.style.left = g.left + 'px';
-        el.style.width = g.width + 'px';
-        // 片側だけを出すウィンドウでは、映らない枠の中身は作らない
+    (scene.layers || []).forEach(l => {
+        if (!l.visible) return;
+        const g = layerGeom(l);
+        // 片側だけを出すウィンドウでは、映らないレイヤーは作らない
         // （映らないカメラを開かない＝キャプチャーボードを左右のウィンドウで取り合わない）
-        if (!isVisible(g)) { el.dataset.hiddenView = '1'; layer.appendChild(el); return; }
-        buildSlotContent(el, scene.slots[name]);
-        applyCrop(el, scene.slots[name]);
+        if (!inView(g)) return;
+        const el = document.createElement('div');
+        el.className = 'lyr lyr-' + l.type;
+        el.dataset.lid = l.id;
+        buildLayerContent(el, l);
+        applyLayerStyle(el, l);
         layer.appendChild(el);
     });
-    applyHoles(layer, scene);
+    applyHoles(layer, scene.layers || []);
     return layer;
 }
 
-// OBS用：16:9の枠がカメラのとき、下にある背景(32:9)もその形にくり抜く（OBSのカメラが見えるように）
-function applyHoles(layer, scene) {
-    if (!CAM_HOLE) return;
-    const bg = layer.querySelector('.slot-bg');
-    if (!bg) return;
-    const single = scene.slots.single;
-    if (scene.layout === 'single' && single && single.type === 'camera') {
-        const g = slotGeometry(scene, 'single');
-        bg.style.clipPath = `path(evenodd, 'M0 0 H${STAGE_W} V${STAGE_H} H0 Z M${g.left} 0 H${g.left + g.width} V${STAGE_H} H${g.left} Z')`;
-    } else {
-        bg.style.clipPath = '';
-    }
-}
-
-// 同じ素材のまま位置・トリミングだけ変わった場合は、フェードせずその場で更新
+// 同じ素材のまま位置・大きさ・不透明度だけ変わった場合は、フェードせずその場で更新
 function updateLayerInPlace(layer, scene) {
-    layer.querySelectorAll('.slot').forEach(el => {
-        const name = el.dataset.slot;
-        const g = slotGeometry(scene, name);
-        el.style.left = g.left + 'px';
-        applyCrop(el, scene.slots[name]);
+    (scene.layers || []).forEach(l => {
+        const el = layer.querySelector(`[data-lid="${CSS.escape(l.id)}"]`);
+        if (el) applyLayerStyle(el, l);
     });
-    applyHoles(layer, scene);
+    applyHoles(layer, scene.layers || []);
 }
 
 function disposeLayer(layer) {
@@ -487,7 +354,7 @@ function disposeLayer(layer) {
 }
 
 function renderScene(scene, transition) {
-    if (!scene || !scene.slots) return;
+    if (!scene || !Array.isArray(scene.layers)) return;
     const key = sceneKey(scene);
     if (current && current.key === key) {
         updateLayerInPlace(current.layer, scene);

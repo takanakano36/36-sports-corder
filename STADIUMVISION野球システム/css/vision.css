@@ -46,16 +46,13 @@ body.monitor { cursor: default; }
 
 .layer { opacity: 1; }
 
-.slot {
+.lyr {
     position: absolute;
-    top: 0;
-    height: 100%;
     overflow: hidden;
-    background: #000;
     container-type: size;
 }
 
-.slot > .media {
+.lyr > .media {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -64,7 +61,8 @@ body.monitor { cursor: default; }
     display: block;
 }
 
-.slot .msg {
+.lyr .msg {
+    background: #101114;
     position: absolute;
     inset: 0;
     display: flex;
@@ -78,11 +76,11 @@ body.monitor { cursor: default; }
 
 /* OBS用（?camera=obs）：背景を透明にし、カメラの枠だけ透明にする */
 html.cam-hole, body.cam-hole, body.cam-hole #viewport, body.cam-hole #stage { background: transparent; }
-.slot.hole { background: transparent; }
-.slot.hole-contain { container-type: size; }
-.slot.hole-contain::before, .slot.hole-contain::after { content: ''; position: absolute; left: 0; right: 0; background: #000; height: max(0px, calc((100cqh - 100cqw * 9 / 16) / 2)); }
-.slot.hole-contain::before { top: 0; }
-.slot.hole-contain::after { bottom: 0; }
+.lyr.hole { background: transparent; }
+.lyr.hole-contain { container-type: size; }
+.lyr.hole-contain::before, .lyr.hole-contain::after { content: ''; position: absolute; left: 0; right: 0; background: #000; height: max(0px, calc((100cqh - 100cqw * 9 / 16) / 2)); }
+.lyr.hole-contain::before { top: 0; }
+.lyr.hole-contain::after { bottom: 0; }
 
 #black {
     position: absolute;
@@ -133,6 +131,7 @@ body.disconnected #conn-lost { display: block; }
 }
 .text-card .t-title { font-size: 16cqh; font-weight: 900; line-height: 1.15; letter-spacing: 0.04em; }
 .text-card .t-sub { font-size: 7cqh; font-weight: 700; opacity: 0.85; }
+.text-card .hr-live { font-family: 'Oswald', sans-serif; }
 
 /* --------------------------------------------------------------------------
    テストパターン (HDMI割当・位置合わせ用)
@@ -176,189 +175,3 @@ body.disconnected #conn-lost { display: block; }
 .test-pattern .tp-frame { position: absolute; inset: 0; border: 10px solid #22c55e; z-index: 2; }
 .test-pattern .tp-size { position: absolute; left: 50%; top: 3cqh; transform: translateX(-50%); font-size: 8cqh; color: #22c55e; z-index: 2; }
 .test-pattern .tp-bars span { flex: 1; }
-
-/* --------------------------------------------------------------------------
-   選手紹介カード (打席 / 選手交代 / HR競争)
-   cqh 単位で枠の高さ基準にスケールするため、16:9枠でも32:9枠でも同じデザインで表示できる
-   -------------------------------------------------------------------------- */
-.pcard {
-    --team: #b91c1c;
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: stretch;
-    background:
-        radial-gradient(ellipse at 20% 30%, color-mix(in srgb, var(--team) 55%, transparent), transparent 70%),
-        linear-gradient(135deg, #0b1220 0%, #111827 55%, color-mix(in srgb, var(--team) 35%, #000) 100%);
-    overflow: hidden;
-}
-
-.pcard::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 2.4cqh;
-    background: var(--team);
-}
-
-.pcard .pc-photo {
-    position: relative;
-    flex: 0 0 auto;
-    width: 72cqh;
-    height: 100%;
-    overflow: hidden;
-}
-.pcard .pc-photo img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 50% 20%;
-    -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent 100%);
-            mask-image: linear-gradient(90deg, #000 70%, transparent 100%);
-}
-.pcard .pc-photo .pc-num-bg {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font: 700 70cqh/1 'Oswald', sans-serif;
-    color: color-mix(in srgb, var(--team) 70%, #fff);
-    opacity: 0.35;
-}
-
-.pcard .pc-info {
-    position: relative;
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 6cqh 7cqh 8cqh 3cqh;
-    gap: 1.8cqh;
-}
-
-.pcard .pc-label {
-    align-self: flex-start;
-    font: 700 6.5cqh/1 'Oswald', 'Noto Sans JP', sans-serif;
-    letter-spacing: 0.08em;
-    background: var(--team);
-    padding: 1.6cqh 3cqh;
-    white-space: nowrap;
-    transform: skewX(-12deg);
-}
-.pcard .pc-label span { display: inline-block; transform: skewX(12deg); }
-
-.pcard .pc-team { font-size: 4.5cqh; font-weight: 700; opacity: 0.85; letter-spacing: 0.1em; }
-
-.pcard .pc-row { display: flex; align-items: baseline; gap: 3cqh; flex-wrap: wrap; }
-.pcard .pc-order { font: 700 9cqh/1 'Oswald', 'Noto Sans JP', sans-serif; color: #facc15; }
-.pcard .pc-pos { font-size: 7cqh; font-weight: 900; }
-.pcard .pc-number { font: 700 9cqh/1 'Oswald', sans-serif; }
-.pcard .pc-number::before { content: '#'; font-size: 0.6em; margin-right: 0.1em; opacity: 0.7; }
-
-.pcard .pc-name {
-    font-size: min(17cqh, 8cqw);
-    font-weight: 900;
-    line-height: 1.05;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.pcard .pc-kana { font-size: 4.5cqh; font-weight: 700; opacity: 0.8; letter-spacing: 0.25em; }
-
-.pcard .pc-stats { display: flex; gap: 4cqh; margin-top: 1cqh; }
-.pcard .pc-stat { display: flex; flex-direction: column; align-items: flex-start; }
-.pcard .pc-stat b { font: 700 9cqh/1 'Oswald', sans-serif; }
-.pcard .pc-stat small { font-size: 3.6cqh; opacity: 0.75; font-weight: 700; }
-
-.pcard .pc-comment { font-size: 4.6cqh; font-weight: 700; opacity: 0.9; line-height: 1.4; }
-
-.pcard .pc-out {
-    display: flex;
-    align-items: center;
-    gap: 2.5cqh;
-    margin-top: 1.5cqh;
-    font-size: 5.5cqh;
-    font-weight: 700;
-    opacity: 0.85;
-}
-.pcard .pc-out .tag {
-    font: 700 4.4cqh/1 'Oswald', sans-serif;
-    background: #475569;
-    padding: 1cqh 2cqh;
-    border-radius: 0.6cqh;
-}
-.pcard .pc-in-tag {
-    font: 700 4.4cqh/1 'Oswald', sans-serif;
-    background: #16a34a;
-    padding: 1cqh 2cqh;
-    border-radius: 0.6cqh;
-    margin-right: 1cqh;
-}
-
-/* HR競争: カウンター (写真枠を細くして名前とカウンターの幅を確保) */
-.pcard.card-hr .pc-photo { width: 46cqh; }
-.pcard.card-hr .pc-photo .pc-num-bg { font-size: 46cqh; }
-.pcard.card-hr .pc-name { font-size: min(14cqh, 5.5cqw); }
-
-.pcard .pc-derby {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 0 8cqh 6cqh 2cqh;
-}
-.pcard .pc-derby .d-label { font: 700 7cqh/1 'Oswald', sans-serif; letter-spacing: 0.1em; color: #facc15; }
-.pcard .pc-derby .d-count { font: 700 44cqh/1 'Oswald', sans-serif; text-shadow: 0 0 4cqh rgba(250, 204, 21, 0.6); }
-.pcard .pc-derby .d-count.bump { animation: bump 0.5s ease; }
-.pcard .pc-derby .d-outs { font: 700 5cqh/1 'Oswald', 'Noto Sans JP', sans-serif; opacity: 0.85; }
-
-@keyframes bump {
-    0% { transform: scale(1); }
-    35% { transform: scale(1.25); color: #facc15; }
-    100% { transform: scale(1); }
-}
-
-/* 登場アニメーション */
-.pcard.enter .pc-photo img,
-.pcard.enter .pc-photo .pc-num-bg { animation: photoIn 0.7s cubic-bezier(.2,.8,.2,1) both; }
-.pcard.enter .pc-info > * { animation: barIn 0.6s cubic-bezier(.2,.8,.2,1) both; }
-.pcard.enter .pc-info > *:nth-child(2) { animation-delay: 0.08s; }
-.pcard.enter .pc-info > *:nth-child(3) { animation-delay: 0.16s; }
-.pcard.enter .pc-info > *:nth-child(4) { animation-delay: 0.24s; }
-.pcard.enter .pc-info > *:nth-child(5) { animation-delay: 0.32s; }
-.pcard.enter .pc-info > *:nth-child(6) { animation-delay: 0.40s; }
-.pcard.enter .pc-info > *:nth-child(7) { animation-delay: 0.48s; }
-
-@keyframes photoIn { from { opacity: 0; transform: translateX(-8%) scale(1.05); } to { opacity: 1; transform: none; } }
-@keyframes barIn { from { opacity: 0; transform: translateX(6%); } to { opacity: 1; transform: none; } }
-
-/* --------------------------------------------------------------------------
-   スターティングラインナップ
-   -------------------------------------------------------------------------- */
-.lineup {
-    --team: #b91c1c;
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 5cqh 7cqh 6cqh;
-    background: linear-gradient(135deg, #0b1220 0%, #111827 60%, color-mix(in srgb, var(--team) 40%, #000) 100%);
-}
-.lineup .lu-head { display: flex; align-items: baseline; gap: 4cqh; margin-bottom: 2.5cqh; border-bottom: 0.6cqh solid var(--team); padding-bottom: 1.5cqh; }
-.lineup .lu-title { font: 700 8cqh/1 'Oswald', sans-serif; letter-spacing: 0.08em; }
-.lineup .lu-team { font-size: 6cqh; font-weight: 900; }
-.lineup .lu-list { flex: 1; display: grid; grid-auto-flow: column; grid-template-rows: repeat(var(--rows, 10), 1fr); gap: 0.8cqh 6cqh; }
-.lineup .lu-row { display: grid; grid-template-columns: 7cqh 13cqh 10cqh 1fr; align-items: center; font-size: 5.6cqh; font-weight: 900; }
-.lineup .lu-row .o { font-family: 'Oswald', sans-serif; color: #facc15; }
-.lineup .lu-row .p { font-size: 4.8cqh; opacity: 0.9; }
-.lineup .lu-row .n { font-family: 'Oswald', sans-serif; opacity: 0.85; }
-.lineup .lu-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lineup.enter .lu-row { animation: barIn 0.5s cubic-bezier(.2,.8,.2,1) both; }
