@@ -41,7 +41,7 @@ GUESTS = [(1, 'SPECIAL GUEST', '元メジャーリーガー', 'マック鈴木',
 # 進行スライドの追加分（台本の参照先の番号を変えないため、既存の番号の後ろに付ける。program.csv に同じ項目があればそちらを使う）
 EXTRA_PROGRAM = [(8, '国旗掲揚', ''), (9, 'ゲスト紹介', '')]
 # 2人を1枚にした名前スライド
-GUEST_PAIRS = [(4, 'SPECIAL GUEST', [('元メジャーリーガー', 'マック鈴木'), ('元メジャーリーガー', '川﨑 宗則')])]
+GUEST_PAIRS = []          # 例 [(4, 'SPECIAL GUEST', [('肩書き', '名前'), ('肩書き', '名前')])]（いまは使わない）
 OPENING_FOOTER = '11.21 SAT  MORIYAMA CITY STADIUM'
 CLOSING_FOOTER = '11.23 MON  MORIYAMA CITY STADIUM'
 
