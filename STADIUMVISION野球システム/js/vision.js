@@ -96,20 +96,35 @@ const camStreams = {}; // deviceId('' = 既定) -> Promise<MediaStream>
 function getCamStream(camId) {
     const cam = (state && state.cameras && state.cameras[camId]) || {};
     const deviceId = cam.deviceId || '';
-    if (!camStreams[deviceId]) {
-        const video = {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 60 }
-        };
-        if (deviceId) video.deviceId = { exact: deviceId };
-        camStreams[deviceId] = navigator.mediaDevices.getUserMedia({ video, audio: false })
-            .catch(err => {
-                delete camStreams[deviceId];
-                throw err;
-            });
-    }
+    if (!camStreams[deviceId]) camStreams[deviceId] = openCam(deviceId, cam.label || '').catch(err => {
+        delete camStreams[deviceId];
+        throw err;
+    });
     return camStreams[deviceId];
+}
+
+// カメラを開く。保存してある deviceId は「管理画面のブラウザ」での番号なので、
+// 別のブラウザ（HDMI出力の全画面Edge・OBS など）では番号が違って開けない。
+// そのときは、名前（label）が同じカメラ → 名前の一部が同じカメラ → 既定のカメラ の順に探して開く。
+const CAM_SIZE = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } };
+async function openCam(deviceId, label) {
+    const md = navigator.mediaDevices;
+    if (deviceId) {
+        try { return await md.getUserMedia({ video: Object.assign({ deviceId: { exact: deviceId } }, CAM_SIZE), audio: false }); }
+        catch (e) { console.warn('[カメラ] 保存した番号では開けません。名前で探します', e && e.name); }
+    }
+    let list = (await md.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    if (list.length && !list.some(d => d.label)) {
+        // 名前を読むには一度許可が要る
+        try { const s = await md.getUserMedia({ video: true, audio: false }); s.getTracks().forEach(t => t.stop()); } catch (e) { /* 下で既定を試す */ }
+        list = (await md.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    }
+    const norm = t => String(t || '').replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '').trim().toLowerCase();
+    const want = norm(label);
+    const hit = want && (list.find(d => norm(d.label) === want) || list.find(d => norm(d.label).includes(want) || (norm(d.label) && want.includes(norm(d.label)))));
+    if (hit) return md.getUserMedia({ video: Object.assign({ deviceId: { exact: hit.deviceId } }, CAM_SIZE), audio: false });
+    if (label) notice(`カメラ「${label}」が見つからないため、このPCの既定のカメラを使います`);
+    return md.getUserMedia({ video: CAM_SIZE, audio: false });
 }
 
 // 割当から外れたデバイスのストリームを停止
