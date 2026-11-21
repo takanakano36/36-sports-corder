@@ -41,12 +41,49 @@ function call(method, body) {
     const scenes = JSON.parse(JSON.stringify(state.scenes));
     const norm = s => String(s || '').normalize('NFKC').trim().toUpperCase();
     let ok = 0;
+    const rid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const keyOf = n => { const m = /^([A-Z]+)-?(\d+)/.exec(norm(n)); return m ? [m[1], Number(m[2])] : null; };
+    // ファイル名の打ち間違い・文字の違い（﨑と崎など）があっても、同じフォルダの「先頭の番号が同じ」ファイルを探して使う
+    function resolveFile(rel) {
+        if (fs.existsSync(path.join(APP, 'slides', rel))) return rel;
+        const dir = path.posix.dirname(rel), base = path.posix.basename(rel);
+        const full = path.join(APP, 'slides', dir);
+        if (!fs.existsSync(full)) return null;
+        const files = fs.readdirSync(full);
+        const nfkc = s => s.normalize('NFKC').replace(/[﨑]/g, '崎').toLowerCase();
+        let hit = files.find(f => nfkc(f) === nfkc(base));
+        const m = /^(\d+)_/.exec(base);
+        if (!hit && m) { const c = files.filter(f => f.startsWith(m[1] + '_')); if (c.length === 1) hit = c[0]; }
+        return hit ? (dir === '.' ? hit : dir + '/' + hit) : null;
+    }
     for (let i = 0; i < args.length; i += 2) {
         const no = norm(args[i]);
-        const rel = args[i + 1].replace(/\\/g, '/').replace(/^slides\//, '');
-        if (!fs.existsSync(path.join(APP, 'slides', rel))) console.log(`  ⚠ ${rel} が slides にありません（先にスライドを入れてください）。セットだけはします`);
-        const sc = scenes.find(s => s.script && norm(s.script.no) === no);
-        if (!sc) { console.log(`  ✕ ${args[i]}：この番号のシーンがありません（［台本から作る］をしてから実行してください）`); continue; }
+        let rel = args[i + 1].replace(/\\/g, '/').replace(/^slides\//, '');
+        const found = resolveFile(rel);
+        if (found) rel = found;
+        else console.log(`  ⚠ ${rel} が slides にありません（先にスライドを入れてください）。セットだけはします`);
+        // 2つに分けたシーン（①②）は1つに戻す
+        for (let j = scenes.length - 1; j >= 0; j--) if (scenes[j].script && norm(scenes[j].script.no) === norm(args[i] + '②')) scenes.splice(j, 1);
+        let sc = scenes.find(s => s.script && norm(s.script.no) === no);
+        if (sc) sc.name = sc.name.replace(/①$/, '');
+        if (!sc) {
+            // 台本の行に変化がなくシーンが作られていない番号は、近い番号のシーンをもとに新しく作る
+            const k = keyOf(no);
+            const near = k && scenes.filter(s => s.script && keyOf(s.script.no) && keyOf(s.script.no)[0] === k[0])
+                .sort((a, b) => Math.abs(keyOf(a.script.no)[1] - k[1]) - Math.abs(keyOf(b.script.no)[1] - k[1]))[0];
+            if (!near) { console.log(`  ✕ ${args[i]}：この番号のシーンも、同じ記号の近いシーンもありません（［台本から作る］をしてから実行してください）`); continue; }
+            sc = JSON.parse(JSON.stringify(near));
+            sc.id = rid('S');
+            const idMap = {};
+            sc.layers.forEach(l => { const n = rid('L'); idMap[l.id] = n; l.id = n; });
+            sc.layers.forEach(l => { if (l.lidFor && idMap[l.lidFor]) l.lidFor = idMap[l.lidFor]; });
+            sc.name = `${args[i]} ${path.posix.basename(rel).replace(/\.[^.]+$/, '').replace(/^\d+_/, '')}`;
+            sc.script = Object.assign({}, near.script, { no: args[i] });
+            if ('bgm' in sc) sc.bgm = null;
+            if ('duck' in sc) sc.duck = null;
+            scenes.push(sc);
+            console.log(`  ＋ ${sc.name}（シーンが無かったので作りました）`);
+        }
         const src = 'slides/' + rel;
         const left = sc.layers.find(l => (l.type === 'image' || l.type === 'logo') && l.x < 0.5)
             || sc.layers.find(l => l.type === 'image');
