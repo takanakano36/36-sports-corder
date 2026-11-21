@@ -219,18 +219,19 @@ def person(kicker, title, name, honor='様', footer_label='11.21 SAT  MORIYAMA C
     text(d, (CX, top - kt), kicker, kf, RED, anchor='ms', spacing=12)
     y = top + (kb - kt) + GAP1
     d.rectangle((CX - 60, y, CX + 60, y + RULE - 1), fill=LINE); y += RULE + GAP2
+    # 名前（敬称込み）の塊は中央。肩書きは名前の書き出しの位置に左寄せ（文字の見える左端どうしをそろえる）
+    widths = [tw(d, ln, f) + (hw if honor and i == len(lines) - 1 else 0) for i, ln in enumerate(lines)]
+    x0 = CX - max(widths) / 2
+    ink = lambda t, ft: ft.getbbox(t, anchor='ls')[0]
     if title:
-        text(d, (CX, y - tt), title, tf, (200, 210, 225), anchor='ms', spacing=6)
+        text(d, (x0 + ink(lines[0], f) - ink(title, tf), y - tt), title, tf, (200, 210, 225), anchor='ls')
         y += (tb - tt) + GAP3
     base_y = y - nt
     for i, ln in enumerate(lines):
         by = base_y + pitch * i
+        text(d, (x0, by), ln, f, WHITE, anchor='ls')
         if honor and i == len(lines) - 1:
-            lw = tw(d, ln, f); x0 = CX - (lw + hw) / 2
-            text(d, (x0, by), ln, f, WHITE, anchor='ls')
-            text(d, (x0 + lw + tw(d, ' ', hf), by), honor, hf, WHITE, anchor='ls')
-        else:
-            text(d, (CX, by), ln, f, WHITE, anchor='ms')
+            text(d, (x0 + tw(d, ln, f) + tw(d, ' ', hf), by), honor, hf, WHITE, anchor='ls')
     footer(img, d, footer_label)
     return finish(img)
 
