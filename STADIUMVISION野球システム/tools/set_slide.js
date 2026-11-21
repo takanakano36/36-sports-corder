@@ -63,7 +63,25 @@ function call(method, body) {
         console.log(`  ○ ${sc.name} ← ${rel}`);
         ok++;
     }
-    if (!ok) return console.log('セットできたシーンはありませんでした');
-    await call('POST', { scenes });
-    console.log(`${ok}個のシーンにセットしました。管理画面に反映されています`);
+    // 同じ番号のシーンが2つ以上あるときは知らせる（古いシーンが残っている）
+    const count = {};
+    scenes.forEach(s => { if (s.script && s.script.no) count[norm(s.script.no)] = (count[norm(s.script.no)] || 0) + 1; });
+    const dup = Object.keys(count).filter(k => count[k] > 1);
+    if (dup.length) console.log(`  ⚠ 同じ番号のシーンが2つ以上あります：${dup.join('、')}（node tools\\clear_script_scenes.js → ［台本から作る］で作り直してください）`);
+    // 台本のシーンを、シートの順・番号の順に並べ直す（「いつでも」などは後ろ）
+    const key = no => { const m = /^([A-Z]+)-?(\d+)(.*)$/.exec(norm(no)); return m ? [m[1], Number(m[2]), m[3]] : [norm(no), 0, '']; };
+    const byId = new Map(scenes.map(s => [s.id, s]));
+    const order = (state.sceneOrder && state.sceneOrder.length ? state.sceneOrder : scenes.map(s => s.id)).filter(id => byId.has(id));
+    scenes.forEach(s => { if (!order.includes(s.id)) order.push(s.id); });
+    const secs = [];
+    order.forEach(id => { const s = byId.get(id); if (s.script && !secs.includes(s.script.sec)) secs.push(s.script.sec); });
+    const scriptIds = order.filter(id => byId.get(id).script).sort((a, b) => {
+        const A = byId.get(a).script, B = byId.get(b).script;
+        if (A.sec !== B.sec) return secs.indexOf(A.sec) - secs.indexOf(B.sec);
+        const ka = key(A.no), kb = key(B.no);
+        return ka[0] < kb[0] ? -1 : ka[0] > kb[0] ? 1 : ka[1] - kb[1] || (ka[2] < kb[2] ? -1 : ka[2] > kb[2] ? 1 : 0);
+    });
+    const sceneOrder = scriptIds.concat(order.filter(id => !byId.get(id).script));
+    await call('POST', { scenes, sceneOrder });
+    console.log(`${ok}個のシーンにセットし、シーンを台本の順に並べ直しました。管理画面に反映されています`);
 })().catch(e => { console.log('止めました: ' + e.message); process.exit(1); });
