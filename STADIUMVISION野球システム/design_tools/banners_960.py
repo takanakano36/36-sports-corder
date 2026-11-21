@@ -236,6 +236,41 @@ def person(kicker, title, name, honor='様', footer_label='11.21 SAT  MORIYAMA C
     return finish(img)
 
 
+def person2(kicker, people, honor='様', footer_label='11.21 SAT  MORIYAMA CITY STADIUM'):
+    """2人を1枚に。people＝[(肩書き, 名前), (肩書き, 名前)]。各人は「肩書き（小）／名前＋様」で上下に並べ、
+    2人の書き出し（左端）をそろえる。塊は上端〜フッター線の 46% の高さ"""
+    img = base()
+    slash(img, 360, 56, K_ENT)
+    d = ImageDraw.Draw(img)
+    CX = (350 + (CW - SAFE)) / 2
+    hf = jp(70, 700); tf = jp(56, 700); kf = osw(52, 600)
+    hw = tw(d, ' ' + honor, hf) if honor else 0
+    size = min(layout_name(d, n, 170, 1300 - hw, 170)[0] for _, n in people)
+    f = jp(size, 900)
+    kt, kb = kf.getbbox(kicker, anchor='ls')[1::2]
+    GAP1, RULE, GAP2, GAPT, GAPP = 34, 5, 70, round(size * 0.22), round(size * 0.55)
+    blocks = []
+    for t, n in people:
+        tt, tb = tf.getbbox(t, anchor='ls')[1::2] if t else (0, 0)
+        nt, nb = f.getbbox(n, anchor='ls')[1::2]
+        blocks.append((t, n, tt, tb, nt, nb))
+    h = (kb - kt) + GAP1 + RULE + GAP2 + sum(((tb - tt) + GAPT if t else 0) + (nb - nt) for t, n, tt, tb, nt, nb in blocks) + GAPP * (len(blocks) - 1)
+    top = FOOT * 0.46 - h / 2
+    text(d, (CX, top - kt), kicker, kf, RED, anchor='ms', spacing=12)
+    y = top + (kb - kt) + GAP1
+    d.rectangle((CX - 60, y, CX + 60, y + RULE - 1), fill=LINE); y += RULE + GAP2
+    x0 = CX - max(tw(d, n, f) + hw for _, n in people) / 2
+    for i, (t, n, tt, tb, nt, nb) in enumerate(blocks):
+        if t:
+            text(d, (x0 + f.getbbox(n, anchor='ls')[0] - tf.getbbox(t, anchor='ls')[0], y - tt), t, tf, (200, 210, 225), anchor='ls')
+            y += (tb - tt) + GAPT
+        text(d, (x0, y - nt), n, f, WHITE, anchor='ls')
+        if honor: text(d, (x0 + tw(d, n, f) + tw(d, ' ', hf), y - nt), honor, hf, WHITE, anchor='ls')
+        y += (nb - nt) + GAPP
+    footer(img, d, footer_label)
+    return finish(img)
+
+
 # ------------------------------------------------ 4. ロゴ（横長・2段、デザイン／黒）
 def logo_960(kind, style):
     w, h = CW, CH

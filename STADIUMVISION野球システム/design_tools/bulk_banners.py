@@ -38,6 +38,10 @@ CLOSING = [(1, '開式の辞', ''), (2, '成績発表', ''), (3, '表彰式', ''
 # ゲスト・来賓の名前スライド（960x686 のみ）。守山市長の名前は要確認
 GUESTS = [(1, 'SPECIAL GUEST', '元メジャーリーガー', 'マック鈴木', '様'), (2, 'SPECIAL GUEST', '元メジャーリーガー', '川﨑 宗則', '様'),
           (3, 'GUEST', '守山市長', '森中 高史', '様')]
+# 進行スライドの追加分（台本の参照先の番号を変えないため、既存の番号の後ろに付ける。program.csv に同じ項目があればそちらを使う）
+EXTRA_PROGRAM = [(8, '国旗掲揚', ''), (9, 'ゲスト紹介', '')]
+# 2人を1枚にした名前スライド
+GUEST_PAIRS = [(4, 'SPECIAL GUEST', [('元メジャーリーガー', 'マック鈴木'), ('元メジャーリーガー', '川﨑 宗則')])]
 OPENING_FOOTER = '11.21 SAT  MORIYAMA CITY STADIUM'
 CLOSING_FOOTER = '11.23 MON  MORIYAMA CITY STADIUM'
 
@@ -118,6 +122,10 @@ def main(argv=None):
         for r in read_csv('program.csv'):
             n = int(r['no'])
             save(B.program(n, r['ja'], r['en'], r['kicker'], footer_label=OPENING_FOOTER), '進行', f'{n:02d}_{safe(r["ja"])}.png')
+        have = {r['ja'] for r in read_csv('program.csv')}
+        for n, ja, en in EXTRA_PROGRAM:
+            if ja not in have:
+                save(B.program(n, ja, en, 'OPENING CEREMONY', footer_label=OPENING_FOOTER), '進行', f'{n:02d}_{safe(ja)}.png')
         print('■ 進行（閉会式）')
         for r in read_csv('closing.csv'):
             n = int(r['no'])
@@ -128,6 +136,8 @@ def main(argv=None):
         print('■ ゲスト・来賓')
         for r in rows:
             save(B.person(r['kicker'], r['title'], r['name'], r.get('honor', '様')), 'ゲスト', f'{int(r["no"]):02d}_{safe(r["name"])}.png')
+        for no, kicker, people in GUEST_PAIRS:
+            save(B.person2(kicker, people), 'ゲスト', f'{no:02d}_' + '_'.join(safe(n) for _, n in people) + '.png')
     if a.only in (None, 'ロゴ') and a.small:
         print('■ ロゴ（横長・2段 960x686）')
         for kind in ('horiz', 'stack'):
