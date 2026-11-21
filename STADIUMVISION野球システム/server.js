@@ -352,7 +352,7 @@ function scenesFromLegacyScript(old, stage, ctx) {
             bgm: cue && cue.bgm ? cue.bgm : null,
             duck: cue && typeof cue.duck === 'boolean' ? cue.duck : null,
             pick: pk ? { folder: String(pk).slice(0, 200) } : null,
-            script: manual ? null : { sec: String(sections[r.sec].name || 'シート').slice(0, 100), no: r.no ? String(r.no).slice(0, 40) : '', edited: true },
+            script: manual ? null : { sec: String(sections[r.sec].name || 'シート').slice(0, 100), no: r.no ? String(r.no).slice(0, 40) : '', edited: false },
             warn: ''
         };
         scenes.push(sc);
@@ -500,7 +500,8 @@ function applyPatch(base, patch) {
 function markEdited(old, next) {
     if (!Array.isArray(old.scenes) || !Array.isArray(next.scenes)) return;
     const prev = new Map(old.scenes.filter(isObj).map(sc => [sc.id, sc]));
-    const sig = x => JSON.stringify([x.name, x.layers, x.bgm, x.duck, x.pick]);
+    // カメラのフタ（自動で付く）の変化は「手で直した」に数えない
+    const sig = x => JSON.stringify([x.name, (x.layers || []).filter(l => l && l.type !== 'lid').map(l => { const c = Object.assign({}, l); delete c.noLid; return c; }), x.bgm, x.duck, x.pick]);
     next.scenes.forEach(sc => {
         const o = isObj(sc) ? prev.get(sc.id) : null;
         if (!o || !isObj(sc.script) || !isObj(o.script) || sc.script.edited) return;
