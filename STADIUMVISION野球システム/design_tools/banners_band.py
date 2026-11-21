@@ -158,6 +158,7 @@ def main():
     save(logo_slide(False, True), '01_ロゴ2段_紺.png')
     save(welcome(), '10_ようこそ.png')
     save(opening_soon(a.time), '11_まもなく開会式.png')
+    save(title_slide(None, 'OPENING CEREMONY', '開会式', en_size=150, ja_size=110), '12_開会式.png')
     save(title_slide(None, 'HOME RUN DERBY', 'ホームランダービー', en_size=170, ja_size=88), '20_ホームランダービー.png')
     save(title_slide(None, 'CLOSING CEREMONY', '閉会式', en_size=150, ja_size=110), '30_閉会式.png')
     save(title_slide(None, 'THANK YOU', 'ご来場ありがとうございました', en_size=180, ja_size=82), '40_ありがとうございました.png')
