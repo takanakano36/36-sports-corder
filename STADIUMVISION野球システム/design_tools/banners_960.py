@@ -196,6 +196,45 @@ def program(no, ja, en, kicker, show_no=False, footer_label='11.21 SAT  MORIYAMA
     return finish(img)
 
 
+# ------------------------------------------------ 3'. 人物（ゲスト・来賓）
+def person(kicker, title, name, honor='様', footer_label='11.21 SAT  MORIYAMA CITY STADIUM'):
+    """kicker＝赤の見出し（例 SPECIAL GUEST）、title＝肩書き（名前の上に小さく）、name＝名前（大きく）、honor＝敬称（名前の右に小さく）。
+    見出し〜名前の塊を、上端〜フッター線の 46% の高さに置く（入場スライドと同じ重心）"""
+    img = base()
+    slash(img, 360, 56, K_ENT)
+    d = ImageDraw.Draw(img)
+    CX = (350 + (CW - SAFE)) / 2
+    maxw = 1300
+    hf = jp(80, 700)
+    hw = (tw(d, ' ' + honor, hf) if honor else 0)
+    size, lines = layout_name(d, name, 210, maxw - hw, 170)
+    f = jp(size, 900); pitch = round(size * 1.12)
+    kf = osw(52, 600); tf = jp(64, 700)
+    kt, kb = kf.getbbox(kicker, anchor='ls')[1::2]
+    tt, tb = (tf.getbbox(title, anchor='ls')[1::2] if title else (0, 0))
+    nt = f.getbbox(lines[0], anchor='ls')[1]; nb = f.getbbox(lines[-1], anchor='ls')[3]
+    GAP1, RULE, GAP2, GAP3 = 34, 5, 70, round(size * 0.30)
+    h = (kb - kt) + GAP1 + RULE + GAP2 + ((tb - tt) + GAP3 if title else 0) + (nb - nt) + pitch * (len(lines) - 1)
+    top = FOOT * 0.46 - h / 2
+    text(d, (CX, top - kt), kicker, kf, RED, anchor='ms', spacing=12)
+    y = top + (kb - kt) + GAP1
+    d.rectangle((CX - 60, y, CX + 60, y + RULE - 1), fill=LINE); y += RULE + GAP2
+    if title:
+        text(d, (CX, y - tt), title, tf, (200, 210, 225), anchor='ms', spacing=6)
+        y += (tb - tt) + GAP3
+    base_y = y - nt
+    for i, ln in enumerate(lines):
+        by = base_y + pitch * i
+        if honor and i == len(lines) - 1:
+            lw = tw(d, ln, f); x0 = CX - (lw + hw) / 2
+            text(d, (x0, by), ln, f, WHITE, anchor='ls')
+            text(d, (x0 + lw + tw(d, ' ', hf), by), honor, hf, WHITE, anchor='ls')
+        else:
+            text(d, (CX, by), ln, f, WHITE, anchor='ms')
+    footer(img, d, footer_label)
+    return finish(img)
+
+
 # ------------------------------------------------ 4. ロゴ（横長・2段、デザイン／黒）
 def logo_960(kind, style):
     w, h = CW, CH

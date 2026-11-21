@@ -35,6 +35,9 @@ PROGRAM = [(1, '選手入場', ''), (2, '開会宣言', ''), (3, '主催者挨�
            (5, '三日月滋賀県知事挨拶', ''), (6, 'ゲストご挨拶', ''), (7, '始球式', '')]
 # 2026-11-18 最新マニュアル(p.55 閉会式 11/23 15:00 式次第)。「表彰式（トロフィー・メダル授与）」は画面では「表彰式」だけにする
 CLOSING = [(1, '開式の辞', ''), (2, '成績発表', ''), (3, '表彰式', ''), (4, 'ゲストご挨拶', ''), (5, '閉会挨拶', '')]
+# ゲスト・来賓の名前スライド（960x686 のみ）。守山市長の名前は要確認
+GUESTS = [(1, 'SPECIAL GUEST', '元メジャーリーガー', 'マック鈴木', '様'), (2, 'SPECIAL GUEST', '元メジャーリーガー', '川﨑 宗則', '様'),
+          (3, 'GUEST', '守山市長', '森中 高史', '様')]
 OPENING_FOOTER = '11.21 SAT  MORIYAMA CITY STADIUM'
 CLOSING_FOOTER = '11.23 MON  MORIYAMA CITY STADIUM'
 
@@ -73,7 +76,7 @@ def init_templates():
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--init', action='store_true'); ap.add_argument('--only', choices=['入場', '対戦', '進行', 'ロゴ'])
+    ap.add_argument('--init', action='store_true'); ap.add_argument('--only', choices=['入場', '対戦', '進行', 'ゲスト', 'ロゴ'])
     ap.add_argument('--small', action='store_true', help='960x686 版（球場ビジョン左半分の枠）を output/960x686/ に作る。16:9 版は触らない')
     a = ap.parse_args(argv)
     if a.init: init_templates(); return 0
@@ -119,6 +122,12 @@ def main(argv=None):
         for r in read_csv('closing.csv'):
             n = int(r['no'])
             save(B.program(n, r['ja'], r['en'], r['kicker'], footer_label=CLOSING_FOOTER), '進行_閉会式', f'{n:02d}_{safe(r["ja"])}.png')
+    if a.only in (None, 'ゲスト') and a.small:
+        # ゲスト・来賓の名前（input/guests.csv があればそれを使う。列：no,kicker,title,name,honor）
+        rows = read_csv('guests.csv') if os.path.exists(os.path.join(IN, 'guests.csv')) else [dict(zip(['no', 'kicker', 'title', 'name', 'honor'], map(str, g))) for g in GUESTS]
+        print('■ ゲスト・来賓')
+        for r in rows:
+            save(B.person(r['kicker'], r['title'], r['name'], r.get('honor', '様')), 'ゲスト', f'{int(r["no"]):02d}_{safe(r["name"])}.png')
     if a.only in (None, 'ロゴ') and a.small:
         print('■ ロゴ（横長・2段 960x686）')
         for kind in ('horiz', 'stack'):
