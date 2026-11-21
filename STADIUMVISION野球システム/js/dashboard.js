@@ -1451,6 +1451,23 @@ function bandFromLed() {
     showInfo(`帯の高さを ${bandH}（上下の中央）にしました。テスト画面を出して、緑の枠がビジョンの四辺に合うか確かめてください`);
 }
 
+// ビジョンに出す窓を、このブラウザ（管理画面と同じChrome）で開く。
+// 別のブラウザ（HDMI出力アイコンのEdge）だとキャプチャーボードを開けないPCがあるため、本番もこちらを使う。
+// 画面が2つ以上あり、ブラウザが画面の配置を教えてくれるときは、管理画面のない方の画面に窓を置く。
+async function openOutputScreen() {
+    let feat = "popup=yes,width=1280,height=720";
+    try {
+        if ("getScreenDetails" in window) {
+            const sd = await window.getScreenDetails();
+            const other = sd.screens.find(sc => sc !== sd.currentScreen) || null;
+            if (other) feat = `popup=yes,left=${other.availLeft},top=${other.availTop},width=${other.availWidth},height=${other.availHeight}`;
+        }
+    } catch (e) { /* 許可がないときは普通の位置に開く */ }
+    const w = window.open("vision.html?view=all", "sv_baseball_vision", feat);
+    if (!w) return showError("窓を開けませんでした。Chromeのアドレス欄右の「ポップアップをブロック」から localhost を許可してください");
+    showInfo("ビジョン用の窓を開きました。ビジョンの画面へ移して、窓をダブルクリック（またはFキー）で全画面にしてください");
+}
+
 function openOutput(view) {
     if (isSdi() && view !== "all") return showError("SDI 1本（1920×1080）で出す設定のため、左右に分けて開けません。「全体」を使ってください");
     const w = view === "all" ? 1280 : 960;
@@ -1544,6 +1561,7 @@ function bindEvents() {
         if (el.scrollWidth > el.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { el.scrollLeft += e.deltaY; e.preventDefault(); }
     }, { passive: false });
     $$("[data-open]").forEach(b => b.addEventListener("click", () => openOutput(b.dataset.open)));
+    $("#btn-out-screen").addEventListener("click", openOutputScreen);
     $("#opt-guide").addEventListener("change", e => patch({ guide: e.target.checked }));
     $$("#out-mode-seg button[data-outmode]").forEach(b => b.addEventListener("click", () => setOutput({ mode: b.dataset.outmode })));
     $("#out-band-y").addEventListener("change", e => setOutput({ bandY: e.target.value }));
